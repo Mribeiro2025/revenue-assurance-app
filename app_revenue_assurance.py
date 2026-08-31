@@ -16,7 +16,7 @@ st.set_page_config(
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
 
-# URL Oficial do Logo Institucional
+# URL do Logo
 URL_LOGO_ARBAITMAN = "https://grupoarbaitman.com.br/wp-content/uploads/2022/05/logo-grupo-arbaitman.png"
 
 # 2. Gerenciador de Usuários e Persistência de Cadastro
@@ -95,11 +95,21 @@ st.markdown("""
             text-align: center;
             margin-bottom: 15px;
         }
+        .logo-text {
+            font-size: 22px;
+            font-weight: 800;
+            color: #002060;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
     </style>
 """, unsafe_allow_html=True)
 
 def exibir_logo(largura=180):
-    st.image(URL_LOGO_ARBAITMAN, width=largura)
+    try:
+        st.image(URL_LOGO_ARBAITMAN, width=largura)
+    except:
+        st.markdown(f'<div class="logo-text">GRUPO ARBAITMAN</div>', unsafe_allow_html=True)
 
 # 4. Estado da Sessão e Autenticação
 if "autenticado" not in st.session_state:
@@ -114,7 +124,7 @@ if not st.session_state["autenticado"]:
     with col_center:
         st.markdown('<div class="login-card">', unsafe_allow_html=True)
         st.markdown('<div class="logo-box">', unsafe_allow_html=True)
-        exibir_logo(largura=220)
+        exibir_logo(largura=200)
         st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: #6c757d; font-size: 13px; margin-bottom: 20px;'>Maringá Turismo | Portal de Revenue Assurance</p>", unsafe_allow_html=True)
         
@@ -146,24 +156,25 @@ if not st.session_state["autenticado"]:
 
         with aba_redefinir:
             st.caption("Redefinição direta de senha de acesso.")
-            user_reset = st.text_input("Informe seu Usuário de Acesso:", key="reset_u").strip().lower()
-            nova_senha_login = st.text_input("Nova Senha:", type="password", key="reset_p1")
-            confirma_senha_login = st.text_input("Confirme a Nova Senha:", type="password", key="reset_p2")
-            btn_redefinir_senha = st.button("🔄 Redefinir Senha", use_container_width=True)
+            with st.form("form_redefinir_senha_login"):
+                user_reset = st.text_input("Informe seu Usuário de Acesso:").strip().lower()
+                nova_senha_login = st.text_input("Nova Senha:", type="password")
+                confirma_senha_login = st.text_input("Confirme a Nova Senha:", type="password")
+                btn_redefinir_senha = st.form_submit_button("🔄 Redefinir Senha", use_container_width=True)
 
-            if btn_redefinir_senha:
-                if not user_reset:
-                    st.error("⚠️ Digite o usuário de acesso.")
-                elif user_reset not in usuarios_db:
-                    st.error("❌ Usuário não encontrado no sistema.")
-                elif not nova_senha_login:
-                    st.error("⚠️ Digite a nova senha.")
-                elif nova_senha_login != confirma_senha_login:
-                    st.error("❌ As senhas não coincidem.")
-                else:
-                    usuarios_db[user_reset]["senha"] = nova_senha_login
-                    salvar_usuarios(usuarios_db)
-                    st.success("✅ Senha redefinida com sucesso! Agora clique na aba '🔐 Entrar' para acessar.")
+                if btn_redefinir_senha:
+                    if not user_reset:
+                        st.error("⚠️ Digite o usuário de acesso.")
+                    elif user_reset not in usuarios_db:
+                        st.error("❌ Usuário não encontrado no sistema.")
+                    elif not nova_senha_login.strip():
+                        st.error("⚠️ Digite a nova senha.")
+                    elif nova_senha_login != confirma_senha_login:
+                        st.error("❌ As senhas não coincidem.")
+                    else:
+                        usuarios_db[user_reset]["senha"] = nova_senha_login.strip()
+                        salvar_usuarios(usuarios_db)
+                        st.success("✅ Senha redefinida com sucesso! Clique na aba '🔐 Entrar' para acessar com sua nova senha.")
 
         with aba_solicitar:
             st.caption("Solicitação formal de acesso para novos colaboradores.")
@@ -316,9 +327,6 @@ st.markdown(f"""
             <h1>GRUPO ARBAITMAN | Revenue Assurance</h1>
             <p>Maringá Turismo — Conectado como: <b>{st.session_state['usuario_atual']}</b> | Perfil: <b>{st.session_state['perfil_atual']}</b></p>
         </div>
-        <div style="background: white; padding: 4px 8px; border-radius: 6px;">
-            <img src="{URL_LOGO_ARBAITMAN}" style="width: 130px; height: auto;">
-        </div>
     </div>
 """, unsafe_allow_html=True)
 
@@ -348,23 +356,25 @@ if btn_mudar_senha or st.session_state.get("abrir_modal_senha", False):
     st.session_state["abrir_modal_senha"] = True
     with st.sidebar.expander("🔑 Alterar Minha Senha", expanded=True):
         u_id_atual = st.session_state["login_user_id"]
-        senha_atual_input = st.text_input("Senha Atual:", type="password", key="pwd_curr")
-        nova_senha_input = st.text_input("Nova Senha:", type="password", key="pwd_new")
-        confirma_senha_input = st.text_input("Confirmar Nova Senha:", type="password", key="pwd_conf")
-        
-        if st.button("💾 Atualizar Senha", use_container_width=True):
-            if usuarios_db[u_id_atual]["senha"] != senha_atual_input:
-                st.error("❌ Senha atual incorreta.")
-            elif not nova_senha_input:
-                st.error("⚠️ Digite uma nova senha.")
-            elif nova_senha_input != confirma_senha_input:
-                st.error("❌ As senhas não coincidem.")
-            else:
-                usuarios_db[u_id_atual]["senha"] = nova_senha_input
-                salvar_usuarios(usuarios_db)
-                st.session_state["msg_sucesso"] = "✅ Senha alterada com sucesso!"
-                st.session_state["abrir_modal_senha"] = False
-                st.rerun()
+        with st.form("form_senha_sidebar"):
+            senha_atual_input = st.text_input("Senha Atual:", type="password")
+            nova_senha_input = st.text_input("Nova Senha:", type="password")
+            confirma_senha_input = st.text_input("Confirmar Nova Senha:", type="password")
+            btn_upd_pwd = st.form_submit_button("💾 Atualizar Senha", use_container_width=True)
+            
+            if btn_upd_pwd:
+                if usuarios_db[u_id_atual]["senha"] != senha_atual_input:
+                    st.error("❌ Senha atual incorreta.")
+                elif not nova_senha_input.strip():
+                    st.error("⚠️ Digite uma nova senha.")
+                elif nova_senha_input != confirma_senha_input:
+                    st.error("❌ As senhas não coincidem.")
+                else:
+                    usuarios_db[u_id_atual]["senha"] = nova_senha_input.strip()
+                    salvar_usuarios(usuarios_db)
+                    st.session_state["msg_sucesso"] = "✅ Senha alterada com sucesso!"
+                    st.session_state["abrir_modal_senha"] = False
+                    st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.title("🔍 Filtros Operacionais")
