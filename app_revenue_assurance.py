@@ -16,7 +16,7 @@ st.set_page_config(
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
 
-# Logo Oficial do Grupo Arbaitman (Imagem Raw GitHub Garantida)
+# Logo Oficial do Grupo Arbaitman
 URL_LOGO_ARBAITMAN = "https://raw.githubusercontent.com/Mribeiro2025/revenue-assurance-app/main/images.png"
 
 # 2. Gerenciador de Usuários e Persistência de Cadastro
@@ -44,7 +44,7 @@ def salvar_usuarios(dict_users):
 
 usuarios_db = carregar_usuarios()
 
-# 3. Estilização CSS Corporativa Clean (Grupo Arbaitman)
+# 3. Estilização CSS Corporativa
 st.markdown("""
     <style>
         .stApp { background-color: #f8f9fa; }
@@ -91,22 +91,6 @@ st.markdown("""
             border-left: 5px solid #002060;
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
-        .logo-img-container {
-            text-align: center;
-            padding: 10px 0;
-        }
-        .logo-img-container img {
-            max-width: 200px !important;
-            width: 200px !important;
-            height: auto !important;
-        }
-        .details-card {
-            background-color: #f1f3f5;
-            border: 1px solid #ced4da;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -114,9 +98,9 @@ def renderizar_logo(largura=180):
     try:
         st.image(URL_LOGO_ARBAITMAN, width=largura)
     except:
-        st.markdown(f"### **GRUPO ARBAITMAN**")
+        st.markdown("### **GRUPO ARBAITMAN**")
 
-# 4. Estado da Sessão e Autenticação
+# 4. Autenticação e Sessão
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
     st.session_state["usuario_atual"] = None
@@ -299,7 +283,6 @@ if "Bilhetes" in df_acao_total.columns:
 else:
     df_acao_total["Bilhetes_Str"] = ""
 
-hoje = datetime.datetime.now()
 usuario_log_formatado = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
 
 # 6. Cabeçalho Principal do Dashboard
@@ -434,6 +417,9 @@ if st.session_state["perfil_atual"] == "Compliance":
 
 abas_objetos = st.tabs(abas_nomes)
 
+# LISTA DINÂMICA DE GERENTES DA BASE
+gerentes_base_unicos = sorted([g for g in df_acao_total[COL_GERENTE].dropna().astype(str).unique() if g not in ["Suporte backoffice", "Não Atribuído", "-"]])
+
 # ABA 1: TRATATIVA OPERACIONAL GERAL
 with abas_objetos[0]:
     st.subheader("📝 Módulo de Resolução e Detalhamento Operacional")
@@ -443,6 +429,7 @@ with abas_objetos[0]:
     else:
         lista_busca_geral = df_master_filtrado["Bilhetes"].astype(str).tolist()
         opcao_sel_m = st.selectbox("Procure ou Selecione o Bilhete / LOC para Tratativa:", options=lista_busca_geral, key="sb_geral")
+        
         row_m = df_master_filtrado[df_master_filtrado["Bilhetes"].astype(str) == opcao_sel_m].iloc[0]
         
         st.markdown(f"""
@@ -456,9 +443,8 @@ with abas_objetos[0]:
             </div>
         """, unsafe_allow_html=True)
         
-        # QUADRO DE DETALHES DAS EMISSÕES
         st.markdown("##### 📋 Detalhes do Bilhete e Valores de Emissão")
-        cols_det = ["Ponto de venda", "Código lata", "Área Resp. Operação", "CIA", "Bilhetes", "Localizador_Sistema", "Status_Sistema", "Data Emissão", "Pagto", "A vista", "A credito", "Taxa", "Comissão", "Taxa DU", "Desc.", "Incentivo", "VL. Líquido", "Status_Geral"]
+        cols_det = ["Ponto de venda", "Área Resp. Operação", "CIA", "Bilhetes", "Localizador_Sistema", "Status_Sistema", "Data Emissão", "Pagto", "A vista", "A credito", "Taxa", "Comissão", "Taxa DU", "Desc.", "Incentivo", "VL. Líquido", "Status_Geral"]
         cols_presentes = [c for c in cols_det if c in row_m.index]
         st.dataframe(pd.DataFrame([row_m[cols_presentes]]), use_container_width=True, hide_index=True)
         st.markdown("---")
@@ -477,18 +463,21 @@ with abas_objetos[0]:
             
             with col_c:
                 if nova_area == "Operação":
-                    gerentes_lista = ["Keli Santi", "Guilherme Silva", "Outro Gerente..."]
-                    gerente_indicado = st.selectbox("Gerente Responsável:", options=gerentes_lista)
+                    opcoes_gerentes_combo = sorted(list(set(gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Fabiano Souza", "Ivanete Bertasol", "Jaime Schnaider"]))) + ["Outro Gerente..."]
+                    gerente_atual_row = str(row_m.get(COL_GERENTE, ""))
+                    idx_g = opcoes_gerentes_combo.index(gerente_atual_row) if gerente_atual_row in opcoes_gerentes_combo else 0
+                    
+                    gerente_indicado = st.selectbox("Gerente Responsável:", options=opcoes_gerentes_combo, index=idx_g)
                     if gerente_indicado == "Outro Gerente...":
-                        gerente_indicado = st.text_input("Nome do Gerente:")
+                        gerente_indicado = st.text_input("Escreva o Nome do Gerente:")
                 else:
-                    st.text_input("Gerente Responsável:", value="N/A (Reatribuído)", disabled=True)
+                    st.text_input("Gerente Responsável:", value=f"N/A ({nova_area})", disabled=True)
                     gerente_indicado = nova_area
 
             with col_d:
                 num_chamado = st.text_input("Nº do Chamado / Ticket (Obrigatório se Suporte Backoffice):", placeholder="Ex: INC-98472")
                 
-            obs_detalhe = st.text_area("Observações e Detalhes da Solução:", value=str(row_m.get("Obs. Operação", "")))
+            obs_detalhe = st.text_area("Observações e Detalhes da Solução:", value="", placeholder="Digite aqui as observações desta tratativa...")
             btn_salvar_g = st.form_submit_button("💾 Salvar Tratativa Operacional")
             
             if btn_salvar_g:
@@ -496,7 +485,6 @@ with abas_objetos[0]:
                     st.error("⚠️ Para reatribuir ao **Suporte backoffice**, é OBRIGATÓRIO informar o Número do Chamado!")
                 else:
                     idx = df_master[df_master["Bilhetes"].astype(str) == opcao_sel_m].index
-                    
                     area_final_salvar = gerente_indicado if nova_area == "Operação" and gerente_indicado else nova_area
                     
                     novo_log = pd.DataFrame([{
@@ -544,6 +532,11 @@ with abas_objetos[0]:
                     except PermissionError:
                         st.error("❌ O arquivo Excel está aberto em outro programa. Feche a planilha para salvar.")
 
+        # TABELA COMPLETA COM TODOS OS CASOS FILTRADOS ABAIXO DO FORMULÁRIO
+        st.markdown("---")
+        st.markdown(f"### 📊 Lista Completa dos Casos Filtrados ({len(df_master_filtrado)} registros)")
+        st.dataframe(df_master_filtrado, use_container_width=True, hide_index=True)
+
 # ABA 2: DIVERGÊNCIA OPERAÇÃO
 with abas_objetos[1]:
     st.subheader("⚠️ Base 98 - Divergência de Operação / CIAs Aéreas / Arquivos HOT")
@@ -564,7 +557,7 @@ with abas_objetos[1]:
             with c_z:
                 num_chamado_d = st.text_input("Nº do Chamado / Ticket (se houver):")
                 
-            obs_d = st.text_area("Observações e Justificativas:", value=str(row_d.get("Obs. Operação", "")))
+            obs_d = st.text_area("Observações e Justificativas:", value="", placeholder="Digite aqui a justificativa ou correção realizada...")
             btn_salvar_d = st.form_submit_button("💾 Salvar Ação nesta Divergência")
             
             if btn_salvar_d:
@@ -614,6 +607,7 @@ with abas_objetos[1]:
                     st.error("❌ O arquivo Excel está aberto em outro programa.")
                     
         st.markdown("---")
+        st.markdown(f"### 📊 Lista Completa das Divergências ({len(df_div_op_filtrado)} registros)")
         st.dataframe(df_div_op_filtrado, use_container_width=True, hide_index=True)
 
 # ABA 3: SEM DIVERGÊNCIA
@@ -643,7 +637,7 @@ with abas_objetos[3]:
                 st.text_input("Área Operacional Preservada:", value=area_original, disabled=True)
                 area_devolucao_bk = area_original
 
-            obs_back = st.text_area("Parecer do Suporte Backoffice / Auditoria:", value=str(row_back.get("Obs. Operação", "")))
+            obs_back = st.text_area("Parecer do Suporte Backoffice / Auditoria:", value="", placeholder="Digite aqui o parecer técnico do suporte...")
             btn_salvar_back = st.form_submit_button("💾 Salvar Resolução do Suporte")
 
             if btn_salvar_back:
@@ -702,6 +696,7 @@ with abas_objetos[3]:
                     st.error("❌ O arquivo Excel está aberto em outro programa.")
 
         st.markdown("---")
+        st.markdown(f"### 📊 Lista Completa dos Chamados ({len(df_backoffice_filtrado)} registros)")
         st.dataframe(df_backoffice_filtrado, use_container_width=True, hide_index=True)
 
 # ABA 5: RÉPLICA DA AUDITORIA
@@ -715,7 +710,7 @@ with abas_objetos[4]:
         with st.form("form_replica_auditoria"):
             status_auditoria = st.selectbox("Decisão da Auditoria:", options=["Contestado / Recusado", "Aprovado / Conciliado"])
             area_devolucao = st.selectbox("Devolver para Área / Gerente:", options=["Suporte backoffice", "Central de Eventos", "Concierge/Lazer", "Unique", "Private", "Operação"])
-            motivo_replica = st.text_area("Justificativa da Auditoria:")
+            motivo_replica = st.text_area("Justificativa da Auditoria:", value="", placeholder="Digite a justificativa para a réplica...")
             btn_replica = st.form_submit_button("🚨 Enviar Apontamento")
             
             if btn_replica:
@@ -747,6 +742,10 @@ with abas_objetos[4]:
                     st.rerun()
                 except PermissionError:
                     st.error("❌ Feche a planilha para salvar.")
+
+        st.markdown("---")
+        st.markdown(f"### 📊 Lista Completa dos Casos em Réplica ({len(bilhetes_com_tratativa)} registros)")
+        st.dataframe(bilhetes_com_tratativa, use_container_width=True, hide_index=True)
 
 # ABAS EXCLUSIVAS DO COMPLIANCE
 idx_aba_compliance = 5
