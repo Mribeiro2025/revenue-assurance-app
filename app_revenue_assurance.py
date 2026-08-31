@@ -16,17 +16,6 @@ st.set_page_config(
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
 
-# Caminhos para Busca do Logo Local
-CAMINHOS_LOGO_LOCAL = [
-    os.path.join(os.getcwd(), "Logo", "logo.png"),
-    os.path.join(os.getcwd(), "Logo", "logo-grupo-arbaitman.png"),
-    os.path.join(os.getcwd(), "logo.png"),
-    r"C:\Users\mribeiro1\MARINGA TURISMO\Maringá Turismo - PLANEJAMENTO ESTRATEGICO (1)\01-Planejamento Estratégico\Auditoria de Bilhetes\Logo\logo.png",
-    r"C:\Users\mribeiro1\MARINGA TURISMO\Maringá Turismo - PLANEJAMENTO ESTRATEGICO (1)\01-Planejamento Estratégico\Auditoria de Bilhetes\Logo\logo-grupo-arbaitman.png"
-]
-
-URL_LOGO_GITHUB = "https://raw.githubusercontent.com/Mribeiro2025/revenue-assurance-app/main/images.png"
-
 # 2. Gerenciador de Usuários e Persistência de Cadastro
 USUARIOS_PADRAO = {
     "mribeiro": {"senha": "123", "nome": "Marcos Ribeiro", "perfil": "Compliance", "status": "APROVADO", "data_solicitacao": "2026-08-31"},
@@ -52,7 +41,7 @@ def salvar_usuarios(dict_users):
 
 usuarios_db = carregar_usuarios()
 
-# 3. Estilização CSS Corporativa (Tags Multiselect em Cinza)
+# 3. Estilização CSS Corporativa
 st.markdown("""
     <style>
         .stApp { background-color: #f8f9fa; }
@@ -104,29 +93,27 @@ st.markdown("""
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
 
-        /* REMOVE O VERMELHO DAS TAGS DO MULTISELECT -> ALTERA PARA CINZA CORPORATIVO */
+        /* TAGS DO MULTISELECT EM CINZA CORPORATIVO */
         span[data-baseweb="tag"] {
             background-color: #6c757d !important;
             color: #ffffff !important;
             border-radius: 4px !important;
         }
+        
+        /* Marca Textual Corporativa */
+        .brand-header {
+            font-size: 22px;
+            font-weight: 800;
+            color: #002060;
+            letter-spacing: 1px;
+            text-align: center;
+            margin-bottom: 5px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
-def renderizar_logo(largura=180):
-    logo_encontrado = None
-    for path in CAMINHOS_LOGO_LOCAL:
-        if os.path.exists(path):
-            logo_encontrado = path
-            break
-            
-    if logo_encontrado:
-        st.image(logo_encontrado, width=largura)
-    else:
-        try:
-            st.image(URL_LOGO_GITHUB, width=largura)
-        except:
-            st.markdown("### **GRUPO ARBAITMAN**")
+def renderizar_marca():
+    st.markdown('<div class="brand-header">GRUPO ARBAITMAN</div>', unsafe_allow_html=True)
 
 # 4. Autenticação e Sessão
 if "autenticado" not in st.session_state:
@@ -140,7 +127,7 @@ if not st.session_state["autenticado"]:
     
     with col_center:
         st.markdown('<div class="login-card">', unsafe_allow_html=True)
-        renderizar_logo(200)
+        renderizar_marca()
         st.markdown("<p style='text-align: center; color: #6c757d; font-size: 13px; margin-bottom: 20px;'>Maringá Turismo | Portal de Revenue Assurance</p>", unsafe_allow_html=True)
         
         aba_login, aba_redefinir, aba_solicitar = st.tabs(["🔐 Entrar", "🔑 Esqueci a Senha", "📝 Solicitar Acesso"])
@@ -335,7 +322,7 @@ if "msg_sucesso" in st.session_state:
     del st.session_state["msg_sucesso"]
 
 # Sidebar / Filtros Operacionais
-renderizar_logo(150)
+renderizar_marca()
 st.sidebar.markdown(f"### 👤 {st.session_state['usuario_atual']}")
 
 col_btn_sair, col_btn_senha = st.sidebar.columns(2)
@@ -422,7 +409,6 @@ df_backoffice_dinamico = pd.concat([
 
 df_backoffice_filtrado = aplicar_filtros_globais(df_backoffice_dinamico)
 
-# Lista de Abas
 abas_nomes = [
     "📊 Dashboard & KPIs",
     "🎯 Tratativa Operacional (Geral)",
@@ -441,7 +427,7 @@ abas_objetos = st.tabs(abas_nomes)
 
 gerentes_base_unicos = sorted([g for g in df_acao_total[COL_GERENTE].dropna().astype(str).unique() if g not in ["Suporte backoffice", "Não Atribuído", "-"]])
 
-# ABA 0: DASHBOARD & KPIS INTERATIVOS
+# ABA 0: DASHBOARD
 with abas_objetos[0]:
     st.subheader("📊 Painel Executivo e Métricas de Controladoria")
     
@@ -454,7 +440,6 @@ with abas_objetos[0]:
     st.markdown("---")
     
     col_chart1, col_chart2 = st.columns(2)
-    
     with col_chart1:
         st.markdown("##### 📌 Distribuição de Volumetria por Status Geral")
         if not df_acao_filtrado.empty and "Status_Geral" in df_acao_filtrado.columns:
@@ -519,6 +504,10 @@ with abas_objetos[1]:
         st.dataframe(pd.DataFrame([row_m[cols_presentes]]), use_container_width=True, hide_index=True)
         st.markdown("---")
         
+        lista_gerentes_combo = sorted(list(set(gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Fabiano Souza", "Ivanete Bertasol", "Jaime Schnaider"]))) + ["Outro Gerente..."]
+        gerente_atual_row = str(row_m.get(COL_GERENTE, ""))
+        idx_g = lista_gerentes_combo.index(gerente_atual_row) if gerente_atual_row in lista_gerentes_combo else (len(lista_gerentes_combo) - 1)
+
         with st.form("form_tratativa_geral"):
             col_a, col_b, col_c, col_d = st.columns([1.2, 1.2, 1.5, 1.2])
             
@@ -533,22 +522,12 @@ with abas_objetos[1]:
             
             with col_c:
                 if nova_area == "Operação":
-                    opcoes_gerentes_combo = sorted(list(set(gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Fabiano Souza", "Ivanete Bertasol", "Jaime Schnaider"]))) + ["Outro Gerente..."]
-                    gerente_atual_row = str(row_m.get(COL_GERENTE, ""))
-                    idx_g = opcoes_gerentes_combo.index(gerente_atual_row) if gerente_atual_row in opcoes_gerentes_combo else 0
-                    
-                    c_g1, c_g2 = st.columns([1, 1])
-                    with c_g1:
-                        gerente_indicado_sel = st.selectbox("Gerente Responsável:", options=opcoes_gerentes_combo, index=idx_g)
-                    with c_g2:
-                        if gerente_indicado_sel == "Outro Gerente...":
-                            texto_novo_gerente = st.text_input("Nome do Novo Gerente:", placeholder="Digite o nome do gerente...")
-                        else:
-                            texto_novo_gerente = ""
+                    gerente_indicado_sel = st.selectbox("Gerente Responsável:", options=lista_gerentes_combo, index=idx_g)
+                    novo_gerente_texto = st.text_input("Escreva o Nome do Novo Gerente:", placeholder="Digite o nome se selecionou 'Outro Gerente...'")
                 else:
                     st.text_input("Gerente Responsável:", value=f"N/A ({nova_area})", disabled=True)
                     gerente_indicado_sel = nova_area
-                    texto_novo_gerente = ""
+                    novo_gerente_texto = ""
 
             with col_d:
                 num_chamado = st.text_input("Nº do Chamado / Ticket (Obrigatório se Suporte Backoffice):", placeholder="Ex: INC-98472")
@@ -557,10 +536,9 @@ with abas_objetos[1]:
             btn_salvar_g = st.form_submit_button("💾 Salvar Tratativa Operacional")
             
             if btn_salvar_g:
-                # CORREÇÃO CRÍTICA DO NOVO GERENTE
                 if nova_area == "Operação":
                     if gerente_indicado_sel == "Outro Gerente...":
-                        gerente_final = texto_novo_gerente.strip()
+                        gerente_final = novo_gerente_texto.strip()
                     else:
                         gerente_final = gerente_indicado_sel
                 else:
@@ -569,7 +547,7 @@ with abas_objetos[1]:
                 if nova_area == "Suporte backoffice" and not num_chamado.strip():
                     st.error("⚠️ Para reatribuir ao **Suporte backoffice**, é OBRIGATÓRIO informar o Número do Chamado!")
                 elif nova_area == "Operação" and not gerente_final:
-                    st.error("⚠️ Por favor, informe o Nome do Novo Gerente no campo de texto ao lado!")
+                    st.error("⚠️ Por favor, informe o Nome do Gerente no campo de texto abaixo do seletor!")
                 else:
                     idx = df_master[df_master["Bilhetes"].astype(str) == opcao_sel_m].index
                     

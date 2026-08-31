@@ -1,0 +1,3 @@
+git add Logo/logo.png
+git commit -m "Adiciona logo ao projeto"
+git push
