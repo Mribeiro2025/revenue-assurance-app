@@ -16,8 +16,15 @@ st.set_page_config(
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
 
-# Logo Oficial do Grupo Arbaitman
-URL_LOGO_ARBAITMAN = "https://raw.githubusercontent.com/Mribeiro2025/revenue-assurance-app/main/images.png"
+# Caminhos para Busca do Logo Local
+CAMINHOS_LOGO_LOCAL = [
+    os.path.join(os.getcwd(), "Logo", "logo.png"),
+    os.path.join(os.getcwd(), "Logo", "logo-grupo-arbaitman.png"),
+    r"C:\Users\mribeiro1\MARINGA TURISMO\Maringá Turismo - PLANEJAMENTO ESTRATEGICO (1)\01-Planejamento Estratégico\Auditoria de Bilhetes\Logo\logo.png",
+    r"C:\Users\mribeiro1\MARINGA TURISMO\Maringá Turismo - PLANEJAMENTO ESTRATEGICO (1)\01-Planejamento Estratégico\Auditoria de Bilhetes\Logo\logo-grupo-arbaitman.png"
+]
+
+URL_LOGO_GITHUB = "https://raw.githubusercontent.com/Mribeiro2025/revenue-assurance-app/main/images.png"
 
 # 2. Gerenciador de Usuários e Persistência de Cadastro
 USUARIOS_PADRAO = {
@@ -44,11 +51,12 @@ def salvar_usuarios(dict_users):
 
 usuarios_db = carregar_usuarios()
 
-# 3. Estilização CSS Corporativa
+# 3. Estilização CSS Corporativa (Tags Multiselect em Cinza)
 st.markdown("""
     <style>
         .stApp { background-color: #f8f9fa; }
         
+        /* Botões Principais */
         div.stButton > button[kind="primary"], div.stButton > button {
             background-color: #002060 !important;
             color: #ffffff !important;
@@ -61,6 +69,7 @@ st.markdown("""
             color: #ffffff !important;
         }
         
+        /* Cabeçalho */
         .header-box {
             background: linear-gradient(135deg, #002060 0%, #003366 100%);
             padding: 15px 25px;
@@ -75,6 +84,7 @@ st.markdown("""
         .header-box h1 { color: #ffffff !important; margin: 0; font-size: 24px; font-weight: 700; }
         .header-box p { color: #d0e0ff !important; margin-top: 4px; font-size: 13px; margin-bottom: 0; }
         
+        /* Card de Login */
         .login-card {
             background-color: #ffffff;
             padding: 30px 35px;
@@ -84,6 +94,7 @@ st.markdown("""
             margin-top: 20px;
         }
         
+        /* Métricas KPI */
         div[data-testid="stMetric"] {
             background-color: #ffffff;
             border-radius: 8px;
@@ -91,14 +102,30 @@ st.markdown("""
             border-left: 5px solid #002060;
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
+
+        /* REMOVE O VERMELHO DAS TAGS DO MULTISELECT -> ALTERA PARA CINZA CORPORATIVO */
+        span[data-baseweb="tag"] {
+            background-color: #6c757d !important;
+            color: #ffffff !important;
+            border-radius: 4px !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
 def renderizar_logo(largura=180):
-    try:
-        st.image(URL_LOGO_ARBAITMAN, width=largura)
-    except:
-        st.markdown("### **GRUPO ARBAITMAN**")
+    logo_encontrado = None
+    for path in CAMINHOS_LOGO_LOCAL:
+        if os.path.exists(path):
+            logo_encontrado = path
+            break
+            
+    if logo_encontrado:
+        st.image(logo_encontrado, width=largura)
+    else:
+        try:
+            st.image(URL_LOGO_GITHUB, width=largura)
+        except:
+            st.markdown("### **GRUPO ARBAITMAN**")
 
 # 4. Autenticação e Sessão
 if "autenticado" not in st.session_state:
@@ -394,15 +421,9 @@ df_backoffice_dinamico = pd.concat([
 
 df_backoffice_filtrado = aplicar_filtros_globais(df_backoffice_dinamico)
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Bilhetes/LOCs em Ação", f"{len(df_acao_filtrado):,}")
-c2.metric("Tarifa Pendente (R$)", f"R$ {df_acao_filtrado['A credito'].sum():,.2f}" if "A credito" in df_acao_filtrado.columns else "R$ 0.00")
-c3.metric("Taxas Pendentes (R$)", f"R$ {df_acao_filtrado['Taxa'].sum():,.2f}" if "Taxa" in df_acao_filtrado.columns else "R$ 0.00")
-c4.metric("Receita em Risco (R$)", f"R$ {df_acao_filtrado['Incentivo'].sum():,.2f}" if "Incentivo" in df_acao_filtrado.columns else "R$ 0.00")
-
-st.markdown("---")
-
+# Lista de Abas Atualizada com a Aba de Dashboard no Início
 abas_nomes = [
+    "📊 Dashboard & KPIs",
     "🎯 Tratativa Operacional (Geral)",
     "⚠️ Divergência Operação (CIAs/HOT + Tratativa Direta)",
     "✅ Sem Divergência (Conciliação)",
@@ -412,16 +433,64 @@ abas_nomes = [
 ]
 
 if st.session_state["perfil_atual"] == "Compliance":
-    abas_nomes.insert(5, "📜 Trilha de Auditoria (Exclusivo Compliance)")
-    abas_nomes.insert(6, "⚙️ Gestão de Acessos & Aprovações")
+    abas_nomes.insert(6, "📜 Trilha de Auditoria (Exclusivo Compliance)")
+    abas_nomes.insert(7, "⚙️ Gestão de Acessos & Aprovações")
 
 abas_objetos = st.tabs(abas_nomes)
 
-# LISTA DINÂMICA DE GERENTES DA BASE
 gerentes_base_unicos = sorted([g for g in df_acao_total[COL_GERENTE].dropna().astype(str).unique() if g not in ["Suporte backoffice", "Não Atribuído", "-"]])
 
-# ABA 1: TRATATIVA OPERACIONAL GERAL
+# ABA 0: DASHBOARD & KPIS INTERATIVOS
 with abas_objetos[0]:
+    st.subheader("📊 Painel Executivo e Métricas de Controladoria")
+    
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Bilhetes/LOCs em Ação", f"{len(df_acao_filtrado):,}")
+    k2.metric("Tarifa Pendente (R$)", f"R$ {df_acao_filtrado['A credito'].sum():,.2f}" if "A credito" in df_acao_filtrado.columns else "R$ 0.00")
+    k3.metric("Taxas Pendentes (R$)", f"R$ {df_acao_filtrado['Taxa'].sum():,.2f}" if "Taxa" in df_acao_filtrado.columns else "R$ 0.00")
+    k4.metric("Receita em Risco (R$)", f"R$ {df_acao_filtrado['Incentivo'].sum():,.2f}" if "Incentivo" in df_acao_filtrado.columns else "R$ 0.00")
+    
+    st.markdown("---")
+    
+    col_chart1, col_chart2 = st.columns(2)
+    
+    with col_chart1:
+        st.markdown("##### 📌 Distribuição de Volumetria por Status Geral")
+        if not df_acao_filtrado.empty and "Status_Geral" in df_acao_filtrado.columns:
+            chart_status = df_acao_filtrado["Status_Geral"].value_counts().reset_index()
+            chart_status.columns = ["Status", "Quantidade"]
+            st.bar_chart(data=chart_status, x="Status", y="Quantidade", color="#002060")
+        else:
+            st.info("Sem dados para exibir o gráfico.")
+            
+    with col_chart2:
+        st.markdown("##### 👤 Top Gerentes Responsáveis por Volume de Pendências")
+        if not df_acao_filtrado.empty and COL_GERENTE in df_acao_filtrado.columns:
+            chart_gerente = df_acao_filtrado[COL_GERENTE].value_counts().head(8).reset_index()
+            chart_gerente.columns = ["Gerente", "Quantidade"]
+            st.bar_chart(data=chart_gerente, x="Gerente", y="Quantidade", color="#003366")
+        else:
+            st.info("Sem dados para exibir o gráfico.")
+            
+    st.markdown("---")
+    
+    col_chart3, col_chart4 = st.columns(2)
+    with col_chart3:
+        st.markdown("##### ✈️ Concentração por Companhia Aérea (CIA)")
+        if not df_acao_filtrado.empty and "CIA" in df_acao_filtrado.columns:
+            chart_cia = df_acao_filtrado["CIA"].value_counts().reset_index()
+            chart_cia.columns = ["Companhia Aérea", "Quantidade"]
+            st.dataframe(chart_cia, use_container_width=True, hide_index=True)
+            
+    with col_chart4:
+        st.markdown("##### 🏢 Volume de Divergências por Setor")
+        if not df_acao_filtrado.empty and COL_SETOR in df_acao_filtrado.columns:
+            chart_setor = df_acao_filtrado[COL_SETOR].value_counts().reset_index()
+            chart_setor.columns = ["Setor", "Quantidade"]
+            st.dataframe(chart_setor, use_container_width=True, hide_index=True)
+
+# ABA 1: TRATATIVA OPERACIONAL GERAL
+with abas_objetos[1]:
     st.subheader("📝 Módulo de Resolução e Detalhamento Operacional")
     
     if len(df_master_filtrado) == 0:
@@ -450,7 +519,7 @@ with abas_objetos[0]:
         st.markdown("---")
         
         with st.form("form_tratativa_geral"):
-            col_a, col_b, col_c, col_d = st.columns([1.2, 1.2, 1.2, 1.2])
+            col_a, col_b, col_c, col_d = st.columns([1.2, 1.2, 1.5, 1.2])
             
             with col_a:
                 novo_status = st.selectbox("Status da Tratativa:", options=["Já Lançado no ERP", "Pendente de Lançamento", "Aguardando TI", "Cancelado / Devolvido"])
@@ -467,9 +536,12 @@ with abas_objetos[0]:
                     gerente_atual_row = str(row_m.get(COL_GERENTE, ""))
                     idx_g = opcoes_gerentes_combo.index(gerente_atual_row) if gerente_atual_row in opcoes_gerentes_combo else 0
                     
-                    gerente_indicado = st.selectbox("Gerente Responsável:", options=opcoes_gerentes_combo, index=idx_g)
-                    if gerente_indicado == "Outro Gerente...":
-                        gerente_indicado = st.text_input("Escreva o Nome do Gerente:")
+                    c_g1, c_g2 = st.columns([1, 1])
+                    with c_g1:
+                        gerente_indicado = st.selectbox("Gerente Responsável:", options=opcoes_gerentes_combo, index=idx_g)
+                    with c_g2:
+                        if gerente_indicado == "Outro Gerente...":
+                            gerente_indicado = st.text_input("Nome do Novo Gerente:", placeholder="Escreva o nome...")
                 else:
                     st.text_input("Gerente Responsável:", value=f"N/A ({nova_area})", disabled=True)
                     gerente_indicado = nova_area
@@ -532,13 +604,12 @@ with abas_objetos[0]:
                     except PermissionError:
                         st.error("❌ O arquivo Excel está aberto em outro programa. Feche a planilha para salvar.")
 
-        # TABELA COMPLETA COM TODOS OS CASOS FILTRADOS ABAIXO DO FORMULÁRIO
         st.markdown("---")
         st.markdown(f"### 📊 Lista Completa dos Casos Filtrados ({len(df_master_filtrado)} registros)")
         st.dataframe(df_master_filtrado, use_container_width=True, hide_index=True)
 
 # ABA 2: DIVERGÊNCIA OPERAÇÃO
-with abas_objetos[1]:
+with abas_objetos[2]:
     st.subheader("⚠️ Base 98 - Divergência de Operação / CIAs Aéreas / Arquivos HOT")
     
     if len(df_div_op_filtrado) == 0:
@@ -611,12 +682,12 @@ with abas_objetos[1]:
         st.dataframe(df_div_op_filtrado, use_container_width=True, hide_index=True)
 
 # ABA 3: SEM DIVERGÊNCIA
-with abas_objetos[2]:
+with abas_objetos[3]:
     st.subheader("✅ Base 98 - Bilhetes Prontos para Conciliação Operacional")
     st.dataframe(df_sem_div_filtrado, use_container_width=True, hide_index=True)
 
 # ABA 4: SUPORTE BACKOFFICE
-with abas_objetos[3]:
+with abas_objetos[4]:
     st.subheader("🎧 Base 99 - Chamados Atribuídos ao Suporte Backoffice")
     
     if len(df_backoffice_filtrado) == 0:
@@ -700,7 +771,7 @@ with abas_objetos[3]:
         st.dataframe(df_backoffice_filtrado, use_container_width=True, hide_index=True)
 
 # ABA 5: RÉPLICA DA AUDITORIA
-with abas_objetos[4]:
+with abas_objetos[5]:
     st.subheader("⚖️ Módulo de Contestação e Réplica da Auditoria")
     bilhetes_com_tratativa = df_acao_filtrado[df_acao_filtrado["Status_Geral"] != "Pendente de Lançamento"]
     if len(bilhetes_com_tratativa) > 0:
@@ -748,7 +819,7 @@ with abas_objetos[4]:
         st.dataframe(bilhetes_com_tratativa, use_container_width=True, hide_index=True)
 
 # ABAS EXCLUSIVAS DO COMPLIANCE
-idx_aba_compliance = 5
+idx_aba_compliance = 6
 
 if st.session_state["perfil_atual"] == "Compliance":
     # ABA TRILHA DE AUDITORIA
