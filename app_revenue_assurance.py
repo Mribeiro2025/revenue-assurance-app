@@ -41,7 +41,7 @@ def salvar_usuarios(dict_users):
 
 usuarios_db = carregar_usuarios()
 
-# 3. Estilização CSS Corporativa
+# 3. Estilização CSS Corporativa (Força Tags de Filtro em Cinza Corporativo)
 st.markdown("""
     <style>
         .stApp { background-color: #f8f9fa; }
@@ -93,11 +93,17 @@ st.markdown("""
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
 
-        /* TAGS DO MULTISELECT EM CINZA CORPORATIVO */
-        span[data-baseweb="tag"] {
+        /* 1º REQUISITO: FORÇAR TODAS AS TAGS DOS MULTISELECTS PARA CINZA CORPORATIVO (#6C757D) */
+        span[data-baseweb="tag"], 
+        div[data-baseweb="tag"], 
+        [data-baseweb="tag"] {
             background-color: #6c757d !important;
             color: #ffffff !important;
             border-radius: 4px !important;
+        }
+        span[data-baseweb="tag"] span,
+        div[data-baseweb="tag"] span {
+            color: #ffffff !important;
         }
         
         /* Marca Textual Corporativa */
@@ -381,7 +387,7 @@ df_f_3 = df_f_2[df_f_2[COL_EMISSOR].astype(str).isin(emissor_sel)]
 tipos_emissao = sorted(list(df_f_3["Tipo_Emissao_Lemon"].dropna().astype(str).unique())) if "Tipo_Emissao_Lemon" in df_f_3.columns else []
 emissao_sel = st.sidebar.multiselect("Tipo de Emissão (OBT):", options=tipos_emissao, default=tipos_emissao)
 
-df_f_4 = df_f_3[df_f_3["Tipo_Emissao_Lemon"].astype(str).isin(emissao_sel)] if "Tipo_Emissao_Lemon" in df_f_3.columns else df_f_3
+df_f_4 = df_f_3[df_f_3["Tipo_Emissao_Lemon"].astype(str).isin(emissao_sel)] if "Tipo_Emissao_Lemon" in df_f_4.columns else df_f_3
 
 cias = sorted(list(df_f_4["CIA"].dropna().astype(str).unique())) if "CIA" in df_f_4.columns else []
 cia_sel = st.sidebar.multiselect("Companhia Aérea:", options=cias, default=cias)
@@ -425,6 +431,7 @@ if st.session_state["perfil_atual"] == "Compliance":
 
 abas_objetos = st.tabs(abas_nomes)
 
+# LISTA GERAL DE GERENTES DA BASE
 gerentes_base_unicos = sorted([g for g in df_acao_total[COL_GERENTE].dropna().astype(str).unique() if g not in ["Suporte backoffice", "Não Atribuído", "-"]])
 
 # ABA 0: DASHBOARD
@@ -457,23 +464,6 @@ with abas_objetos[0]:
             st.bar_chart(data=chart_gerente, x="Gerente", y="Quantidade", color="#003366")
         else:
             st.info("Sem dados para exibir o gráfico.")
-            
-    st.markdown("---")
-    
-    col_chart3, col_chart4 = st.columns(2)
-    with col_chart3:
-        st.markdown("##### ✈️ Concentração por Companhia Aérea (CIA)")
-        if not df_acao_filtrado.empty and "CIA" in df_acao_filtrado.columns:
-            chart_cia = df_acao_filtrado["CIA"].value_counts().reset_index()
-            chart_cia.columns = ["Companhia Aérea", "Quantidade"]
-            st.dataframe(chart_cia, use_container_width=True, hide_index=True)
-            
-    with col_chart4:
-        st.markdown("##### 🏢 Volume de Divergências por Setor")
-        if not df_acao_filtrado.empty and COL_SETOR in df_acao_filtrado.columns:
-            chart_setor = df_acao_filtrado[COL_SETOR].value_counts().reset_index()
-            chart_setor.columns = ["Setor", "Quantidade"]
-            st.dataframe(chart_setor, use_container_width=True, hide_index=True)
 
 # ABA 1: TRATATIVA OPERACIONAL GERAL
 with abas_objetos[1]:
@@ -503,10 +493,6 @@ with abas_objetos[1]:
         cols_presentes = [c for c in cols_det if c in row_m.index]
         st.dataframe(pd.DataFrame([row_m[cols_presentes]]), use_container_width=True, hide_index=True)
         st.markdown("---")
-        
-        lista_gerentes_combo = sorted(list(set(gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Fabiano Souza", "Ivanete Bertasol", "Jaime Schnaider"]))) + ["Outro Gerente..."]
-        gerente_atual_row = str(row_m.get(COL_GERENTE, ""))
-        idx_g = lista_gerentes_combo.index(gerente_atual_row) if gerente_atual_row in lista_gerentes_combo else (len(lista_gerentes_combo) - 1)
 
         with st.form("form_tratativa_geral"):
             col_a, col_b, col_c, col_d = st.columns([1.2, 1.2, 1.5, 1.2])
@@ -517,17 +503,53 @@ with abas_objetos[1]:
             with col_b:
                 areas_opcoes = ["Operação", "Suporte backoffice", "Central de Eventos", "Concierge/Lazer", "Unique", "Private"]
                 area_atual = str(row_m.get(COL_GERENTE, "Operação"))
-                index_area = areas_opcoes.index(area_atual) if area_atual in areas_opcoes else 0
+                
+                # MAPEAMENTO DAS ÁREAS ESPECÍFICAS
+                if area_atual in ["Silvana Celane"]: area_atual = "Private"
+                elif area_atual in ["Jaime Schnaider"]: area_atual = "Unique"
+                elif area_atual in ["Fabiano Souza"]: area_atual = "Concierge/Lazer"
+                elif area_atual in ["Central de Eventos"]: area_atual = "Central de Eventos"
+                elif area_atual.lower() == "suporte backoffice": area_atual = "Suporte backoffice"
+                elif area_atual not in areas_opcoes: area_atual = "Operação"
+
+                index_area = areas_opcoes.index(area_atual)
                 nova_area = st.selectbox("Área Responsável (Reatribuir):", options=areas_opcoes, index=index_area)
             
+            # 2º REQUISITO: REGRA DE GERENTES POR ÁREA
             with col_c:
-                if nova_area == "Operação":
-                    gerente_indicado_sel = st.selectbox("Gerente Responsável:", options=lista_gerentes_combo, index=idx_g)
-                    novo_gerente_texto = st.text_input("Escreva o Nome do Novo Gerente:", placeholder="Digite o nome se selecionou 'Outro Gerente...'")
-                else:
-                    st.text_input("Gerente Responsável:", value=f"N/A ({nova_area})", disabled=True)
-                    gerente_indicado_sel = nova_area
+                if nova_area == "Private":
+                    st.text_input("Gerente Responsável:", value="Silvana Celane", disabled=True)
+                    gerente_indicado_sel = "Silvana Celane"
                     novo_gerente_texto = ""
+                elif nova_area == "Unique":
+                    st.text_input("Gerente Responsável:", value="Jaime Schnaider", disabled=True)
+                    gerente_indicado_sel = "Jaime Schnaider"
+                    novo_gerente_texto = ""
+                elif nova_area == "Concierge/Lazer":
+                    st.text_input("Gerente Responsável:", value="Fabiano Souza", disabled=True)
+                    gerente_indicado_sel = "Fabiano Souza"
+                    novo_gerente_texto = ""
+                elif nova_area == "Central de Eventos":
+                    st.text_input("Gerente Responsável:", value="Central de Eventos", disabled=True)
+                    gerente_indicado_sel = "Central de Eventos"
+                    novo_gerente_texto = ""
+                elif nova_area == "Suporte backoffice":
+                    st.text_input("Gerente Responsável:", value="N/A (Suporte backoffice)", disabled=True)
+                    gerente_indicado_sel = "Suporte backoffice"
+                    novo_gerente_texto = ""
+                else:
+                    # ÁREA OPERAÇÃO: EXCLUI OS GERENTES DAS DEMAIS ÁREAS
+                    gerentes_reservados = ["Silvana Celane", "Jaime Schnaider", "Fabiano Souza", "Central de Eventos", "Suporte backoffice"]
+                    gerentes_operacao_puros = sorted(list(set([g for g in gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Ivanete Bertasol"] if g not in gerentes_reservados]))) + ["Outro Gerente..."]
+                    
+                    gerente_atual_m = str(row_m.get(COL_GERENTE, ""))
+                    idx_g = gerentes_operacao_puros.index(gerente_atual_m) if gerente_atual_m in gerentes_operacao_puros else 0
+                    
+                    gerente_indicado_sel = st.selectbox("Gerente Responsável:", options=gerentes_operacao_puros, index=idx_g)
+                    if gerente_indicado_sel == "Outro Gerente...":
+                        novo_gerente_texto = st.text_input("Escreva o Nome do Novo Gerente:", placeholder="Digite o nome completo do gerente...")
+                    else:
+                        novo_gerente_texto = ""
 
             with col_d:
                 num_chamado = st.text_input("Nº do Chamado / Ticket (Obrigatório se Suporte Backoffice):", placeholder="Ex: INC-98472")
@@ -542,7 +564,7 @@ with abas_objetos[1]:
                     else:
                         gerente_final = gerente_indicado_sel
                 else:
-                    gerente_final = nova_area
+                    gerente_final = gerente_indicado_sel
 
                 if nova_area == "Suporte backoffice" and not num_chamado.strip():
                     st.error("⚠️ Para reatribuir ao **Suporte backoffice**, é OBRIGATÓRIO informar o Número do Chamado!")
