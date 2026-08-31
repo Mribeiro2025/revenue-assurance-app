@@ -15,7 +15,9 @@ st.set_page_config(
 
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
-URL_LOGO_ARBAITMAN = "https://raw.githubusercontent.com/Mribeiro2025/revenue-assurance-app/main/images.png"
+
+# URL Oficial do Logo Institucional
+URL_LOGO_ARBAITMAN = "https://grupoarbaitman.com.br/wp-content/uploads/2022/05/logo-grupo-arbaitman.png"
 
 # 2. Gerenciador de Usuários e Persistência de Cadastro
 USUARIOS_PADRAO = {
@@ -61,7 +63,7 @@ st.markdown("""
         
         .header-box {
             background: linear-gradient(135deg, #002060 0%, #003366 100%);
-            padding: 20px 25px;
+            padding: 15px 25px;
             border-radius: 10px;
             color: white;
             margin-bottom: 20px;
@@ -93,18 +95,11 @@ st.markdown("""
             text-align: center;
             margin-bottom: 15px;
         }
-        .logo-box img {
-            max-width: 200px;
-            height: auto;
-        }
     </style>
 """, unsafe_allow_html=True)
 
 def exibir_logo(largura=180):
-    try:
-        st.image(URL_LOGO_ARBAITMAN, width=largura)
-    except:
-        st.markdown(f"### GRUPO ARBAITMAN")
+    st.image(URL_LOGO_ARBAITMAN, width=largura)
 
 # 4. Estado da Sessão e Autenticação
 if "autenticado" not in st.session_state:
@@ -119,7 +114,7 @@ if not st.session_state["autenticado"]:
     with col_center:
         st.markdown('<div class="login-card">', unsafe_allow_html=True)
         st.markdown('<div class="logo-box">', unsafe_allow_html=True)
-        exibir_logo(largura=200)
+        exibir_logo(largura=220)
         st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: #6c757d; font-size: 13px; margin-bottom: 20px;'>Maringá Turismo | Portal de Revenue Assurance</p>", unsafe_allow_html=True)
         
@@ -300,6 +295,9 @@ st.markdown(f"""
             <h1>GRUPO ARBAITMAN | Revenue Assurance</h1>
             <p>Maringá Turismo — Conectado como: <b>{st.session_state['usuario_atual']}</b> | Perfil: <b>{st.session_state['perfil_atual']}</b></p>
         </div>
+        <div style="background: white; padding: 4px 8px; border-radius: 6px;">
+            <img src="{URL_LOGO_ARBAITMAN}" style="width: 130px; height: auto;">
+        </div>
     </div>
 """, unsafe_allow_html=True)
 
@@ -446,7 +444,6 @@ with abas_objetos[0]:
                         "Tipo_Interacao": "Tratativa Geral"
                     }])
 
-                    # LÓGICA DE MOVIMENTAÇÃO PARA SEM DIVERGÊNCIA
                     if novo_status == "Já Lançado no ERP":
                         row_upd = row_m.copy()
                         row_upd["Status_Geral"] = "Já Lançado no ERP"
@@ -557,7 +554,7 @@ with abas_objetos[2]:
     st.subheader("✅ Base 98 - Bilhetes Prontos para Conciliação Operacional")
     st.dataframe(df_sem_div_filtrado, use_container_width=True, hide_index=True)
 
-# ABA 4: SUPORTE BACKOFFICE (COM FORMULÁRIO DE RESOLUÇÃO E DEVOLUÇÃO)
+# ABA 4: SUPORTE BACKOFFICE (COM ÁREA OPERACIONAL PRESERVADA)
 with abas_objetos[3]:
     st.subheader("🎧 Base 99 - Chamados Atribuídos ao Suporte Backoffice")
     
@@ -569,11 +566,16 @@ with abas_objetos[3]:
         row_back = df_backoffice_filtrado[df_backoffice_filtrado["Bilhetes"].astype(str) == bilhete_back_sel].iloc[0]
 
         with st.form("form_solucao_backoffice"):
-            c_bk1, c_bk2 = st.columns(2)
-            with c_bk1:
-                acao_back = st.selectbox("Ação do Suporte / Auditoria:", options=["Informar que está Correto (Mover para Sem Divergência)", "Devolver para Tratativa Operacional"])
-            with c_bk2:
-                area_devolucao_bk = st.selectbox("Área Operacional de Destino (em caso de devolução):", options=["Operação", "Central de Eventos", "Concierge/Lazer", "Unique", "Private"])
+            acao_back = st.selectbox("Ação do Suporte / Auditoria:", options=["Informar que está Correto (Mover para Sem Divergência)", "Devolver para Tratativa Operacional"])
+            
+            # Se for devolução, ativa a seleção de destino. Se for "Correto", preserva a área que veio no bilhete.
+            if acao_back.startswith("Devolver"):
+                area_devolucao_bk = st.selectbox("Área Operacional de Destino:", options=["Operação", "Central de Eventos", "Concierge/Lazer", "Unique", "Private"])
+            else:
+                area_original = str(row_back.get(COL_GERENTE, "Operação"))
+                if area_original.lower() == "suporte backoffice": area_original = "Operação"
+                st.text_input("Área Operacional Preservada:", value=area_original, disabled=True)
+                area_devolucao_bk = area_original
 
             obs_back = st.text_area("Parecer do Suporte Backoffice / Auditoria:", value=str(row_back.get("Obs. Operação", "")))
             btn_salvar_back = st.form_submit_button("💾 Salvar Resolução do Suporte")
@@ -582,9 +584,10 @@ with abas_objetos[3]:
                 idx_m_bk = df_master[df_master["Bilhetes"].astype(str) == bilhete_back_sel].index if "Bilhetes" in df_master.columns else []
                 
                 if acao_back.startswith("Informar"):
-                    # Mover para Sem Divergência
+                    # Mover para Sem Divergência mantendo a área original
                     row_upd_bk = row_back.copy()
                     row_upd_bk["Status_Geral"] = "Já Lançado no ERP"
+                    row_upd_bk[COL_GERENTE] = area_devolucao_bk
                     row_upd_bk["Status_Divergencia"] = "Valores Corretos"
                     row_upd_bk["Obs. Operação"] = f"[Correto pelo Suporte]: {obs_back}"
                     
@@ -592,8 +595,8 @@ with abas_objetos[3]:
                     df_sem_div = pd.concat([df_sem_div, pd.DataFrame([row_upd_bk])], ignore_index=True)
                     
                     novo_status_log = "Já Lançado no ERP (Sem Divergência)"
-                    area_destino_log = "Conciliado"
-                    msg_sucesso_bk = f"🎉 Chamado {bilhete_back_sel} resolvido e movido para **Sem Divergência**!"
+                    area_destino_log = area_devolucao_bk
+                    msg_sucesso_bk = f"🎉 Chamado {bilhete_back_sel} resolvido com área '{area_devolucao_bk}' e movido para **Sem Divergência**!"
                 else:
                     # Devolver para Operação
                     if len(idx_m_bk) > 0:
@@ -685,11 +688,10 @@ with abas_objetos[4]:
 idx_aba_compliance = 5
 
 if st.session_state["perfil_atual"] == "Compliance":
-    # ABA TRILHA DE AUDITORIA (COM GERENCIADOR DE EXCLUSÃO MASTER)
+    # ABA TRILHA DE AUDITORIA
     with abas_objetos[idx_aba_compliance]:
         st.subheader("📜 Histórico Completo de Alterações e Trilha de Auditoria")
         
-        # Botão / Gerenciador de Exclusão para Usuário Master
         with st.expander("🗑️ Módulo Master de Gerenciamento e Exclusão de Logs"):
             if not df_log_master.empty:
                 indices_log = df_log_master.index.tolist()
@@ -703,7 +705,7 @@ if st.session_state["perfil_atual"] == "Compliance":
                     try:
                         with pd.ExcelWriter(ARQUIVO_DASHBOARD, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
                             df_log_master.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
-                        st.session_state["msg_sucesso"] = "🗑️ Registro de log excluído da Trilha de Auditoria com sucesso!"
+                        st.session_state["msg_sucesso"] = "🗑️ Registro de log excluído com sucesso!"
                         st.cache_data.clear()
                         st.rerun()
                     except PermissionError:
