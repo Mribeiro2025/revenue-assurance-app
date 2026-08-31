@@ -7,7 +7,7 @@ import streamlit as st
 
 # 1. Configuração Inicial da Página
 st.set_page_config(
-    page_title="Revenue Assurance | Grupo Arbaitman",
+    page_title="Grupo Arbaitman | Revenue Assurance",
     page_icon="✈️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -15,11 +15,12 @@ st.set_page_config(
 
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
+URL_LOGO_ARBAITMAN = "https://raw.githubusercontent.com/Mribeiro2025/revenue-assurance-app/main/images.png"
 
 # 2. Gerenciador de Usuários e Persistência de Cadastro
 USUARIOS_PADRAO = {
-    "compliance1": {"senha": "123", "nome": "Compliance - Auditoria 01", "perfil": "Compliance", "status": "APROVADO", "data_solicitacao": "2026-08-31"},
     "mribeiro": {"senha": "123", "nome": "Marcos Ribeiro", "perfil": "Compliance", "status": "APROVADO", "data_solicitacao": "2026-08-31"},
+    "compliance1": {"senha": "123", "nome": "Compliance - Auditoria 01", "perfil": "Compliance", "status": "APROVADO", "data_solicitacao": "2026-08-31"},
     "operacao": {"senha": "123", "nome": "Equipe Operacional", "perfil": "Operacao", "status": "APROVADO", "data_solicitacao": "2026-08-31"},
     "backoffice": {"senha": "123", "nome": "Atendimento Backoffice", "perfil": "Operacao", "status": "APROVADO", "data_solicitacao": "2026-08-31"}
 }
@@ -44,49 +45,66 @@ usuarios_db = carregar_usuarios()
 # 3. Estilização CSS Corporativa Clean (Grupo Arbaitman)
 st.markdown("""
     <style>
-        .stApp { background-color: #f4f6f9; }
+        .stApp { background-color: #f8f9fa; }
+        
+        div.stButton > button[kind="primary"], div.stButton > button {
+            background-color: #002060 !important;
+            color: #ffffff !important;
+            border-radius: 6px !important;
+            border: none !important;
+            font-weight: 600 !important;
+        }
+        div.stButton > button:hover {
+            background-color: #001040 !important;
+            color: #ffffff !important;
+        }
+        
         .header-box {
-            background: linear-gradient(135deg, #002060 0%, #004080 100%);
-            padding: 22px;
+            background: linear-gradient(135deg, #002060 0%, #003366 100%);
+            padding: 20px 25px;
             border-radius: 10px;
             color: white;
             margin-bottom: 20px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
         .header-box h1 { color: #ffffff !important; margin: 0; font-size: 24px; font-weight: 700; }
-        .header-box p { color: #d0e0ff !important; margin-top: 4px; font-size: 13px; }
+        .header-box p { color: #d0e0ff !important; margin-top: 4px; font-size: 13px; margin-bottom: 0; }
         
-        .login-wrapper {
-            max-width: 460px;
-            margin: 40px auto;
+        .login-card {
             background-color: #ffffff;
-            padding: 35px;
+            padding: 30px 35px;
             border-radius: 12px;
             border-top: 6px solid #002060;
             box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+            margin-top: 20px;
         }
-        .login-title {
-            color: #002060;
-            font-size: 22px;
-            font-weight: 700;
-            margin-bottom: 2px;
-            text-align: center;
-        }
-        .login-subtitle {
-            color: #6c757d;
-            font-size: 13px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
+        
         div[data-testid="stMetric"] {
             background-color: #ffffff;
             border-radius: 8px;
             padding: 14px;
-            border-left: 4px solid #002060;
+            border-left: 5px solid #002060;
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        }
+        .logo-box {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .logo-box img {
+            max-width: 200px;
+            height: auto;
         }
     </style>
 """, unsafe_allow_html=True)
+
+def exibir_logo(largura=180):
+    try:
+        st.image(URL_LOGO_ARBAITMAN, width=largura)
+    except:
+        st.markdown(f"### GRUPO ARBAITMAN")
 
 # 4. Estado da Sessão e Autenticação
 if "autenticado" not in st.session_state:
@@ -96,75 +114,80 @@ if "autenticado" not in st.session_state:
     st.session_state["login_user_id"] = None
 
 if not st.session_state["autenticado"]:
-    st.markdown('<div class="login-wrapper">', unsafe_allow_html=True)
-    st.markdown('<div class="login-title">GRUPO ARBAITMAN</div>', unsafe_allow_html=True)
-    st.markdown('<div class="login-subtitle">Maringá Turismo | Portal de Revenue Assurance</div>', unsafe_allow_html=True)
+    col_left, col_center, col_right = st.columns([1, 1.2, 1])
     
-    aba_login, aba_solicitar = st.tabs(["🔐 Entrar", "📝 Solicitar Acesso"])
-    
-    with aba_login:
-        user_input = st.text_input("Usuário de Acesso:", key="login_user").strip().lower()
-        pass_input = st.text_input("Senha:", type="password", key="login_pass").strip()
-        btn_entrar = st.button("🚀 Acessar Sistema", use_container_width=True, type="primary")
+    with col_center:
+        st.markdown('<div class="login-card">', unsafe_allow_html=True)
+        st.markdown('<div class="logo-box">', unsafe_allow_html=True)
+        exibir_logo(largura=200)
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #6c757d; font-size: 13px; margin-bottom: 20px;'>Maringá Turismo | Portal de Revenue Assurance</p>", unsafe_allow_html=True)
         
-        if btn_entrar:
-            if user_input in usuarios_db:
-                dados_u = usuarios_db[user_input]
-                if dados_u["senha"] == pass_input:
-                    if dados_u.get("status") == "APROVADO":
-                        st.session_state["autenticado"] = True
-                        st.session_state["usuario_atual"] = dados_u["nome"]
-                        st.session_state["perfil_atual"] = dados_u["perfil"]
-                        st.session_state["login_user_id"] = user_input
-                        st.rerun()
-                    elif dados_u.get("status") == "PENDENTE":
-                        st.warning("⏳ Sua solicitação de acesso ainda está **Pendente de Aprovação** pelo time de Compliance.")
+        aba_login, aba_solicitar = st.tabs(["🔐 Entrar", "📝 Solicitar Acesso"])
+        
+        with aba_login:
+            user_input = st.text_input("Usuário de Acesso:", key="login_user").strip().lower()
+            pass_input = st.text_input("Senha:", type="password", key="login_pass").strip()
+            btn_entrar = st.button("🚀 Acessar Sistema", use_container_width=True, type="primary")
+            
+            if btn_entrar:
+                if user_input in usuarios_db:
+                    dados_u = usuarios_db[user_input]
+                    if dados_u["senha"] == pass_input:
+                        if dados_u.get("status") == "APROVADO":
+                            st.session_state["autenticado"] = True
+                            st.session_state["usuario_atual"] = dados_u["nome"]
+                            st.session_state["perfil_atual"] = dados_u["perfil"]
+                            st.session_state["login_user_id"] = user_input
+                            st.rerun()
+                        elif dados_u.get("status") == "PENDENTE":
+                            st.warning("⏳ Sua solicitação de acesso está **Pendente de Aprovação** pelo Compliance.")
+                        else:
+                            st.error("❌ Acesso não autorizado.")
                     else:
-                        st.error("❌ Seu acesso foi negado ou desativado.")
+                        st.error("❌ Senha incorreta.")
                 else:
-                    st.error("❌ Senha incorreta.")
-            else:
-                st.error("❌ Usuário não encontrado no sistema.")
+                    st.error("❌ Usuário não cadastrado.")
 
-    with aba_solicitar:
-        st.caption("Solicitação formal de credencial para o Portal de Auditoria.")
-        novo_nome = st.text_input("Nome Completo:")
-        novo_user = st.text_input("Usuário Desejado (ex: nome.sobrenome):").strip().lower()
-        nova_senha = st.text_input("Crie uma Senha:", type="password")
-        novo_perfil = st.selectbox("Perfil Solicitado:", options=["Operacao", "Compliance"])
-        
-        st.markdown("""
-            <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 6px; font-size: 11px; color: #495057; max-height: 100px; overflow-y: scroll;">
-                <b>COMUNICADO DE AUTORIZAÇÃO E CONFIDENCIALIDADE - GRUPO ARBAITMAN</b><br>
-                Ao solicitar acesso ao Portal de Revenue Assurance, o usuário declara estar ciente de que os dados apresentados contêm informações financeiras e operacionais sigilosas da Maringá Turismo / Grupo Arbaitman. Qualquer modificação, exportação ou reprografia sem autorização prévia estará sujeita às políticas internas de governança e conformidade.
-            </div>
-        """, unsafe_allow_html=True)
-        
-        termo_aceito = st.checkbox("Li e concordo com o Comunicado de Confidencialidade")
-        btn_cadastrar = st.button("📩 Enviar Solicitação de Acesso", use_container_width=True)
-        
-        if btn_cadastrar:
-            if not novo_nome or not novo_user or not nova_senha:
-                st.error("⚠️ Preencha todos os campos do formulário.")
-            elif not termo_aceito:
-                st.error("⚠️ Você deve aceitar o Termo de Confidencialidade para continuar.")
-            elif novo_user in usuarios_db:
-                st.error("❌ Este nome de usuário já existe.")
-            else:
-                usuarios_db[novo_user] = {
-                    "senha": nova_senha,
-                    "nome": novo_nome,
-                    "perfil": novo_perfil,
-                    "status": "PENDENTE",
-                    "data_solicitacao": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                }
-                salvar_usuarios(usuarios_db)
-                st.success("✅ Solicitação enviada com sucesso! Aguarde a aprovação do Compliance.")
+        with aba_solicitar:
+            st.caption("Solicitação formal de acesso para novos colaboradores.")
+            novo_nome = st.text_input("Nome Completo:")
+            novo_user = st.text_input("Usuário Desejado (ex: nome.sobrenome):").strip().lower()
+            nova_senha = st.text_input("Crie uma Senha:", type="password")
+            novo_perfil = st.selectbox("Perfil Solicitado:", options=["Operacao", "Compliance"])
+            
+            st.markdown("""
+                <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 6px; font-size: 11px; color: #495057; max-height: 90px; overflow-y: scroll; margin-bottom: 10px;">
+                    <b>TERMO DE CONFIDENCIALIDADE - GRUPO ARBAITMAN</b><br>
+                    O usuário declara estar ciente do caráter confidencial das informações de Revenue Assurance. Qualquer alteração ou exportação de dados é monitorada na trilha de auditoria.
+                </div>
+            """, unsafe_allow_html=True)
+            
+            termo_aceito = st.checkbox("Li e aceito os termos de sigilo")
+            btn_cadastrar = st.button("📩 Enviar Solicitação", use_container_width=True)
+            
+            if btn_cadastrar:
+                if not novo_nome or not novo_user or not nova_senha:
+                    st.error("⚠️ Preencha todos os campos do formulário.")
+                elif not termo_aceito:
+                    st.error("⚠️ Aceite o termo de sigilo para continuar.")
+                elif novo_user in usuarios_db:
+                    st.error("❌ Usuário já existente.")
+                else:
+                    usuarios_db[novo_user] = {
+                        "senha": nova_senha,
+                        "nome": novo_nome,
+                        "perfil": novo_perfil,
+                        "status": "PENDENTE",
+                        "data_solicitacao": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    salvar_usuarios(usuarios_db)
+                    st.success("✅ Solicitação enviada! Aguarde a liberação pelo Compliance.")
 
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
-# 5. Tratamento de Dados e Leitura de Bases
+# 5. Leitura de Bases e Tratamento de Colunas
 def clean_num(val):
     if pd.isna(val) or val is None: return 0.0
     s = str(val).replace("[", "").replace("]", "").replace("R$", "").strip()
@@ -232,14 +255,14 @@ def carregar_bases():
 df_master, df_div_op, df_sem_div, df_backoffice, df_log_master, status_carga = carregar_bases()
 
 if status_carga == "ARQUIVO_BLOQUEADO":
-    st.error(f"⚠️ O arquivo **'{ARQUIVO_DASHBOARD}'** está aberto em outro processo. Feche a planilha para recarregar.")
+    st.error(f"⚠️ O arquivo **'{ARQUIVO_DASHBOARD}'** está em uso. Feche a planilha para atualizar.")
     if st.button("🔄 Recarregar Dados"):
         st.cache_data.clear()
         st.rerun()
     st.stop()
 
 if (df_master is None or df_master.empty) and (df_div_op is None or df_div_op.empty):
-    st.error(f"⚠️ Base consolidada de divergências não encontrada em **'{ARQUIVO_DASHBOARD}'**.")
+    st.error(f"⚠️ Base consolidada de divergências não encontrada.")
     st.stop()
 
 COL_GERENTE = "Área Resp. Operação"
@@ -268,11 +291,15 @@ def calcular_dias(row):
 
 df_acao_total["Dias_Em_Aberto"] = df_acao_total.apply(calcular_dias, axis=1)
 
+usuario_log_formatado = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
+
 # 6. Cabeçalho Principal do Dashboard
 st.markdown(f"""
     <div class="header-box">
-        <h1>GRUPO ARBAITMAN | Revenue Assurance</h1>
-        <p>Maringá Turismo — Usuário: <b>{st.session_state['usuario_atual']}</b> | Perfil: <b>{st.session_state['perfil_atual']}</b></p>
+        <div>
+            <h1>GRUPO ARBAITMAN | Revenue Assurance</h1>
+            <p>Maringá Turismo — Conectado como: <b>{st.session_state['usuario_atual']}</b> | Perfil: <b>{st.session_state['perfil_atual']}</b></p>
+        </div>
     </div>
 """, unsafe_allow_html=True)
 
@@ -281,7 +308,11 @@ if "msg_sucesso" in st.session_state:
     del st.session_state["msg_sucesso"]
 
 # Sidebar / Filtros Operacionais
-st.sidebar.title(f"👤 {st.session_state['usuario_atual']}")
+st.sidebar.markdown('<div class="logo-box">', unsafe_allow_html=True)
+exibir_logo(largura=150)
+st.sidebar.markdown('</div>', unsafe_allow_html=True)
+
+st.sidebar.markdown(f"### 👤 {st.session_state['usuario_atual']}")
 if st.sidebar.button("🔒 Sair do Sistema"):
     st.session_state["autenticado"] = False
     st.session_state["usuario_atual"] = None
@@ -345,7 +376,6 @@ c4.metric("Receita em Risco (R$)", f"R$ {df_acao_filtrado['Incentivo'].sum():,.2
 
 st.markdown("---")
 
-# Abas Dinâmicas de Acordo com Perfil de Acesso
 abas_nomes = [
     "🎯 Tratativa Operacional (Geral)",
     "⚠️ Divergência Operação (CIAs/HOT + Tratativa Direta)",
@@ -407,7 +437,7 @@ with abas_objetos[0]:
                     novo_log = pd.DataFrame([{
                         "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Bilhete": opcao_sel_m,
-                        "Usuario_Acao": st.session_state['usuario_atual'],
+                        "Usuario_Acao": usuario_log_formatado,
                         "Status_Anterior": row_m.get("Status_Geral", "Pendente"),
                         "Novo_Status": novo_status,
                         "Area_Anterior": row_m.get(COL_GERENTE, "Operação"),
@@ -415,22 +445,36 @@ with abas_objetos[0]:
                         "Observacao": obs_detalhe,
                         "Tipo_Interacao": "Tratativa Geral"
                     }])
-                    
-                    df_master.loc[idx, "Status_Geral"] = novo_status
-                    df_master.loc[idx, COL_GERENTE] = nova_area
-                    df_master.loc[idx, "Obs. Operação"] = f"[Chamado: {num_chamado}] {obs_detalhe}" if num_chamado else obs_detalhe
-                    
+
+                    # LÓGICA DE MOVIMENTAÇÃO PARA SEM DIVERGÊNCIA
+                    if novo_status == "Já Lançado no ERP":
+                        row_upd = row_m.copy()
+                        row_upd["Status_Geral"] = "Já Lançado no ERP"
+                        row_upd[COL_GERENTE] = nova_area
+                        row_upd["Obs. Operação"] = f"[Chamado: {num_chamado}] {obs_detalhe}" if num_chamado else obs_detalhe
+                        row_upd["Status_Divergencia"] = "Valores Corretos"
+                        
+                        df_master = df_master.drop(idx)
+                        df_sem_div = pd.concat([df_sem_div, pd.DataFrame([row_upd])], ignore_index=True)
+                        msg_res = "transferido para a aba 'Sem Divergência'"
+                    else:
+                        df_master.loc[idx, "Status_Geral"] = novo_status
+                        df_master.loc[idx, COL_GERENTE] = nova_area
+                        df_master.loc[idx, "Obs. Operação"] = f"[Chamado: {num_chamado}] {obs_detalhe}" if num_chamado else obs_detalhe
+                        msg_res = "atualizado com sucesso"
+
                     df_back_atualizado = df_master[df_master[COL_GERENTE].astype(str) == "Suporte backoffice"].copy()
                     df_log_updated = pd.concat([df_log_master, novo_log], ignore_index=True)
                     
                     try:
                         with pd.ExcelWriter(ARQUIVO_DASHBOARD, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
                             df_master.to_excel(writer, sheet_name="99_Base_Divergencias_Geral", index=False)
+                            df_sem_div.to_excel(writer, sheet_name="98_OK_Sem_Divergencia_Concil", index=False)
                             if not df_back_atualizado.empty:
                                 df_back_atualizado.to_excel(writer, sheet_name="99_Suporte backoffice", index=False)
                             df_log_updated.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
                         
-                        st.session_state["msg_sucesso"] = f"✅ Tratativa salva por {st.session_state['usuario_atual']}!"
+                        st.session_state["msg_sucesso"] = f"✅ Bilhete {opcao_sel_m} {msg_res} por {usuario_log_formatado}!"
                         st.cache_data.clear()
                         st.rerun()
                     except PermissionError:
@@ -466,7 +510,7 @@ with abas_objetos[1]:
                 novo_log_d = pd.DataFrame([{
                     "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "Bilhete": bilhete_div_sel,
-                    "Usuario_Acao": st.session_state['usuario_atual'],
+                    "Usuario_Acao": usuario_log_formatado,
                     "Status_Anterior": row_d.get("Status_Geral", "Pendente"),
                     "Novo_Status": novo_status_d,
                     "Area_Anterior": row_d.get(COL_GERENTE, "Operação"),
@@ -474,20 +518,32 @@ with abas_objetos[1]:
                     "Observacao": texto_obs_d,
                     "Tipo_Interacao": "Tratativa Divergência CIA"
                 }])
-                
-                if len(idx_d) > 0:
+
+                if novo_status_d in ["Já Lançado no ERP", "CIA Aérea Corrigida"]:
+                    row_upd_d = row_d.copy()
+                    row_upd_d["Status_Geral"] = novo_status_d
+                    if cia_corrigida_d: row_upd_d["CIA"] = cia_corrigida_d
+                    row_upd_d["Obs. Operação"] = texto_obs_d
+                    row_upd_d["Status_Divergencia"] = "Valores Corretos"
+                    
+                    df_div_op = df_div_op.drop(idx_d)
+                    df_sem_div = pd.concat([df_sem_div, pd.DataFrame([row_upd_d])], ignore_index=True)
+                    msg_res_d = "resolvida e transferida para 'Sem Divergência'"
+                else:
                     df_div_op.loc[idx_d, "Status_Geral"] = novo_status_d
-                    if "CIA" in df_div_op.columns and cia_corrigida_d: df_div_op.loc[idx_d, "CIA"] = cia_corrigida_d
+                    if cia_corrigida_d: df_div_op.loc[idx_d, "CIA"] = cia_corrigida_d
                     df_div_op.loc[idx_d, "Obs. Operação"] = texto_obs_d
+                    msg_res_d = "atualizada com sucesso"
 
                 df_log_updated = pd.concat([df_log_master, novo_log_d], ignore_index=True)
                 
                 try:
                     with pd.ExcelWriter(ARQUIVO_DASHBOARD, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
                         df_div_op.to_excel(writer, sheet_name="98_OK_Divergencia_Operacao", index=False)
+                        df_sem_div.to_excel(writer, sheet_name="98_OK_Sem_Divergencia_Concil", index=False)
                         df_log_updated.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
                     
-                    st.session_state["msg_sucesso"] = f"✅ Divergência salva por {st.session_state['usuario_atual']}!"
+                    st.session_state["msg_sucesso"] = f"✅ Divergência {bilhete_div_sel} {msg_res_d} por {usuario_log_formatado}!"
                     st.cache_data.clear()
                     st.rerun()
                 except PermissionError:
@@ -501,10 +557,85 @@ with abas_objetos[2]:
     st.subheader("✅ Base 98 - Bilhetes Prontos para Conciliação Operacional")
     st.dataframe(df_sem_div_filtrado, use_container_width=True, hide_index=True)
 
-# ABA 4: SUPORTE BACKOFFICE
+# ABA 4: SUPORTE BACKOFFICE (COM FORMULÁRIO DE RESOLUÇÃO E DEVOLUÇÃO)
 with abas_objetos[3]:
     st.subheader("🎧 Base 99 - Chamados Atribuídos ao Suporte Backoffice")
-    st.dataframe(df_backoffice_filtrado, use_container_width=True, hide_index=True)
+    
+    if len(df_backoffice_filtrado) == 0:
+        st.info("Nenhum chamado pendente no Suporte Backoffice no momento.")
+    else:
+        lista_back_bilhetes = df_backoffice_filtrado["Bilhetes"].astype(str).tolist()
+        bilhete_back_sel = st.selectbox("Selecione o Chamado / Bilhete para Tratativa do Suporte:", options=lista_back_bilhetes, key="sb_backoffice")
+        row_back = df_backoffice_filtrado[df_backoffice_filtrado["Bilhetes"].astype(str) == bilhete_back_sel].iloc[0]
+
+        with st.form("form_solucao_backoffice"):
+            c_bk1, c_bk2 = st.columns(2)
+            with c_bk1:
+                acao_back = st.selectbox("Ação do Suporte / Auditoria:", options=["Informar que está Correto (Mover para Sem Divergência)", "Devolver para Tratativa Operacional"])
+            with c_bk2:
+                area_devolucao_bk = st.selectbox("Área Operacional de Destino (em caso de devolução):", options=["Operação", "Central de Eventos", "Concierge/Lazer", "Unique", "Private"])
+
+            obs_back = st.text_area("Parecer do Suporte Backoffice / Auditoria:", value=str(row_back.get("Obs. Operação", "")))
+            btn_salvar_back = st.form_submit_button("💾 Salvar Resolução do Suporte")
+
+            if btn_salvar_back:
+                idx_m_bk = df_master[df_master["Bilhetes"].astype(str) == bilhete_back_sel].index if "Bilhetes" in df_master.columns else []
+                
+                if acao_back.startswith("Informar"):
+                    # Mover para Sem Divergência
+                    row_upd_bk = row_back.copy()
+                    row_upd_bk["Status_Geral"] = "Já Lançado no ERP"
+                    row_upd_bk["Status_Divergencia"] = "Valores Corretos"
+                    row_upd_bk["Obs. Operação"] = f"[Correto pelo Suporte]: {obs_back}"
+                    
+                    if len(idx_m_bk) > 0: df_master = df_master.drop(idx_m_bk)
+                    df_sem_div = pd.concat([df_sem_div, pd.DataFrame([row_upd_bk])], ignore_index=True)
+                    
+                    novo_status_log = "Já Lançado no ERP (Sem Divergência)"
+                    area_destino_log = "Conciliado"
+                    msg_sucesso_bk = f"🎉 Chamado {bilhete_back_sel} resolvido e movido para **Sem Divergência**!"
+                else:
+                    # Devolver para Operação
+                    if len(idx_m_bk) > 0:
+                        df_master.loc[idx_m_bk, "Status_Geral"] = "Pendente de Lançamento"
+                        df_master.loc[idx_m_bk, COL_GERENTE] = area_devolucao_bk
+                        df_master.loc[idx_m_bk, "Obs. Operação"] = f"[Devolvido pelo Suporte]: {obs_back}"
+                        
+                    novo_status_log = f"Devolvido para {area_devolucao_bk}"
+                    area_destino_log = area_devolucao_bk
+                    msg_sucesso_bk = f"🔄 Chamado {bilhete_back_sel} devolvido com sucesso para **{area_devolucao_bk}**!"
+
+                novo_log_bk = pd.DataFrame([{
+                    "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "Bilhete": bilhete_back_sel,
+                    "Usuario_Acao": usuario_log_formatado,
+                    "Status_Anterior": row_back.get("Status_Geral", "Pendente"),
+                    "Novo_Status": novo_status_log,
+                    "Area_Anterior": "Suporte backoffice",
+                    "Nova_Area": area_destino_log,
+                    "Observacao": obs_back,
+                    "Tipo_Interacao": "Tratativa Suporte Backoffice"
+                }])
+
+                df_backoffice_atualizado = df_master[df_master[COL_GERENTE].astype(str) == "Suporte backoffice"].copy()
+                df_log_updated = pd.concat([df_log_master, novo_log_bk], ignore_index=True)
+
+                try:
+                    with pd.ExcelWriter(ARQUIVO_DASHBOARD, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                        df_master.to_excel(writer, sheet_name="99_Base_Divergencias_Geral", index=False)
+                        df_sem_div.to_excel(writer, sheet_name="98_OK_Sem_Divergencia_Concil", index=False)
+                        if not df_backoffice_atualizado.empty:
+                            df_backoffice_atualizado.to_excel(writer, sheet_name="99_Suporte backoffice", index=False)
+                        df_log_updated.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
+
+                    st.session_state["msg_sucesso"] = msg_sucesso_bk
+                    st.cache_data.clear()
+                    st.rerun()
+                except PermissionError:
+                    st.error("❌ O arquivo Excel está aberto em outro programa.")
+
+        st.markdown("---")
+        st.dataframe(df_backoffice_filtrado, use_container_width=True, hide_index=True)
 
 # ABA 5: RÉPLICA DA AUDITORIA
 with abas_objetos[4]:
@@ -525,7 +656,7 @@ with abas_objetos[4]:
                 novo_log_rep = pd.DataFrame([{
                     "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "Bilhete": bilhete_rep,
-                    "Usuario_Acao": st.session_state['usuario_atual'],
+                    "Usuario_Acao": usuario_log_formatado,
                     "Status_Anterior": row_rep.get("Status_Geral", "-"),
                     "Novo_Status": f"Contestado ({area_devolucao})",
                     "Area_Anterior": row_rep.get(COL_GERENTE, "-"),
@@ -544,7 +675,7 @@ with abas_objetos[4]:
                     with pd.ExcelWriter(ARQUIVO_DASHBOARD, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
                         df_master.to_excel(writer, sheet_name="99_Base_Divergencias_Geral", index=False)
                         df_log_updated.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
-                    st.session_state["msg_sucesso"] = f"✅ Contestação registrada com sucesso!"
+                    st.session_state["msg_sucesso"] = f"✅ Contestação registrada por {usuario_log_formatado}!"
                     st.cache_data.clear()
                     st.rerun()
                 except PermissionError:
@@ -554,16 +685,38 @@ with abas_objetos[4]:
 idx_aba_compliance = 5
 
 if st.session_state["perfil_atual"] == "Compliance":
-    # ABA TRILHA DE AUDITORIA
+    # ABA TRILHA DE AUDITORIA (COM GERENCIADOR DE EXCLUSÃO MASTER)
     with abas_objetos[idx_aba_compliance]:
         st.subheader("📜 Histórico Completo de Alterações e Trilha de Auditoria")
-        st.dataframe(df_log_master, use_container_width=True, hide_index=True)
+        
+        # Botão / Gerenciador de Exclusão para Usuário Master
+        with st.expander("🗑️ Módulo Master de Gerenciamento e Exclusão de Logs"):
+            if not df_log_master.empty:
+                indices_log = df_log_master.index.tolist()
+                log_opcao = st.selectbox(
+                    "Selecione o registro de log que deseja EXCLUIR:",
+                    options=indices_log,
+                    format_func=lambda i: f"Linha {i} | Data: {df_log_master.loc[i, 'Data_Hora']} | Bilhete: {df_log_master.loc[i, 'Bilhete']} | Usuário: {df_log_master.loc[i, 'Usuario_Acao']}"
+                )
+                if st.button("❌ Excluir Registro de Log Selecionado"):
+                    df_log_master = df_log_master.drop(log_opcao).reset_index(drop=True)
+                    try:
+                        with pd.ExcelWriter(ARQUIVO_DASHBOARD, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                            df_log_master.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
+                        st.session_state["msg_sucesso"] = "🗑️ Registro de log excluído da Trilha de Auditoria com sucesso!"
+                        st.cache_data.clear()
+                        st.rerun()
+                    except PermissionError:
+                        st.error("❌ O arquivo Excel está aberto em outro programa.")
+            else:
+                st.info("Nenhum registro de log para exclusão.")
+                
+        st.dataframe(df_log_master, use_container_width=True, hide_index=False)
     idx_aba_compliance += 1
 
     # ABA GESTÃO DE ACESSOS & APROVAÇÕES
     with abas_objetos[idx_aba_compliance]:
         st.subheader("⚙️ Central de Aprovações de Acesso e Governança")
-        st.caption("Aprove ou negue novas solicitações de usuários para acesso ao Portal do Grupo Arbaitman.")
         
         usuarios_atuais = carregar_usuarios()
         pendentes = {k: v for k, v in usuarios_atuais.items() if v.get("status") == "PENDENTE"}
