@@ -16,8 +16,24 @@ st.set_page_config(
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
 
-# URL do Logo
-URL_LOGO_ARBAITMAN = "https://grupoarbaitman.com.br/wp-content/uploads/2022/05/logo-grupo-arbaitman.png"
+# Logo Oficial do Grupo Arbaitman embutido via SVG (Garante exibição sem dependência externa)
+SVG_LOGO_ARBAITMAN = """
+<div style="text-align: center; padding: 10px 0;">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" width="180" height="auto">
+        <g transform="translate(50, 0)">
+            <!-- Triângulo Verde (Topo) -->
+            <path d="M 150,20 L 205,115 L 150,88 L 95,115 Z" fill="#008738" />
+            <!-- Triângulo Azul (Esquerda) -->
+            <path d="M 95,115 L 150,88 L 150,165 L 40,165 Z" fill="#004098" />
+            <!-- Triângulo Amarelo (Direita) -->
+            <path d="M 205,115 L 260,165 L 150,165 L 150,88 Z" fill="#F2D100" />
+        </g>
+        <!-- Texto GRUPO Arbaitman -->
+        <text x="200" y="195" font-family="'Segoe UI', Arial, sans-serif" font-size="28" font-weight="300" fill="#666666" text-anchor="middle" letter-spacing="4">GRUPO</text>
+        <text x="200" y="230" font-family="'Segoe UI', Arial, sans-serif" font-size="34" font-weight="800" fill="#4D4D4D" text-anchor="middle" letter-spacing="1">Arbaitman</text>
+    </svg>
+</div>
+"""
 
 # 2. Gerenciador de Usuários e Persistência de Cadastro
 USUARIOS_PADRAO = {
@@ -91,25 +107,8 @@ st.markdown("""
             border-left: 5px solid #002060;
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
-        .logo-box {
-            text-align: center;
-            margin-bottom: 15px;
-        }
-        .logo-text {
-            font-size: 22px;
-            font-weight: 800;
-            color: #002060;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
     </style>
 """, unsafe_allow_html=True)
-
-def exibir_logo(largura=180):
-    try:
-        st.image(URL_LOGO_ARBAITMAN, width=largura)
-    except:
-        st.markdown(f'<div class="logo-text">GRUPO ARBAITMAN</div>', unsafe_allow_html=True)
 
 # 4. Estado da Sessão e Autenticação
 if "autenticado" not in st.session_state:
@@ -123,9 +122,7 @@ if not st.session_state["autenticado"]:
     
     with col_center:
         st.markdown('<div class="login-card">', unsafe_allow_html=True)
-        st.markdown('<div class="logo-box">', unsafe_allow_html=True)
-        exibir_logo(largura=200)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(SVG_LOGO_ARBAITMAN, unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: #6c757d; font-size: 13px; margin-bottom: 20px;'>Maringá Turismo | Portal de Revenue Assurance</p>", unsafe_allow_html=True)
         
         aba_login, aba_redefinir, aba_solicitar = st.tabs(["🔐 Entrar", "🔑 Esqueci a Senha", "📝 Solicitar Acesso"])
@@ -174,7 +171,7 @@ if not st.session_state["autenticado"]:
                     else:
                         usuarios_db[user_reset]["senha"] = nova_senha_login.strip()
                         salvar_usuarios(usuarios_db)
-                        st.success("✅ Senha redefinida com sucesso! Clique na aba '🔐 Entrar' para acessar com sua nova senha.")
+                        st.success("✅ Senha redefinida com sucesso! Clique na aba '🔐 Entrar' para acessar.")
 
         with aba_solicitar:
             st.caption("Solicitação formal de acesso para novos colaboradores.")
@@ -327,6 +324,9 @@ st.markdown(f"""
             <h1>GRUPO ARBAITMAN | Revenue Assurance</h1>
             <p>Maringá Turismo — Conectado como: <b>{st.session_state['usuario_atual']}</b> | Perfil: <b>{st.session_state['perfil_atual']}</b></p>
         </div>
+        <div style="background: white; padding: 2px 10px; border-radius: 6px;">
+            {SVG_LOGO_ARBAITMAN}
+        </div>
     </div>
 """, unsafe_allow_html=True)
 
@@ -335,10 +335,7 @@ if "msg_sucesso" in st.session_state:
     del st.session_state["msg_sucesso"]
 
 # Sidebar / Filtros Operacionais
-st.sidebar.markdown('<div class="logo-box">', unsafe_allow_html=True)
-exibir_logo(largura=150)
-st.sidebar.markdown('</div>', unsafe_allow_html=True)
-
+st.sidebar.markdown(SVG_LOGO_ARBAITMAN, unsafe_allow_html=True)
 st.sidebar.markdown(f"### 👤 {st.session_state['usuario_atual']}")
 
 col_btn_sair, col_btn_senha = st.sidebar.columns(2)
@@ -453,7 +450,7 @@ with abas_objetos[0]:
     st.subheader("📝 Módulo de Resolução e Detalhamento Operacional")
     
     if len(df_master_filtrado) == 0:
-        st.warning("Nenhum bilhete encontrado na base geral para os filtros selecionados.")
+        st.warning("Nenum bilhete encontrado na base geral para os filtros selecionados.")
     else:
         lista_busca_geral = df_master_filtrado["Bilhetes"].astype(str).tolist()
         opcao_sel_m = st.selectbox("Procure ou Selecione o Bilhete / LOC para Tratativa:", options=lista_busca_geral, key="sb_geral")
