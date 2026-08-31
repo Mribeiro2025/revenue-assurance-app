@@ -41,7 +41,7 @@ def salvar_usuarios(dict_users):
 
 usuarios_db = carregar_usuarios()
 
-# 3. Estilização CSS Corporativa (Força Tags em Cinza sem Exceção)
+# 3. Estilização CSS Corporativa (Injeção Forçada para Tags em Cinza)
 st.markdown("""
     <style>
         .stApp { background-color: #f8f9fa; }
@@ -93,7 +93,7 @@ st.markdown("""
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
 
-        /* TROCA O VERMELHO DAS TAGS MULTISELECT POR CINZA CORPORATIVO */
+        /* COR CINZA CORPORATIVO PARA AS TAGS DO MULTISELECT */
         [data-baseweb="tag"], 
         span[data-baseweb="tag"], 
         div[data-baseweb="tag"], 
@@ -390,7 +390,6 @@ df_f_3 = df_f_2[df_f_2[COL_EMISSOR].astype(str).isin(emissor_sel)]
 tipos_emissao = sorted(list(df_f_3["Tipo_Emissao_Lemon"].dropna().astype(str).unique())) if "Tipo_Emissao_Lemon" in df_f_3.columns else []
 emissao_sel = st.sidebar.multiselect("Tipo de Emissão (OBT):", options=tipos_emissao, default=tipos_emissao)
 
-# FIX CORRIGIDO DO FILTRO
 df_f_4 = df_f_3[df_f_3["Tipo_Emissao_Lemon"].astype(str).isin(emissao_sel)] if "Tipo_Emissao_Lemon" in df_f_3.columns else df_f_3
 
 cias = sorted(list(df_f_4["CIA"].dropna().astype(str).unique())) if "CIA" in df_f_4.columns else []
@@ -507,41 +506,46 @@ with abas_objetos[1]:
                 areas_opcoes = ["Operação", "Suporte backoffice", "Central de Eventos", "Concierge/Lazer", "Unique", "Private"]
                 area_atual = str(row_m.get(COL_GERENTE, "Operação"))
                 
-                if area_atual in ["Silvana Celane"]: area_atual = "Private"
-                elif area_atual in ["Jaime Schnaider"]: area_atual = "Unique"
+                # Mapeamento do nome atual para a área correspondente
+                if area_atual in ["Silvana Celani", "Silvana Celane"]: area_atual = "Private"
+                elif area_atual in ["Jaime Schinaider", "Jaime Schnaider"]: area_atual = "Unique"
                 elif area_atual in ["Fabiano Souza"]: area_atual = "Concierge/Lazer"
-                elif area_atual in ["Central de Eventos"]: area_atual = "Central de Eventos"
+                elif area_atual in ["Alexandre Souza", "Central de Eventos"]: area_atual = "Central de Eventos"
                 elif area_atual.lower() == "suporte backoffice": area_atual = "Suporte backoffice"
                 elif area_atual not in areas_opcoes: area_atual = "Operação"
 
                 index_area = areas_opcoes.index(area_atual)
                 nova_area = st.selectbox("Área Responsável (Reatribuir):", options=areas_opcoes, index=index_area)
             
+            # REQUISITO 2: Mapeamento de gerentes por área + 'Outro Gerente...' em Operação
             with col_c:
                 if nova_area == "Private":
-                    st.text_input("Gerente Responsável:", value="Silvana Celane", disabled=True)
-                    gerente_indicado_sel = "Silvana Celane"
+                    st.text_input("Gerente Responsável:", value="Silvana Celani", disabled=True)
+                    gerente_indicado_sel = "Silvana Celani"
                     novo_gerente_texto = ""
                 elif nova_area == "Unique":
-                    st.text_input("Gerente Responsável:", value="Jaime Schnaider", disabled=True)
-                    gerente_indicado_sel = "Jaime Schnaider"
+                    st.text_input("Gerente Responsável:", value="Jaime Schinaider", disabled=True)
+                    gerente_indicado_sel = "Jaime Schinaider"
                     novo_gerente_texto = ""
                 elif nova_area == "Concierge/Lazer":
                     st.text_input("Gerente Responsável:", value="Fabiano Souza", disabled=True)
                     gerente_indicado_sel = "Fabiano Souza"
                     novo_gerente_texto = ""
                 elif nova_area == "Central de Eventos":
-                    st.text_input("Gerente Responsável:", value="Central de Eventos", disabled=True)
-                    gerente_indicado_sel = "Central de Eventos"
+                    st.text_input("Gerente Responsável:", value="Alexandre Souza", disabled=True)
+                    gerente_indicado_sel = "Alexandre Souza"
                     novo_gerente_texto = ""
                 elif nova_area == "Suporte backoffice":
                     st.text_input("Gerente Responsável:", value="N/A (Suporte backoffice)", disabled=True)
                     gerente_indicado_sel = "Suporte backoffice"
                     novo_gerente_texto = ""
-                else:
-                    gerentes_reservados = ["Silvana Celane", "Jaime Schnaider", "Fabiano Souza", "Central de Eventos", "Suporte backoffice"]
-                    gerentes_operacao_puros = sorted(list(set([g for g in gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Ivanete Bertasol"] if g not in gerentes_reservados]))) + ["Outro Gerente..."]
+                else: # Operação
+                    gerentes_reservados = ["Silvana Celani", "Silvana Celane", "Jaime Schinaider", "Jaime Schnaider", "Fabiano Souza", "Alexandre Souza", "Central de Eventos", "Suporte backoffice"]
+                    gerentes_operacao_puros = sorted(list(set([g for g in gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Ivanete Bertasol"] if g not in gerentes_reservados])))
                     
+                    if "Outro Gerente..." not in gerentes_operacao_puros:
+                        gerentes_operacao_puros.append("Outro Gerente...")
+                        
                     gerente_atual_m = str(row_m.get(COL_GERENTE, ""))
                     idx_g = gerentes_operacao_puros.index(gerente_atual_m) if gerente_atual_m in gerentes_operacao_puros else 0
                     
@@ -569,7 +573,7 @@ with abas_objetos[1]:
                 if nova_area == "Suporte backoffice" and not num_chamado.strip():
                     st.error("⚠️ Para reatribuir ao **Suporte backoffice**, é OBRIGATÓRIO informar o Número do Chamado!")
                 elif nova_area == "Operação" and not gerente_final:
-                    st.error("⚠️ Por favor, informe o Nome do Gerente no campo de texto abaixo do seletor!")
+                    st.error("⚠️ Por favor, informe o Nome do Gerente no campo de texto fornecido!")
                 else:
                     idx = df_master[df_master["Bilhetes"].astype(str) == opcao_sel_m].index
                     
@@ -695,9 +699,70 @@ with abas_objetos[2]:
         st.markdown(f"### 📊 Lista Completa das Divergências ({len(df_div_op_filtrado)} registros)")
         st.dataframe(df_div_op_filtrado, use_container_width=True, hide_index=True)
 
-# ABA 3: SEM DIVERGÊNCIA
+# ABA 3: SEM DIVERGÊNCIA (Com módulo exclusivo do Compliance para devolução)
 with abas_objetos[3]:
     st.subheader("✅ Base 98 - Bilhetes Prontos para Conciliação Operacional")
+    
+    # REQUISITO 1: Opção de remoção/devolução exclusiva para o perfil Compliance
+    if st.session_state.get("perfil_atual") == "Compliance":
+        with st.expander("🛡️ Módulo do Compliance — Retirar Linha e Devolver para Tratativa Operacional", expanded=False):
+            if df_sem_div_filtrado.empty or "Bilhetes" not in df_sem_div_filtrado.columns:
+                st.info("Nenhum bilhete disponível para devolução nesta visualização.")
+            else:
+                lista_bilhetes_sd = df_sem_div_filtrado["Bilhetes"].astype(str).tolist()
+                bilhete_devolver_sel = st.selectbox("Selecione o Bilhete / LOC para Devolução:", options=lista_bilhetes_sd, key="sb_devolucao_compliance")
+                
+                row_sd = df_sem_div_filtrado[df_sem_div_filtrado["Bilhetes"].astype(str) == bilhete_devolver_sel].iloc[0]
+                
+                with st.form("form_devolucao_compliance"):
+                    st.write(f"**Bilhete:** {row_sd.get('Bilhetes', '-')} | **Gerente Atual:** {row_sd.get(COL_GERENTE, '-')} | **CIA:** {row_sd.get('CIA', '-')}")
+                    
+                    area_devolucao_comp = st.selectbox("Devolver para Área:", options=["Operação", "Suporte backoffice", "Central de Eventos", "Concierge/Lazer", "Unique", "Private"])
+                    motivo_devolucao = st.text_area("Motivo/Justificativa da Devolução (Obrigatório):", placeholder="Informe o motivo técnico da recusa pelo Compliance...")
+                    
+                    btn_devolver_sd = st.form_submit_button("🔄 Confirmar Devolução para Operação")
+                    
+                    if btn_devolver_sd:
+                        if not motivo_devolucao.strip():
+                            st.error("⚠️ É obrigatório preencher a justificativa da devolução!")
+                        else:
+                            idx_sd = df_sem_div[df_sem_div["Bilhetes"].astype(str) == bilhete_devolver_sel].index
+                            
+                            row_para_devolver = row_sd.copy()
+                            row_para_devolver["Status_Geral"] = "Pendente de Lançamento"
+                            row_para_devolver[COL_GERENTE] = area_devolucao_comp
+                            row_para_devolver["Obs. Operação"] = f"[Devolvido pelo Compliance]: {motivo_devolucao}"
+                            
+                            # Remove de 'Sem Divergência' e insere na 'Base Geral'
+                            df_sem_div = df_sem_div.drop(idx_sd)
+                            df_master = pd.concat([df_master, pd.DataFrame([row_para_devolver])], ignore_index=True)
+                            
+                            novo_log_comp = pd.DataFrame([{
+                                "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "Bilhete": bilhete_devolver_sel,
+                                "Usuario_Acao": usuario_log_formatado,
+                                "Status_Anterior": "Já Lançado no ERP (Sem Divergência)",
+                                "Novo_Status": "Pendente de Lançamento (Devolvido pelo Compliance)",
+                                "Area_Anterior": row_sd.get(COL_GERENTE, "-"),
+                                "Nova_Area": area_devolucao_comp,
+                                "Observacao": motivo_devolucao,
+                                "Tipo_Interacao": "Devolução do Compliance"
+                            }])
+                            
+                            df_log_updated = pd.concat([df_log_master, novo_log_comp], ignore_index=True)
+                            
+                            try:
+                                with pd.ExcelWriter(ARQUIVO_DASHBOARD, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                                    df_master.to_excel(writer, sheet_name="99_Base_Divergencias_Geral", index=False)
+                                    df_sem_div.to_excel(writer, sheet_name="98_OK_Sem_Divergencia_Concil", index=False)
+                                    df_log_updated.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
+                                
+                                st.session_state["msg_sucesso"] = f"🔄 Bilhete {bilhete_devolver_sel} removido da conciliação e devolvido para {area_devolucao_comp}!"
+                                st.cache_data.clear()
+                                st.rerun()
+                            except PermissionError:
+                                st.error("❌ O arquivo Excel está aberto em outro programa. Feche a planilha para salvar.")
+
     st.dataframe(df_sem_div_filtrado, use_container_width=True, hide_index=True)
 
 # ABA 4: SUPORTE BACKOFFICE
