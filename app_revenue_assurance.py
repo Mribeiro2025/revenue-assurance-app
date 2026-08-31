@@ -16,8 +16,8 @@ st.set_page_config(
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
 
-# URL Oficial do Logo Institucional
-URL_LOGO_ARBAITMAN = "https://grupoarbaitman.com.br/wp-content/uploads/2022/05/logo-grupo-arbaitman.png"
+# Logo Oficial do Grupo Arbaitman (Imagem Raw GitHub Garantida)
+URL_LOGO_ARBAITMAN = "https://raw.githubusercontent.com/Mribeiro2025/revenue-assurance-app/main/images.png"
 
 # 2. Gerenciador de Usuários e Persistência de Cadastro
 USUARIOS_PADRAO = {
@@ -91,24 +91,30 @@ st.markdown("""
             border-left: 5px solid #002060;
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
-        .logo-box-custom {
+        .logo-img-container {
             text-align: center;
             padding: 10px 0;
         }
-        .logo-box-custom img {
-            max-width: 220px !important;
+        .logo-img-container img {
+            max-width: 200px !important;
+            width: 200px !important;
             height: auto !important;
-            object-fit: contain !important;
+        }
+        .details-card {
+            background-color: #f1f3f5;
+            border: 1px solid #ced4da;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
         }
     </style>
 """, unsafe_allow_html=True)
 
-def renderizar_logo(largura=220):
-    st.markdown(f'''
-        <div class="logo-box-custom">
-            <img src="{URL_LOGO_ARBAITMAN}" alt="Grupo Arbaitman" style="max-width: {largura}px; height: auto;">
-        </div>
-    ''', unsafe_allow_html=True)
+def renderizar_logo(largura=180):
+    try:
+        st.image(URL_LOGO_ARBAITMAN, width=largura)
+    except:
+        st.markdown(f"### **GRUPO ARBAITMAN**")
 
 # 4. Estado da Sessão e Autenticação
 if "autenticado" not in st.session_state:
@@ -122,7 +128,7 @@ if not st.session_state["autenticado"]:
     
     with col_center:
         st.markdown('<div class="login-card">', unsafe_allow_html=True)
-        renderizar_logo(220)
+        renderizar_logo(200)
         st.markdown("<p style='text-align: center; color: #6c757d; font-size: 13px; margin-bottom: 20px;'>Maringá Turismo | Portal de Revenue Assurance</p>", unsafe_allow_html=True)
         
         aba_login, aba_redefinir, aba_solicitar = st.tabs(["🔐 Entrar", "🔑 Esqueci a Senha", "📝 Solicitar Acesso"])
@@ -212,15 +218,6 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # 5. Leitura de Bases e Tratamento de Colunas
-def clean_num(val):
-    if pd.isna(val) or val is None: return 0.0
-    s = str(val).replace("[", "").replace("]", "").replace("R$", "").strip()
-    if not s or s == "-": return 0.0
-    if "," in s and "." in s: s = s.replace(".", "").replace(",", ".")
-    elif "," in s: s = s.replace(",", ".")
-    try: return float(s)
-    except: return 0.0
-
 def padronizar_e_deduplicar_colunas(df, origem=""):
     if df is None or df.empty: return pd.DataFrame()
     df = df.loc[:, ~df.columns.duplicated()].copy()
@@ -303,39 +300,31 @@ else:
     df_acao_total["Bilhetes_Str"] = ""
 
 hoje = datetime.datetime.now()
-if "Data_Primeira_Inclusao" not in df_acao_total.columns:
-    df_acao_total["Data_Primeira_Inclusao"] = hoje.strftime("%Y-%m-%d %H:%M:%S")
-
-def calcular_dias(row):
-    try:
-        dt_inicio = pd.to_datetime(row["Data_Primeira_Inclusao"])
-        dt_fim = pd.to_datetime(row["Data_Resolucao"]) if pd.notna(row.get("Data_Resolucao")) else hoje
-        return (dt_fim - dt_inicio).days
-    except: return 0
-
-df_acao_total["Dias_Em_Aberto"] = df_acao_total.apply(calcular_dias, axis=1)
-
 usuario_log_formatado = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
 
 # 6. Cabeçalho Principal do Dashboard
-st.markdown(f"""
-    <div class="header-box">
-        <div>
-            <h1>GRUPO ARBAITMAN | Revenue Assurance</h1>
-            <p>Maringá Turismo — Conectado como: <b>{st.session_state['usuario_atual']}</b> | Perfil: <b>{st.session_state['perfil_atual']}</b></p>
+col_hdr1, col_hdr2 = st.columns([3, 1])
+with col_hdr1:
+    st.markdown(f"""
+        <div class="header-box">
+            <div>
+                <h1>GRUPO ARBAITMAN | Revenue Assurance</h1>
+                <p>Maringá Turismo — Conectado como: <b>{st.session_state['usuario_atual']}</b> | Perfil: <b>{st.session_state['perfil_atual']}</b></p>
+            </div>
         </div>
-        <div style="background: white; padding: 4px 12px; border-radius: 6px;">
-            <img src="{URL_LOGO_ARBAITMAN}" style="max-width: 140px; height: auto;">
-        </div>
-    </div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+
+with col_hdr2:
+    if st.button("🔄 Recarregar / Atualizar Dados", use_container_width=True, type="primary"):
+        st.cache_data.clear()
+        st.rerun()
 
 if "msg_sucesso" in st.session_state:
     st.success(st.session_state["msg_sucesso"])
     del st.session_state["msg_sucesso"]
 
 # Sidebar / Filtros Operacionais
-renderizar_logo(160)
+renderizar_logo(150)
 st.sidebar.markdown(f"### 👤 {st.session_state['usuario_atual']}")
 
 col_btn_sair, col_btn_senha = st.sidebar.columns(2)
@@ -467,16 +456,36 @@ with abas_objetos[0]:
             </div>
         """, unsafe_allow_html=True)
         
+        # QUADRO DE DETALHES DAS EMISSÕES
+        st.markdown("##### 📋 Detalhes do Bilhete e Valores de Emissão")
+        cols_det = ["Ponto de venda", "Código lata", "Área Resp. Operação", "CIA", "Bilhetes", "Localizador_Sistema", "Status_Sistema", "Data Emissão", "Pagto", "A vista", "A credito", "Taxa", "Comissão", "Taxa DU", "Desc.", "Incentivo", "VL. Líquido", "Status_Geral"]
+        cols_presentes = [c for c in cols_det if c in row_m.index]
+        st.dataframe(pd.DataFrame([row_m[cols_presentes]]), use_container_width=True, hide_index=True)
+        st.markdown("---")
+        
         with st.form("form_tratativa_geral"):
-            col_a, col_b, col_c = st.columns(3)
+            col_a, col_b, col_c, col_d = st.columns([1.2, 1.2, 1.2, 1.2])
+            
             with col_a:
                 novo_status = st.selectbox("Status da Tratativa:", options=["Já Lançado no ERP", "Pendente de Lançamento", "Aguardando TI", "Cancelado / Devolvido"])
+            
             with col_b:
-                areas_opcoes = ["Suporte backoffice", "Central de Eventos", "Concierge/Lazer", "Unique", "Private", "Operação"]
+                areas_opcoes = ["Operação", "Suporte backoffice", "Central de Eventos", "Concierge/Lazer", "Unique", "Private"]
                 area_atual = str(row_m.get(COL_GERENTE, "Operação"))
                 index_area = areas_opcoes.index(area_atual) if area_atual in areas_opcoes else 0
                 nova_area = st.selectbox("Área Responsável (Reatribuir):", options=areas_opcoes, index=index_area)
+            
             with col_c:
+                if nova_area == "Operação":
+                    gerentes_lista = ["Keli Santi", "Guilherme Silva", "Outro Gerente..."]
+                    gerente_indicado = st.selectbox("Gerente Responsável:", options=gerentes_lista)
+                    if gerente_indicado == "Outro Gerente...":
+                        gerente_indicado = st.text_input("Nome do Gerente:")
+                else:
+                    st.text_input("Gerente Responsável:", value="N/A (Reatribuído)", disabled=True)
+                    gerente_indicado = nova_area
+
+            with col_d:
                 num_chamado = st.text_input("Nº do Chamado / Ticket (Obrigatório se Suporte Backoffice):", placeholder="Ex: INC-98472")
                 
             obs_detalhe = st.text_area("Observações e Detalhes da Solução:", value=str(row_m.get("Obs. Operação", "")))
@@ -488,6 +497,8 @@ with abas_objetos[0]:
                 else:
                     idx = df_master[df_master["Bilhetes"].astype(str) == opcao_sel_m].index
                     
+                    area_final_salvar = gerente_indicado if nova_area == "Operação" and gerente_indicado else nova_area
+                    
                     novo_log = pd.DataFrame([{
                         "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Bilhete": opcao_sel_m,
@@ -495,7 +506,7 @@ with abas_objetos[0]:
                         "Status_Anterior": row_m.get("Status_Geral", "Pendente"),
                         "Novo_Status": novo_status,
                         "Area_Anterior": row_m.get(COL_GERENTE, "Operação"),
-                        "Nova_Area": nova_area,
+                        "Nova_Area": area_final_salvar,
                         "Observacao": obs_detalhe,
                         "Tipo_Interacao": "Tratativa Geral"
                     }])
@@ -503,7 +514,7 @@ with abas_objetos[0]:
                     if novo_status == "Já Lançado no ERP":
                         row_upd = row_m.copy()
                         row_upd["Status_Geral"] = "Já Lançado no ERP"
-                        row_upd[COL_GERENTE] = nova_area
+                        row_upd[COL_GERENTE] = area_final_salvar
                         row_upd["Obs. Operação"] = f"[Chamado: {num_chamado}] {obs_detalhe}" if num_chamado else obs_detalhe
                         row_upd["Status_Divergencia"] = "Valores Corretos"
                         
@@ -512,7 +523,7 @@ with abas_objetos[0]:
                         msg_res = "transferido para a aba 'Sem Divergência'"
                     else:
                         df_master.loc[idx, "Status_Geral"] = novo_status
-                        df_master.loc[idx, COL_GERENTE] = nova_area
+                        df_master.loc[idx, COL_GERENTE] = area_final_salvar
                         df_master.loc[idx, "Obs. Operação"] = f"[Chamado: {num_chamado}] {obs_detalhe}" if num_chamado else obs_detalhe
                         msg_res = "atualizado com sucesso"
 
