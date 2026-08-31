@@ -41,7 +41,7 @@ def salvar_usuarios(dict_users):
 
 usuarios_db = carregar_usuarios()
 
-# 3. Estilização CSS Corporativa (Força Tags de Filtro em Cinza Corporativo)
+# 3. Estilização CSS Corporativa (Força Tags em Cinza sem Exceção)
 st.markdown("""
     <style>
         .stApp { background-color: #f8f9fa; }
@@ -93,19 +93,22 @@ st.markdown("""
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
 
-        /* 1º REQUISITO: FORÇAR TODAS AS TAGS DOS MULTISELECTS PARA CINZA CORPORATIVO (#6C757D) */
+        /* TROCA O VERMELHO DAS TAGS MULTISELECT POR CINZA CORPORATIVO */
+        [data-baseweb="tag"], 
         span[data-baseweb="tag"], 
         div[data-baseweb="tag"], 
-        [data-baseweb="tag"] {
+        li[data-baseweb="tag"] {
             background-color: #6c757d !important;
+            background: #6c757d !important;
             color: #ffffff !important;
             border-radius: 4px !important;
         }
-        span[data-baseweb="tag"] span,
-        div[data-baseweb="tag"] span {
+        
+        [data-baseweb="tag"] span,
+        span[data-baseweb="tag"] span {
             color: #ffffff !important;
         }
-        
+
         /* Marca Textual Corporativa */
         .brand-header {
             font-size: 22px;
@@ -387,7 +390,8 @@ df_f_3 = df_f_2[df_f_2[COL_EMISSOR].astype(str).isin(emissor_sel)]
 tipos_emissao = sorted(list(df_f_3["Tipo_Emissao_Lemon"].dropna().astype(str).unique())) if "Tipo_Emissao_Lemon" in df_f_3.columns else []
 emissao_sel = st.sidebar.multiselect("Tipo de Emissão (OBT):", options=tipos_emissao, default=tipos_emissao)
 
-df_f_4 = df_f_3[df_f_3["Tipo_Emissao_Lemon"].astype(str).isin(emissao_sel)] if "Tipo_Emissao_Lemon" in df_f_4.columns else df_f_3
+# FIX CORRIGIDO DO FILTRO
+df_f_4 = df_f_3[df_f_3["Tipo_Emissao_Lemon"].astype(str).isin(emissao_sel)] if "Tipo_Emissao_Lemon" in df_f_3.columns else df_f_3
 
 cias = sorted(list(df_f_4["CIA"].dropna().astype(str).unique())) if "CIA" in df_f_4.columns else []
 cia_sel = st.sidebar.multiselect("Companhia Aérea:", options=cias, default=cias)
@@ -431,7 +435,6 @@ if st.session_state["perfil_atual"] == "Compliance":
 
 abas_objetos = st.tabs(abas_nomes)
 
-# LISTA GERAL DE GERENTES DA BASE
 gerentes_base_unicos = sorted([g for g in df_acao_total[COL_GERENTE].dropna().astype(str).unique() if g not in ["Suporte backoffice", "Não Atribuído", "-"]])
 
 # ABA 0: DASHBOARD
@@ -504,7 +507,6 @@ with abas_objetos[1]:
                 areas_opcoes = ["Operação", "Suporte backoffice", "Central de Eventos", "Concierge/Lazer", "Unique", "Private"]
                 area_atual = str(row_m.get(COL_GERENTE, "Operação"))
                 
-                # MAPEAMENTO DAS ÁREAS ESPECÍFICAS
                 if area_atual in ["Silvana Celane"]: area_atual = "Private"
                 elif area_atual in ["Jaime Schnaider"]: area_atual = "Unique"
                 elif area_atual in ["Fabiano Souza"]: area_atual = "Concierge/Lazer"
@@ -515,7 +517,6 @@ with abas_objetos[1]:
                 index_area = areas_opcoes.index(area_atual)
                 nova_area = st.selectbox("Área Responsável (Reatribuir):", options=areas_opcoes, index=index_area)
             
-            # 2º REQUISITO: REGRA DE GERENTES POR ÁREA
             with col_c:
                 if nova_area == "Private":
                     st.text_input("Gerente Responsável:", value="Silvana Celane", disabled=True)
@@ -538,7 +539,6 @@ with abas_objetos[1]:
                     gerente_indicado_sel = "Suporte backoffice"
                     novo_gerente_texto = ""
                 else:
-                    # ÁREA OPERAÇÃO: EXCLUI OS GERENTES DAS DEMAIS ÁREAS
                     gerentes_reservados = ["Silvana Celane", "Jaime Schnaider", "Fabiano Souza", "Central de Eventos", "Suporte backoffice"]
                     gerentes_operacao_puros = sorted(list(set([g for g in gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Ivanete Bertasol"] if g not in gerentes_reservados]))) + ["Outro Gerente..."]
                     
