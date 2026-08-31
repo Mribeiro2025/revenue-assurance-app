@@ -118,7 +118,7 @@ if not st.session_state["autenticado"]:
         st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: #6c757d; font-size: 13px; margin-bottom: 20px;'>Maringá Turismo | Portal de Revenue Assurance</p>", unsafe_allow_html=True)
         
-        aba_login, aba_solicitar = st.tabs(["🔐 Entrar", "📝 Solicitar Acesso"])
+        aba_login, aba_redefinir, aba_solicitar = st.tabs(["🔐 Entrar", "🔑 Esqueci a Senha", "📝 Solicitar Acesso"])
         
         with aba_login:
             user_input = st.text_input("Usuário de Acesso:", key="login_user").strip().lower()
@@ -143,6 +143,27 @@ if not st.session_state["autenticado"]:
                         st.error("❌ Senha incorreta.")
                 else:
                     st.error("❌ Usuário não cadastrado.")
+
+        with aba_redefinir:
+            st.caption("Redefinição direta de senha de acesso.")
+            user_reset = st.text_input("Informe seu Usuário de Acesso:", key="reset_u").strip().lower()
+            nova_senha_login = st.text_input("Nova Senha:", type="password", key="reset_p1")
+            confirma_senha_login = st.text_input("Confirme a Nova Senha:", type="password", key="reset_p2")
+            btn_redefinir_senha = st.button("🔄 Redefinir Senha", use_container_width=True)
+
+            if btn_redefinir_senha:
+                if not user_reset:
+                    st.error("⚠️ Digite o usuário de acesso.")
+                elif user_reset not in usuarios_db:
+                    st.error("❌ Usuário não encontrado no sistema.")
+                elif not nova_senha_login:
+                    st.error("⚠️ Digite a nova senha.")
+                elif nova_senha_login != confirma_senha_login:
+                    st.error("❌ As senhas não coincidem.")
+                else:
+                    usuarios_db[user_reset]["senha"] = nova_senha_login
+                    salvar_usuarios(usuarios_db)
+                    st.success("✅ Senha redefinida com sucesso! Agora clique na aba '🔐 Entrar' para acessar.")
 
         with aba_solicitar:
             st.caption("Solicitação formal de acesso para novos colaboradores.")
@@ -311,11 +332,39 @@ exibir_logo(largura=150)
 st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
 st.sidebar.markdown(f"### 👤 {st.session_state['usuario_atual']}")
-if st.sidebar.button("🔒 Sair do Sistema"):
-    st.session_state["autenticado"] = False
-    st.session_state["usuario_atual"] = None
-    st.session_state["perfil_atual"] = None
-    st.rerun()
+
+col_btn_sair, col_btn_senha = st.sidebar.columns(2)
+with col_btn_sair:
+    if st.button("🔒 Sair"):
+        st.session_state["autenticado"] = False
+        st.session_state["usuario_atual"] = None
+        st.session_state["perfil_atual"] = None
+        st.rerun()
+
+with col_btn_senha:
+    btn_mudar_senha = st.button("🔑 Senha")
+
+if btn_mudar_senha or st.session_state.get("abrir_modal_senha", False):
+    st.session_state["abrir_modal_senha"] = True
+    with st.sidebar.expander("🔑 Alterar Minha Senha", expanded=True):
+        u_id_atual = st.session_state["login_user_id"]
+        senha_atual_input = st.text_input("Senha Atual:", type="password", key="pwd_curr")
+        nova_senha_input = st.text_input("Nova Senha:", type="password", key="pwd_new")
+        confirma_senha_input = st.text_input("Confirmar Nova Senha:", type="password", key="pwd_conf")
+        
+        if st.button("💾 Atualizar Senha", use_container_width=True):
+            if usuarios_db[u_id_atual]["senha"] != senha_atual_input:
+                st.error("❌ Senha atual incorreta.")
+            elif not nova_senha_input:
+                st.error("⚠️ Digite uma nova senha.")
+            elif nova_senha_input != confirma_senha_input:
+                st.error("❌ As senhas não coincidem.")
+            else:
+                usuarios_db[u_id_atual]["senha"] = nova_senha_input
+                salvar_usuarios(usuarios_db)
+                st.session_state["msg_sucesso"] = "✅ Senha alterada com sucesso!"
+                st.session_state["abrir_modal_senha"] = False
+                st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.title("🔍 Filtros Operacionais")
@@ -554,7 +603,7 @@ with abas_objetos[2]:
     st.subheader("✅ Base 98 - Bilhetes Prontos para Conciliação Operacional")
     st.dataframe(df_sem_div_filtrado, use_container_width=True, hide_index=True)
 
-# ABA 4: SUPORTE BACKOFFICE (COM ÁREA OPERACIONAL PRESERVADA)
+# ABA 4: SUPORTE BACKOFFICE
 with abas_objetos[3]:
     st.subheader("🎧 Base 99 - Chamados Atribuídos ao Suporte Backoffice")
     
@@ -568,7 +617,6 @@ with abas_objetos[3]:
         with st.form("form_solucao_backoffice"):
             acao_back = st.selectbox("Ação do Suporte / Auditoria:", options=["Informar que está Correto (Mover para Sem Divergência)", "Devolver para Tratativa Operacional"])
             
-            # Se for devolução, ativa a seleção de destino. Se for "Correto", preserva a área que veio no bilhete.
             if acao_back.startswith("Devolver"):
                 area_devolucao_bk = st.selectbox("Área Operacional de Destino:", options=["Operação", "Central de Eventos", "Concierge/Lazer", "Unique", "Private"])
             else:
@@ -584,7 +632,6 @@ with abas_objetos[3]:
                 idx_m_bk = df_master[df_master["Bilhetes"].astype(str) == bilhete_back_sel].index if "Bilhetes" in df_master.columns else []
                 
                 if acao_back.startswith("Informar"):
-                    # Mover para Sem Divergência mantendo a área original
                     row_upd_bk = row_back.copy()
                     row_upd_bk["Status_Geral"] = "Já Lançado no ERP"
                     row_upd_bk[COL_GERENTE] = area_devolucao_bk
@@ -598,7 +645,6 @@ with abas_objetos[3]:
                     area_destino_log = area_devolucao_bk
                     msg_sucesso_bk = f"🎉 Chamado {bilhete_back_sel} resolvido com área '{area_devolucao_bk}' e movido para **Sem Divergência**!"
                 else:
-                    # Devolver para Operação
                     if len(idx_m_bk) > 0:
                         df_master.loc[idx_m_bk, "Status_Geral"] = "Pendente de Lançamento"
                         df_master.loc[idx_m_bk, COL_GERENTE] = area_devolucao_bk
