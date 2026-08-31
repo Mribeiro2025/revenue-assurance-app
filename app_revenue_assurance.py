@@ -16,15 +16,18 @@ st.set_page_config(
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
 
-# Caminhos de Busca do Logo (Pasta local no projeto ou URL do GitHub)
-CAMINHOS_LOGO = [
+# Caminhos para Busca do Logo Local
+CAMINHOS_LOGO_LOCAL = [
     os.path.join(os.getcwd(), "Logo", "logo.png"),
     os.path.join(os.getcwd(), "Logo", "logo-grupo-arbaitman.png"),
-    os.path.join(os.getcwd(), "logo.png")
+    os.path.join(os.getcwd(), "logo.png"),
+    r"C:\Users\mribeiro1\MARINGA TURISMO\Maringá Turismo - PLANEJAMENTO ESTRATEGICO (1)\01-Planejamento Estratégico\Auditoria de Bilhetes\Logo\logo.png",
+    r"C:\Users\mribeiro1\MARINGA TURISMO\Maringá Turismo - PLANEJAMENTO ESTRATEGICO (1)\01-Planejamento Estratégico\Auditoria de Bilhetes\Logo\logo-grupo-arbaitman.png"
 ]
+
 URL_LOGO_GITHUB = "https://raw.githubusercontent.com/Mribeiro2025/revenue-assurance-app/main/images.png"
 
-# 2. Gerenciador de Usuários
+# 2. Gerenciador de Usuários e Persistência de Cadastro
 USUARIOS_PADRAO = {
     "mribeiro": {"senha": "123", "nome": "Marcos Ribeiro", "perfil": "Compliance", "status": "APROVADO", "data_solicitacao": "2026-08-31"},
     "compliance1": {"senha": "123", "nome": "Compliance - Auditoria 01", "perfil": "Compliance", "status": "APROVADO", "data_solicitacao": "2026-08-31"},
@@ -49,11 +52,12 @@ def salvar_usuarios(dict_users):
 
 usuarios_db = carregar_usuarios()
 
-# 3. Estilização CSS Corporativa (Tags de Filtro em Cinza)
+# 3. Estilização CSS Corporativa (Tags Multiselect em Cinza)
 st.markdown("""
     <style>
         .stApp { background-color: #f8f9fa; }
         
+        /* Botões Principais */
         div.stButton > button[kind="primary"], div.stButton > button {
             background-color: #002060 !important;
             color: #ffffff !important;
@@ -66,6 +70,7 @@ st.markdown("""
             color: #ffffff !important;
         }
         
+        /* Cabeçalho */
         .header-box {
             background: linear-gradient(135deg, #002060 0%, #003366 100%);
             padding: 15px 25px;
@@ -80,6 +85,7 @@ st.markdown("""
         .header-box h1 { color: #ffffff !important; margin: 0; font-size: 24px; font-weight: 700; }
         .header-box p { color: #d0e0ff !important; margin-top: 4px; font-size: 13px; margin-bottom: 0; }
         
+        /* Card de Login */
         .login-card {
             background-color: #ffffff;
             padding: 30px 35px;
@@ -89,6 +95,7 @@ st.markdown("""
             margin-top: 20px;
         }
         
+        /* Métricas KPI */
         div[data-testid="stMetric"] {
             background-color: #ffffff;
             border-radius: 8px;
@@ -97,7 +104,7 @@ st.markdown("""
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
 
-        /* TROCA O VERMELHO DAS TAGS DO MULTISELECT POR CINZA CORPORATIVO */
+        /* REMOVE O VERMELHO DAS TAGS DO MULTISELECT -> ALTERA PARA CINZA CORPORATIVO */
         span[data-baseweb="tag"] {
             background-color: #6c757d !important;
             color: #ffffff !important;
@@ -107,14 +114,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def renderizar_logo(largura=180):
-    logo_path = None
-    for p in CAMINHOS_LOGO:
-        if os.path.exists(p):
-            logo_path = p
+    logo_encontrado = None
+    for path in CAMINHOS_LOGO_LOCAL:
+        if os.path.exists(path):
+            logo_encontrado = path
             break
             
-    if logo_path:
-        st.image(logo_path, width=largura)
+    if logo_encontrado:
+        st.image(logo_encontrado, width=largura)
     else:
         try:
             st.image(URL_LOGO_GITHUB, width=largura)
@@ -387,7 +394,7 @@ df_f_3 = df_f_2[df_f_2[COL_EMISSOR].astype(str).isin(emissor_sel)]
 tipos_emissao = sorted(list(df_f_3["Tipo_Emissao_Lemon"].dropna().astype(str).unique())) if "Tipo_Emissao_Lemon" in df_f_3.columns else []
 emissao_sel = st.sidebar.multiselect("Tipo de Emissão (OBT):", options=tipos_emissao, default=tipos_emissao)
 
-df_f_4 = df_f_3[df_f_3["Tipo_Emissao_Lemon"].astype(str).isin(emissao_sel)] if "Tipo_Emissao_Lemon" in df_f_4.columns else df_f_3
+df_f_4 = df_f_3[df_f_3["Tipo_Emissao_Lemon"].astype(str).isin(emissao_sel)] if "Tipo_Emissao_Lemon" in df_f_3.columns else df_f_3
 
 cias = sorted(list(df_f_4["CIA"].dropna().astype(str).unique())) if "CIA" in df_f_4.columns else []
 cia_sel = st.sidebar.multiselect("Companhia Aérea:", options=cias, default=cias)
@@ -415,6 +422,7 @@ df_backoffice_dinamico = pd.concat([
 
 df_backoffice_filtrado = aplicar_filtros_globais(df_backoffice_dinamico)
 
+# Lista de Abas
 abas_nomes = [
     "📊 Dashboard & KPIs",
     "🎯 Tratativa Operacional (Geral)",
@@ -446,6 +454,7 @@ with abas_objetos[0]:
     st.markdown("---")
     
     col_chart1, col_chart2 = st.columns(2)
+    
     with col_chart1:
         st.markdown("##### 📌 Distribuição de Volumetria por Status Geral")
         if not df_acao_filtrado.empty and "Status_Geral" in df_acao_filtrado.columns:
@@ -463,6 +472,23 @@ with abas_objetos[0]:
             st.bar_chart(data=chart_gerente, x="Gerente", y="Quantidade", color="#003366")
         else:
             st.info("Sem dados para exibir o gráfico.")
+            
+    st.markdown("---")
+    
+    col_chart3, col_chart4 = st.columns(2)
+    with col_chart3:
+        st.markdown("##### ✈️ Concentração por Companhia Aérea (CIA)")
+        if not df_acao_filtrado.empty and "CIA" in df_acao_filtrado.columns:
+            chart_cia = df_acao_filtrado["CIA"].value_counts().reset_index()
+            chart_cia.columns = ["Companhia Aérea", "Quantidade"]
+            st.dataframe(chart_cia, use_container_width=True, hide_index=True)
+            
+    with col_chart4:
+        st.markdown("##### 🏢 Volume de Divergências por Setor")
+        if not df_acao_filtrado.empty and COL_SETOR in df_acao_filtrado.columns:
+            chart_setor = df_acao_filtrado[COL_SETOR].value_counts().reset_index()
+            chart_setor.columns = ["Setor", "Quantidade"]
+            st.dataframe(chart_setor, use_container_width=True, hide_index=True)
 
 # ABA 1: TRATATIVA OPERACIONAL GERAL
 with abas_objetos[1]:
@@ -473,6 +499,7 @@ with abas_objetos[1]:
     else:
         lista_busca_geral = df_master_filtrado["Bilhetes"].astype(str).tolist()
         opcao_sel_m = st.selectbox("Procure ou Selecione o Bilhete / LOC para Tratativa:", options=lista_busca_geral, key="sb_geral")
+        
         row_m = df_master_filtrado[df_master_filtrado["Bilhetes"].astype(str) == opcao_sel_m].iloc[0]
         
         st.markdown(f"""
@@ -508,18 +535,20 @@ with abas_objetos[1]:
                 if nova_area == "Operação":
                     opcoes_gerentes_combo = sorted(list(set(gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Fabiano Souza", "Ivanete Bertasol", "Jaime Schnaider"]))) + ["Outro Gerente..."]
                     gerente_atual_row = str(row_m.get(COL_GERENTE, ""))
-                    idx_g = opcoes_gerentes_combo.index(gerente_atual_row) if gerente_atual_row in opcoes_gerentes_combo else (len(opcoes_gerentes_combo) - 1)
+                    idx_g = opcoes_gerentes_combo.index(gerente_atual_row) if gerente_atual_row in opcoes_gerentes_combo else 0
                     
-                    gerente_indicado_sel = st.selectbox("Gerente Responsável:", options=opcoes_gerentes_combo, index=idx_g)
-                    
-                    if gerente_indicado_sel == "Outro Gerente...":
-                        novo_gerente_dig = st.text_input("Escreva o Nome do Gerente:", placeholder="Digite o nome completo do gerente...")
-                        gerente_indicado = novo_gerente_dig.strip() if novo_gerente_dig.strip() else "Outro Gerente"
-                    else:
-                        gerente_indicado = gerente_indicado_sel
+                    c_g1, c_g2 = st.columns([1, 1])
+                    with c_g1:
+                        gerente_indicado_sel = st.selectbox("Gerente Responsável:", options=opcoes_gerentes_combo, index=idx_g)
+                    with c_g2:
+                        if gerente_indicado_sel == "Outro Gerente...":
+                            texto_novo_gerente = st.text_input("Nome do Novo Gerente:", placeholder="Digite o nome do gerente...")
+                        else:
+                            texto_novo_gerente = ""
                 else:
                     st.text_input("Gerente Responsável:", value=f"N/A ({nova_area})", disabled=True)
-                    gerente_indicado = nova_area
+                    gerente_indicado_sel = nova_area
+                    texto_novo_gerente = ""
 
             with col_d:
                 num_chamado = st.text_input("Nº do Chamado / Ticket (Obrigatório se Suporte Backoffice):", placeholder="Ex: INC-98472")
@@ -528,13 +557,21 @@ with abas_objetos[1]:
             btn_salvar_g = st.form_submit_button("💾 Salvar Tratativa Operacional")
             
             if btn_salvar_g:
+                # CORREÇÃO CRÍTICA DO NOVO GERENTE
+                if nova_area == "Operação":
+                    if gerente_indicado_sel == "Outro Gerente...":
+                        gerente_final = texto_novo_gerente.strip()
+                    else:
+                        gerente_final = gerente_indicado_sel
+                else:
+                    gerente_final = nova_area
+
                 if nova_area == "Suporte backoffice" and not num_chamado.strip():
                     st.error("⚠️ Para reatribuir ao **Suporte backoffice**, é OBRIGATÓRIO informar o Número do Chamado!")
-                elif nova_area == "Operação" and (not gerente_indicado or gerente_indicado == "Outro Gerente"):
-                    st.error("⚠️ Por favor, digite o nome do Gerente Responsável no campo abaixo de 'Outro Gerente...'.")
+                elif nova_area == "Operação" and not gerente_final:
+                    st.error("⚠️ Por favor, informe o Nome do Novo Gerente no campo de texto ao lado!")
                 else:
                     idx = df_master[df_master["Bilhetes"].astype(str) == opcao_sel_m].index
-                    area_final_salvar = gerente_indicado if nova_area == "Operação" else nova_area
                     
                     novo_log = pd.DataFrame([{
                         "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -543,7 +580,7 @@ with abas_objetos[1]:
                         "Status_Anterior": row_m.get("Status_Geral", "Pendente"),
                         "Novo_Status": novo_status,
                         "Area_Anterior": row_m.get(COL_GERENTE, "Operação"),
-                        "Nova_Area": area_final_salvar,
+                        "Nova_Area": gerente_final,
                         "Observacao": obs_detalhe,
                         "Tipo_Interacao": "Tratativa Geral"
                     }])
@@ -551,7 +588,7 @@ with abas_objetos[1]:
                     if novo_status == "Já Lançado no ERP":
                         row_upd = row_m.copy()
                         row_upd["Status_Geral"] = "Já Lançado no ERP"
-                        row_upd[COL_GERENTE] = area_final_salvar
+                        row_upd[COL_GERENTE] = gerente_final
                         row_upd["Obs. Operação"] = f"[Chamado: {num_chamado}] {obs_detalhe}" if num_chamado else obs_detalhe
                         row_upd["Status_Divergencia"] = "Valores Corretos"
                         
@@ -560,7 +597,7 @@ with abas_objetos[1]:
                         msg_res = "transferido para a aba 'Sem Divergência'"
                     else:
                         df_master.loc[idx, "Status_Geral"] = novo_status
-                        df_master.loc[idx, COL_GERENTE] = area_final_salvar
+                        df_master.loc[idx, COL_GERENTE] = gerente_final
                         df_master.loc[idx, "Obs. Operação"] = f"[Chamado: {num_chamado}] {obs_detalhe}" if num_chamado else obs_detalhe
                         msg_res = "atualizado com sucesso"
 
@@ -575,7 +612,7 @@ with abas_objetos[1]:
                                 df_back_atualizado.to_excel(writer, sheet_name="99_Suporte backoffice", index=False)
                             df_log_updated.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
                         
-                        st.session_state["msg_sucesso"] = f"✅ Bilhete {opcao_sel_m} {msg_res} por {usuario_log_formatado} (Gerente: {area_final_salvar})!"
+                        st.session_state["msg_sucesso"] = f"✅ Bilhete {opcao_sel_m} {msg_res} por {usuario_log_formatado} (Gerente Atribuído: {gerente_final})!"
                         st.cache_data.clear()
                         st.rerun()
                     except PermissionError:
