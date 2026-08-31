@@ -1,0 +1,30 @@
+{
+    "compliance1": {
+        "senha": "123",
+        "nome": "Compliance - Auditoria 01",
+        "perfil": "Compliance",
+        "status": "APROVADO",
+        "data_solicitacao": "2026-08-31"
+    },
+    "mribeiro": {
+        "senha": "123",
+        "nome": "Marcos Ribeiro",
+        "perfil": "Compliance",
+        "status": "APROVADO",
+        "data_solicitacao": "2026-08-31"
+    },
+    "operacao": {
+        "senha": "123",
+        "nome": "Equipe Operacional",
+        "perfil": "Operacao",
+        "status": "APROVADO",
+        "data_solicitacao": "2026-08-31"
+    },
+    "backoffice": {
+        "senha": "123",
+        "nome": "Atendimento Backoffice",
+        "perfil": "Operacao",
+        "status": "APROVADO",
+        "data_solicitacao": "2026-08-31"
+    }
+}
