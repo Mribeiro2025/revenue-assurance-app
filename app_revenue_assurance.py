@@ -146,7 +146,7 @@ if not st.session_state["autenticado"]:
         with aba_login:
             user_input = st.text_input("Usuário de Acesso:", key="login_user").strip().lower()
             pass_input = st.text_input("Senha:", type="password", key="login_pass").strip()
-            btn_entrar = st.button("🚀 Acessar Sistema", use_container_width=True, type="primary")
+            btn_entrar = st.button("🚀 Acessar Sistema", type="primary")
             
             if btn_entrar:
                 if user_input in usuarios_db:
@@ -173,7 +173,7 @@ if not st.session_state["autenticado"]:
                 user_reset = st.text_input("Informe seu Usuário de Acesso:").strip().lower()
                 nova_senha_login = st.text_input("Nova Senha:", type="password")
                 confirma_senha_login = st.text_input("Confirme a Nova Senha:", type="password")
-                btn_redefinir_senha = st.form_submit_button("🔄 Redefinir Senha", use_container_width=True)
+                btn_redefinir_senha = st.form_submit_button("🔄 Redefinir Senha")
 
                 if btn_redefinir_senha:
                     if not user_reset:
@@ -204,7 +204,7 @@ if not st.session_state["autenticado"]:
             """, unsafe_allow_html=True)
             
             termo_aceito = st.checkbox("Li e aceito os termos de sigilo")
-            btn_cadastrar = st.button("📩 Enviar Solicitação", use_container_width=True)
+            btn_cadastrar = st.button("📩 Enviar Solicitação")
             
             if btn_cadastrar:
                 if not novo_nome or not novo_user or not nova_senha:
@@ -294,7 +294,6 @@ def carregar_bases():
 def sincronizar_planilhas_auxiliares(bilhete_str, nova_area_resp, observacao_str):
     bilhete_target = str(bilhete_str).strip()
     
-    # Normaliza nome para exibição nas planilhas de relatórios
     if str(nova_area_resp).lower().strip() in ["suporte backoffice", "suporte benner"]:
         area_gravar = "Suporte Backoffice"
     else:
@@ -385,7 +384,7 @@ with col_hdr1:
     """, unsafe_allow_html=True)
 
 with col_hdr2:
-    if st.button("🔄 Recarregar / Atualizar Dados", use_container_width=True, type="primary"):
+    if st.button("🔄 Recarregar / Atualizar Dados", type="primary"):
         st.cache_data.clear()
         st.rerun()
 
@@ -416,7 +415,7 @@ if btn_mudar_senha or st.session_state.get("abrir_modal_senha", False):
             senha_atual_input = st.text_input("Senha Atual:", type="password")
             nova_senha_input = st.text_input("Nova Senha:", type="password")
             confirma_senha_input = st.text_input("Confirmar Nova Senha:", type="password")
-            btn_upd_pwd = st.form_submit_button("💾 Atualizar Senha", use_container_width=True)
+            btn_upd_pwd = st.form_submit_button("💾 Atualizar Senha")
             
             if btn_upd_pwd:
                 if usuarios_db[u_id_atual]["senha"] != senha_atual_input:
@@ -560,7 +559,7 @@ with abas_objetos[1]:
         st.markdown("##### 📋 Detalhes do Bilhete e Valores de Emissão")
         cols_det = ["Ponto de venda", "Área Resp. Operação", "CIA", "Bilhetes", "Localizador_Sistema", "Status_Sistema", "Data Emissão", "Pagto", "A vista", "A credito", "Taxa", "Comissão", "Taxa DU", "Desc.", "Incentivo", "VL. Líquido", "Status_Geral"]
         cols_presentes = [c for c in cols_det if c in row_m.index]
-        st.dataframe(pd.DataFrame([row_m[cols_presentes]]), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame([row_m[cols_presentes]]), hide_index=True)
         st.markdown("---")
 
         with st.form("form_tratativa_geral"):
@@ -695,7 +694,7 @@ with abas_objetos[1]:
 
         st.markdown("---")
         st.markdown(f"### 📊 Lista Completa dos Casos Filtrados ({len(df_master_filtrado)} registros)")
-        st.dataframe(df_master_filtrado, use_container_width=True, hide_index=True)
+        st.dataframe(df_master_filtrado, hide_index=True)
 
 # ABA 2: DIVERGÊNCIA OPERAÇÃO
 with abas_objetos[2]:
@@ -772,7 +771,7 @@ with abas_objetos[2]:
                     
         st.markdown("---")
         st.markdown(f"### 📊 Lista Completa das Divergências ({len(df_div_op_filtrado)} registros)")
-        st.dataframe(df_div_op_filtrado, use_container_width=True, hide_index=True)
+        st.dataframe(df_div_op_filtrado, hide_index=True)
 
 # ABA 3: SEM DIVERGÊNCIA
 with abas_objetos[3]:
@@ -842,7 +841,7 @@ with abas_objetos[3]:
                             except PermissionError:
                                 st.error("❌ O arquivo Excel está aberto em outro programa. Feche a planilha para salvar.")
 
-    st.dataframe(df_sem_div_filtrado, use_container_width=True, hide_index=True)
+    st.dataframe(df_sem_div_filtrado, hide_index=True)
 
 # ABA 4: SUPORTE BACKOFFICE
 with abas_objetos[4]:
@@ -932,7 +931,7 @@ with abas_objetos[4]:
 
         st.markdown("---")
         st.markdown(f"### 📊 Lista Completa dos Chamados ({len(df_backoffice_filtrado)} registros)")
-        st.dataframe(df_backoffice_filtrado, use_container_width=True, hide_index=True)
+        st.dataframe(df_backoffice_filtrado, hide_index=True)
 
 # ABA 5: RÉPLICA DA AUDITORIA
 with abas_objetos[5]:
@@ -988,7 +987,7 @@ with abas_objetos[5]:
 
         st.markdown("---")
         st.markdown(f"### 📊 Lista Completa dos Casos em Réplica ({len(bilhetes_com_tratativa)} registros)")
-        st.dataframe(bilhetes_com_tratativa, use_container_width=True, hide_index=True)
+        st.dataframe(bilhetes_com_tratativa, hide_index=True)
 
 # ABAS EXCLUSIVAS DO COMPLIANCE
 idx_aba_compliance = 6
@@ -1019,7 +1018,7 @@ if st.session_state["perfil_atual"] == "Compliance":
             else:
                 st.info("Nenhum registro de log para exclusão.")
                 
-        st.dataframe(df_log_master, use_container_width=True, hide_index=False)
+        st.dataframe(df_log_master, hide_index=False)
     idx_aba_compliance += 1
 
     # ABA GESTÃO DE ACESSOS & APROVAÇÕES
@@ -1059,4 +1058,4 @@ if st.session_state["perfil_atual"] == "Compliance":
 # ABA VISÃO GERAL BASE TOTAL
 with abas_objetos[idx_aba_compliance]:
     st.subheader("📋 Visão Geral da Base Total de Divergências")
-    st.dataframe(df_acao_filtrado, use_container_width=True, hide_index=True)
+    st.dataframe(df_acao_filtrado, hide_index=True)
