@@ -131,8 +131,11 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
     if df_export is None or df_export.empty:
         df_export = pd.DataFrame(columns=["Aviso"], data=[["Nenhum registro encontrado para os filtros selecionados"]])
 
+    cols_remover = [c for c in ["Dt_Parsed", "Mes_Ano_Sort"] if c in df_export.columns]
+    df_clean = df_export.drop(columns=cols_remover) if cols_remover else df_export
+
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        df_export.to_excel(writer, sheet_name=nome_aba[:30], index=False)
+        df_clean.to_excel(writer, sheet_name=nome_aba[:30], index=False)
         
     buffer.seek(0)
     wb = openpyxl.load_workbook(buffer)
@@ -291,7 +294,43 @@ if not st.session_state["autenticado"]:
         st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
-# 4. Leitura e Padronização das Bases
+# 4. Leitura, Limpeza Cadastral e Padronização
+def padronizar_gerentes_e_setores(val):
+    if pd.isna(val) or not str(val).strip():
+        return "Não Atribuído"
+    v = str(val).strip()
+    
+    # Padronização Rosângela Pallu (com e sem acento)
+    if v in ["Rosangela Pallu", "Rosângela Pallu", "ROSANGELA PALLU", "ROSÂNGELA PALLU"]:
+        return "Rosângela Pallu"
+    # Padronização Central de Eventos
+    elif v in ["CENTRAL DE EVENTOS", "Central de Eventos", "central de eventos"]:
+        return "Central de Eventos"
+    # Padronização Jaime Schnaider
+    elif v in ["Jaime Schinaider", "Jaime Schnaider", "JAIME SCHNAIDER"]:
+        return "Jaime Schnaider"
+    # Padronização Silvana Celani
+    elif v in ["Silvana Celane", "Silvana Celani", "SILVANA CELANI"]:
+        return "Silvana Celani"
+    # Suporte Backoffice
+    elif "suporte" in v.lower() or "benner" in v.lower() or "katia" in v.lower():
+        return "Suporte Backoffice"
+    return v
+
+def categorizar_tipo_inconsistencia(row):
+    origem = str(row.get('Origem_Aba', ''))
+    status_div = str(row.get('Status_Divergencia', '')).strip()
+    status_sis = str(row.get('Status_Sistema', '')).strip()
+    
+    if origem == "99_Geral" or status_sis == "NAO_CONSTA" or "Pendente" in str(row.get('Status_Geral', '')):
+        return "Pendente de Lançamento no ERP"
+    elif status_div and status_div not in ["nan", "Valores Corretos", ""]:
+        return status_div
+    elif "Sem_Divergencia" in origem or status_div == "Valores Corretos":
+        return "Sem Divergência (Conciliado)"
+    else:
+        return "Pendente de Lançamento no ERP"
+
 def padronizar_e_deduplicar_colunas(df, origem=""):
     if df is None or df.empty: return pd.DataFrame()
     df = df.loc[:, ~df.columns.duplicated()].copy()
@@ -327,6 +366,10 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     if "Obs. Operação" not in df_out.columns: df_out["Obs. Operação"] = ""
     if "Data Emissão" not in df_out.columns: df_out["Data Emissão"] = "-"
 
+    # PADRONIZAÇÃO DE GERENTES E SETORES
+    df_out["Área Resp. Operação"] = df_out["Área Resp. Operação"].apply(padronizar_gerentes_e_setores)
+    df_out["Setor"] = df_out["Setor"].apply(lambda s: "Central de Eventos" if str(s).upper() == "CENTRAL DE EVENTOS" else s)
+
     val_area_orig = df[col_area_resp].astype(str).str.lower() if col_area_resp and col_area_resp in df.columns else pd.Series("", index=df.index)
     val_ger_orig = df_out["Área Resp. Operação"].astype(str).str.lower()
     val_obs_orig = df_out["Obs. Operação"].fillna("").astype(str).str.lower()
@@ -339,6 +382,7 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     
     df_out.loc[mascara_suporte, "Área Resp. Operação"] = "Suporte Backoffice"
     df_out["Origem_Aba"] = origem
+    df_out["Tipo_Inconsistencia"] = df_out.apply(categorizar_tipo_inconsistencia, axis=1)
 
     # EXTRAÇÃO E PADRONIZAÇÃO DE MÊS/ANO PARA FILTRO
     df_out["Dt_Parsed"] = pd.to_datetime(df_out["Data Emissão"], errors="coerce", dayfirst=True)
@@ -356,7 +400,7 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
         if m_match:
             m_num, y_num = m_match.group(1), m_match.group(2)
             return f"{mapa_meses.get(m_num, m_num)}/{y_num}"
-        return "Outros / Sem Data"
+        return "Acumulado / Sem Data"
 
     df_out["Mes_Ano_Label"] = df_out.apply(extrair_rotulo_mes, axis=1)
     return df_out
@@ -444,7 +488,7 @@ COL_GERENTE = "Área Resp. Operação"
 COL_SETOR = "Setor"
 COL_EMISSOR = "Consultor_Lemon"
 
-# CONSOLIDAÇÃO TOTAL ACUMULADA
+# CONSOLIDAÇÃO DE 100% DAS ABAS (344 + 43 + 31 = 418 LINHAS / 407 BILHETES ÚNICOS)
 df_list = [d for d in [df_master, df_div_op, df_sem_div] if not d.empty]
 df_acao_total = pd.concat(df_list, ignore_index=True, sort=False) if len(df_list) > 0 else pd.DataFrame()
 
@@ -595,54 +639,57 @@ gerentes_base_unicos = sorted([g for g in df_acao_total[COL_GERENTE].dropna().as
 
 dt_str_export = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
-# ABA 0: DASHBOARD INTERATIVO E PROFISSIONAL
+# ABA 0: DASHBOARD INTERATIVO - 100% DOS CASOS AUDITADOS
 with abas_objetos[0]:
-    st.subheader("📊 Painel Executivo e Métricas de Controladoria")
+    st.subheader("📊 Painel Executivo e Métricas Globais (100% da Base Auditada)")
     
-    # Kpis Principais
+    # KPIs Principais
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Bilhetes/LOCs em Ação", f"{len(df_acao_filtrado):,}")
+    k1.metric("Bilhetes Auditados em Ação", f"{len(df_acao_filtrado):,}")
     k2.metric("Tarifa Pendente (R$)", f"R$ {df_acao_filtrado['A credito'].sum():,.2f}" if "A credito" in df_acao_filtrado.columns else "R$ 0.00")
     k3.metric("Taxas Pendentes (R$)", f"R$ {df_acao_filtrado['Taxa'].sum():,.2f}" if "Taxa" in df_acao_filtrado.columns else "R$ 0.00")
     k4.metric("Receita em Risco (R$)", f"R$ {df_acao_filtrado['Incentivo'].sum():,.2f}" if "Incentivo" in df_acao_filtrado.columns else "R$ 0.00")
     
     st.markdown("---")
     
-    # AREA GRÁFICA AVANÇADA COM PLOTLY
+    # PAINEL GRÁFICO 1: DISTRIBUIÇÃO E DIVERGÊNCIAS
     col_chart1, col_chart2 = st.columns(2)
     
     with col_chart1:
-        st.markdown("##### 📌 Distribuição de Volumetria por Status Geral")
-        if not df_acao_filtrado.empty and "Status_Geral" in df_acao_filtrado.columns:
-            df_status = df_acao_filtrado["Status_Geral"].value_counts().reset_index()
-            df_status.columns = ["Status", "Quantidade"]
+        st.markdown("##### ⚠️ Classificação Detalhada dos Tipos de Inconsistência")
+        if not df_acao_filtrado.empty and "Tipo_Inconsistencia" in df_acao_filtrado.columns:
+            df_inc = df_acao_filtrado["Tipo_Inconsistencia"].value_counts().reset_index()
+            df_inc.columns = ["Inconsistencia", "Quantidade"]
             
-            fig_donut = px.pie(
-                df_status, 
-                names="Status", 
-                values="Quantidade", 
-                hole=0.45,
-                color_discrete_sequence=["#002060", "#00509d", "#0077b6", "#0096c7", "#48cae4"]
+            fig_inc = px.bar(
+                df_inc, 
+                x="Quantidade", 
+                y="Inconsistencia", 
+                orientation="h",
+                text="Quantidade",
+                color="Inconsistencia",
+                color_discrete_sequence=["#002060", "#c1121f", "#7209b7", "#4361ee", "#4cc9f0", "#2b9348"]
             )
-            fig_donut.update_traces(
-                textposition='inside', 
-                textinfo='percent+label+value',
-                marker=dict(line=dict(color='#FFFFFF', width=2))
+            fig_inc.update_traces(
+                texttemplate='%{text}', 
+                textposition='outside',
+                cliponaxis=False
             )
-            fig_donut.update_layout(
-                showlegend=True, 
+            fig_inc.update_layout(
                 height=380,
-                margin=dict(l=10, r=10, t=20, b=20),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+                xaxis_title="Qtd. Bilhetes",
+                yaxis_title="",
+                showlegend=False,
+                margin=dict(l=10, r=20, t=20, b=20)
             )
-            st.plotly_chart(fig_donut, use_container_width=True)
+            st.plotly_chart(fig_inc, use_container_width=True)
         else:
             st.info("Sem dados para exibir o gráfico.")
             
     with col_chart2:
-        st.markdown("##### 👤 Top Gerentes Responsáveis por Volume de Pendências")
+        st.markdown("##### 👤 Volumetria Total por Gerente Responsável (Sem Duplicações)")
         if not df_acao_filtrado.empty and COL_GERENTE in df_acao_filtrado.columns:
-            df_ger = df_acao_filtrado[COL_GERENTE].value_counts().head(8).reset_index()
+            df_ger = df_acao_filtrado[COL_GERENTE].value_counts().head(10).reset_index()
             df_ger.columns = ["Gerente", "Quantidade"]
             
             fig_bar = px.bar(
@@ -672,8 +719,8 @@ with abas_objetos[0]:
 
     st.markdown("---")
     
-    # GRÁFICO 3: EVOLUÇÃO MENSAL POR SETOR
-    st.markdown("##### 📈 Comparativo Mensal de Pendências por Setor Responsável")
+    # PAINEL GRÁFICO 2: COMPARATIVO MENSAL POR SETOR
+    st.markdown("##### 📈 Volumetria Mensal de Pendências por Setor Responsável")
     if not df_acao_filtrado.empty and "Mes_Ano_Label" in df_acao_filtrado.columns:
         df_mes_setor = df_acao_filtrado.groupby(["Mes_Ano_Label", COL_SETOR]).size().reset_index(name="Quantidade")
         
@@ -701,7 +748,7 @@ with abas_objetos[1]:
     st.subheader("📝 Módulo de Resolução e Detalhamento Operacional")
     
     if len(df_master_filtrado) == 0:
-        st.warning("Nenhum bilhete encontrado na base geral para os filtros selecionados.")
+        st.warning("Nenum bilhete encontrado na base geral para os filtros selecionados.")
     else:
         lista_busca_geral = df_master_filtrado["Bilhetes"].astype(str).tolist()
         opcao_sel_m = st.selectbox("Procure ou Selecione o Bilhete / LOC para Tratativa:", options=lista_busca_geral, key="sb_geral")
@@ -751,8 +798,8 @@ with abas_objetos[1]:
                     gerente_indicado_sel = "Silvana Celani"
                     novo_gerente_texto = ""
                 elif nova_area == "Unique":
-                    st.text_input("Gerente Responsável:", value="Jaime Schinaider", disabled=True)
-                    gerente_indicado_sel = "Jaime Schinaider"
+                    st.text_input("Gerente Responsável:", value="Jaime Schnaider", disabled=True)
+                    gerente_indicado_sel = "Jaime Schnaider"
                     novo_gerente_texto = ""
                 elif nova_area == "Concierge/Lazer":
                     st.text_input("Gerente Responsável:", value="Fabiano Souza", disabled=True)
@@ -767,8 +814,8 @@ with abas_objetos[1]:
                     gerente_indicado_sel = "Suporte Backoffice"
                     novo_gerente_texto = ""
                 else:
-                    gerentes_reservados = ["Silvana Celani", "Silvana Celane", "Jaime Schinaider", "Jaime Schnaider", "Fabiano Souza", "Alexandre Souza", "Central de Eventos", "Suporte Backoffice", "Suporte backoffice", "Katia Martins"]
-                    gerentes_operacao_puros = sorted(list(set([g for g in gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Ivanete Bertasol"] if g not in gerentes_reservados])))
+                    gerentes_reservados = ["Silvana Celani", "Jaime Schnaider", "Fabiano Souza", "Alexandre Souza", "Central de Eventos", "Suporte Backoffice", "Katia Martins"]
+                    gerentes_operacao_puros = sorted(list(set([g for g in gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Ivanete Bertasol", "Rosângela Pallu"] if g not in gerentes_reservados])))
                     
                     if "Outro Gerente..." not in gerentes_operacao_puros:
                         gerentes_operacao_puros.append("Outro Gerente...")
@@ -790,10 +837,7 @@ with abas_objetos[1]:
             
             if btn_salvar_g:
                 if nova_area == "Operação":
-                    if gerente_indicado_sel == "Outro Gerente...":
-                        gerente_final = novo_gerente_texto.strip()
-                    else:
-                        gerente_final = gerente_indicado_sel
+                    gerente_final = novo_gerente_texto.strip() if gerente_indicado_sel == "Outro Gerente..." else gerente_indicado_sel
                 else:
                     gerente_final = gerente_indicado_sel
 
@@ -825,6 +869,7 @@ with abas_objetos[1]:
                         rows_upd[COL_GERENTE] = gerente_final
                         rows_upd["Obs. Operação"] = texto_obs_final
                         rows_upd["Status_Divergencia"] = "Valores Corretos"
+                        rows_upd["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
                         
                         df_master = df_master.drop(idx)
                         df_sem_div = pd.concat([df_sem_div, rows_upd], ignore_index=True)
@@ -916,6 +961,7 @@ with abas_objetos[2]:
                     if cia_corrigida_d: rows_upd_d["CIA"] = cia_corrigida_d
                     rows_upd_d["Obs. Operação"] = texto_obs_d
                     rows_upd_d["Status_Divergencia"] = "Valores Corretos"
+                    rows_upd_d["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
                     
                     df_div_op = df_div_op.drop(idx_d)
                     df_sem_div = pd.concat([df_sem_div, rows_upd_d], ignore_index=True)
@@ -992,6 +1038,7 @@ with abas_objetos[3]:
                             rows_para_devolver["Status_Geral"] = "Pendente de Lançamento"
                             rows_para_devolver[COL_GERENTE] = area_final_comp
                             rows_para_devolver["Obs. Operação"] = texto_obs_comp
+                            rows_para_devolver["Tipo_Inconsistencia"] = "Pendente de Lançamento no ERP"
                             
                             df_sem_div = df_sem_div.drop(idx_sd)
                             df_master = pd.concat([df_master, rows_para_devolver], ignore_index=True)
@@ -1071,6 +1118,7 @@ with abas_objetos[4]:
                     row_upd_bk["Status_Geral"] = "Já Lançado no ERP"
                     row_upd_bk[COL_GERENTE] = area_devolucao_bk
                     row_upd_bk["Status_Divergencia"] = "Valores Corretos"
+                    row_upd_bk["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
                     texto_obs_bk = f"[Correto pelo Suporte]: {obs_back}"
                     row_upd_bk["Obs. Operação"] = texto_obs_bk
                     
@@ -1269,3 +1317,13 @@ with abas_objetos[idx_aba_compliance]:
             key="btn_exp_total"
         )
     st.dataframe(df_acao_filtrado, hide_index=True)
+
+
+
+
+###Codigo para versionamento no GitHub###
+#----------------------------------------------#
+
+#git add app_revenue_assurance.py
+#git commit -m "Adiciona filtro por mes e graficos profissionais Plotly com rotulos de dados"
+#git push origin main
