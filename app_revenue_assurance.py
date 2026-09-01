@@ -8,6 +8,8 @@ import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 import streamlit as st
+import plotly.express as px
+import plotly.graph_objects as go
 
 # 1. Configuração Inicial da Página
 st.set_page_config(
@@ -22,7 +24,6 @@ ARQUIVO_NAO_CONCILIADOS = "NÃO CONCILIADOS.xlsx"
 ARQUIVO_CONCILIADOS = "CONCILIADOS _ REGULARIZADOS.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
 
-# 2. Gerenciador de Usuários e Persistência de Cadastro
 USUARIOS_PADRAO = {
     "mribeiro": {"senha": "123", "nome": "Marcos Ribeiro", "perfil": "Compliance", "status": "APROVADO", "data_solicitacao": "2026-08-31"},
     "compliance1": {"senha": "123", "nome": "Compliance - Auditoria 01", "perfil": "Compliance", "status": "APROVADO", "data_solicitacao": "2026-08-31"},
@@ -47,7 +48,7 @@ def salvar_usuarios(dict_users):
 
 usuarios_db = carregar_usuarios()
 
-# 3. Estilização CSS Corporativa
+# 2. Estilização CSS Corporativa
 st.markdown("""
     <style>
         .stApp { background-color: #f8f9fa; }
@@ -124,9 +125,7 @@ st.markdown("""
 def renderizar_marca():
     st.markdown('<div class="brand-header">GRUPO ARBAITMAN</div>', unsafe_allow_html=True)
 
-# 4. Funções de Exportação Formatada em Excel
 def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
-    """Gera um buffer binário do Excel formatado com cabeçalhos azul-marinho e moedas em R$."""
     buffer = io.BytesIO()
     
     if df_export is None or df_export.empty:
@@ -139,7 +138,6 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
     wb = openpyxl.load_workbook(buffer)
     ws = wb.active
     
-    # Estilos Corporativos
     header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True, size=11)
     thin_border = Border(
@@ -157,7 +155,6 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
 
     ws.views.sheetView[0].showGridLines = True
 
-    # Formatar Cabeçalhos
     for cell in ws[1]:
         cell.fill = header_fill
         cell.font = header_font
@@ -167,17 +164,14 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
     max_row = ws.max_row
     max_col = ws.max_column
 
-    # Formatar Dados e Ajustar Larguras
     for col_idx in range(1, max_col + 1):
         col_letter = get_column_letter(col_idx)
         col_name = str(ws.cell(row=1, column=col_idx).value or '')
         
-        # Ajuste dinâmico de largura
         len_vals = [len(str(ws.cell(row=r, column=col_idx).value or '')) for r in range(1, max_row + 1)]
         max_len = max(len_vals) if len_vals else 10
         ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
         
-        # Formatação Numérica e Bordas
         for r in range(2, max_row + 1):
             cell = ws.cell(row=r, column=col_idx)
             cell.border = thin_border
@@ -196,7 +190,7 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
     output_buffer.seek(0)
     return output_buffer
 
-# 5. Autenticação e Sessão
+# 3. Autenticação e Sessão
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
     st.session_state["usuario_atual"] = None
@@ -297,7 +291,7 @@ if not st.session_state["autenticado"]:
         st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
-# 6. Leitura de Bases e Tratamento Sem Falsos Positivos
+# 4. Leitura e Padronização das Bases
 def padronizar_e_deduplicar_colunas(df, origem=""):
     if df is None or df.empty: return pd.DataFrame()
     df = df.loc[:, ~df.columns.duplicated()].copy()
@@ -319,6 +313,8 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
             renomear[col] = "Consultor_Lemon"
         elif c_str in ["bilhete", "bilhetes"]:
             renomear[col] = "Bilhetes"
+        elif c_str in ["data emissão", "data emissao", "data_emissao"]:
+            renomear[col] = "Data Emissão"
             
     df_out = df.rename(columns=renomear).copy()
     df_out = df_out.loc[:, ~df_out.columns.duplicated()].copy()
@@ -329,6 +325,7 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     if "Localizador_Sistema" not in df_out.columns: df_out["Localizador_Sistema"] = "-"
     if "Status_Geral" not in df_out.columns: df_out["Status_Geral"] = "Pendente de Lançamento"
     if "Obs. Operação" not in df_out.columns: df_out["Obs. Operação"] = ""
+    if "Data Emissão" not in df_out.columns: df_out["Data Emissão"] = "-"
 
     val_area_orig = df[col_area_resp].astype(str).str.lower() if col_area_resp and col_area_resp in df.columns else pd.Series("", index=df.index)
     val_ger_orig = df_out["Área Resp. Operação"].astype(str).str.lower()
@@ -342,6 +339,26 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     
     df_out.loc[mascara_suporte, "Área Resp. Operação"] = "Suporte Backoffice"
     df_out["Origem_Aba"] = origem
+
+    # EXTRAÇÃO E PADRONIZAÇÃO DE MÊS/ANO PARA FILTRO
+    df_out["Dt_Parsed"] = pd.to_datetime(df_out["Data Emissão"], errors="coerce", dayfirst=True)
+    df_out["Mes_Ano_Sort"] = df_out["Dt_Parsed"].dt.strftime("%Y-%m")
+    
+    mapa_meses = {"01": "Jan", "02": "Fev", "03": "Mar", "04": "Abr", "05": "Mai", "06": "Jun", "07": "Jul", "08": "Ago", "09": "Set", "10": "Out", "11": "Nov", "12": "Dez"}
+    
+    def extrair_rotulo_mes(row):
+        if pd.notna(row["Dt_Parsed"]):
+            m_num = row["Dt_Parsed"].strftime("%m")
+            y_num = row["Dt_Parsed"].strftime("%Y")
+            return f"{mapa_meses.get(m_num, m_num)}/{y_num}"
+        s_raw = str(row["Data Emissão"])
+        m_match = re.search(r'/(\d{2})/(\d{4})', s_raw)
+        if m_match:
+            m_num, y_num = m_match.group(1), m_match.group(2)
+            return f"{mapa_meses.get(m_num, m_num)}/{y_num}"
+        return "Outros / Sem Data"
+
+    df_out["Mes_Ano_Label"] = df_out.apply(extrair_rotulo_mes, axis=1)
     return df_out
 
 @st.cache_data(ttl=2)
@@ -376,53 +393,39 @@ def carregar_bases():
 
 def sincronizar_planilhas_auxiliares(bilhete_str, nova_area_resp, observacao_str):
     bilhete_target = str(bilhete_str).strip()
-    
-    if str(nova_area_resp).lower().strip() in ["suporte backoffice", "suporte benner"]:
-        area_gravar = "SUPORTE BENNER"
-    else:
-        area_gravar = nova_area_resp
+    area_gravar = "SUPORTE BENNER" if str(nova_area_resp).lower().strip() in ["suporte backoffice", "suporte benner"] else nova_area_resp
 
     if os.path.exists(ARQUIVO_NAO_CONCILIADOS):
         try:
             df_nc = pd.read_excel(ARQUIVO_NAO_CONCILIADOS, sheet_name="NÃO CONCILIADOS")
-            col_bilhete_nc = "BILHETES" if "BILHETES" in df_nc.columns else ("Bilhete" if "Bilhete" in df_nc.columns else None)
-            if col_bilhete_nc:
-                mascara_nc = df_nc[col_bilhete_nc].astype(str).str.strip() == bilhete_target
-                if mascara_nc.any():
-                    if "ÁREA RESPONSÁVEL" in df_nc.columns:
-                        df_nc.loc[mascara_nc, "ÁREA RESPONSÁVEL"] = area_gravar
-                    elif "GERENTES" in df_nc.columns:
-                        df_nc.loc[mascara_nc, "GERENTES"] = area_gravar
-                    
-                    if "OBS" in df_nc.columns:
-                        df_nc.loc[mascara_nc, "OBS"] = observacao_str
-                    
+            col_b = "BILHETES" if "BILHETES" in df_nc.columns else ("Bilhete" if "Bilhete" in df_nc.columns else None)
+            if col_b:
+                m_nc = df_nc[col_b].astype(str).str.strip() == bilhete_target
+                if m_nc.any():
+                    if "ÁREA RESPONSÁVEL" in df_nc.columns: df_nc.loc[m_nc, "ÁREA RESPONSÁVEL"] = area_gravar
+                    elif "GERENTES" in df_nc.columns: df_nc.loc[m_nc, "GERENTES"] = area_gravar
+                    if "OBS" in df_nc.columns: df_nc.loc[m_nc, "OBS"] = observacao_str
                     with pd.ExcelWriter(ARQUIVO_NAO_CONCILIADOS, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
                         df_nc.to_excel(writer, sheet_name="NÃO CONCILIADOS", index=False)
         except Exception as e:
-            st.warning(f"⚠️ Nota: Não foi possível atualizar 'NÃO CONCILIADOS.xlsx': {str(e)}")
+            st.warning(f"⚠️ Nota ao atualizar 'NÃO CONCILIADOS.xlsx': {str(e)}")
 
     if os.path.exists(ARQUIVO_CONCILIADOS):
         try:
             xls_c = pd.ExcelFile(ARQUIVO_CONCILIADOS)
             sheet_target = xls_c.sheet_names[0]
             df_cr = pd.read_excel(xls_c, sheet_name=sheet_target)
-            col_bilhete_cr = "BILHETES" if "BILHETES" in df_cr.columns else ("Bilhete" if "Bilhete" in df_cr.columns else None)
-            if col_bilhete_cr:
-                mascara_cr = df_cr[col_bilhete_cr].astype(str).str.strip() == bilhete_target
-                if mascara_cr.any():
-                    if "ÁREA RESPONSÁVEL" in df_cr.columns:
-                        df_cr.loc[mascara_cr, "ÁREA RESPONSÁVEL"] = area_gravar
-                    elif "GERENTES" in df_cr.columns:
-                        df_cr.loc[mascara_cr, "GERENTES"] = area_gravar
-                        
-                    if "OBS" in df_cr.columns:
-                        df_cr.loc[mascara_cr, "OBS"] = observacao_str
-                        
+            col_b = "BILHETES" if "BILHETES" in df_cr.columns else ("Bilhete" if "Bilhete" in df_cr.columns else None)
+            if col_b:
+                m_cr = df_cr[col_b].astype(str).str.strip() == bilhete_target
+                if m_cr.any():
+                    if "ÁREA RESPONSÁVEL" in df_cr.columns: df_cr.loc[m_cr, "ÁREA RESPONSÁVEL"] = area_gravar
+                    elif "GERENTES" in df_cr.columns: df_cr.loc[m_cr, "GERENTES"] = area_gravar
+                    if "OBS" in df_cr.columns: df_cr.loc[m_cr, "OBS"] = observacao_str
                     with pd.ExcelWriter(ARQUIVO_CONCILIADOS, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
                         df_cr.to_excel(writer, sheet_name=sheet_target, index=False)
         except Exception as e:
-            st.warning(f"⚠️ Nota: Não foi possível atualizar 'CONCILIADOS _ REGULARIZADOS.xlsx': {str(e)}")
+            st.warning(f"⚠️ Nota ao atualizar 'CONCILIADOS _ REGULARIZADOS.xlsx': {str(e)}")
 
 df_master, df_div_op, df_sem_div, df_backoffice, df_log_master, status_carga = carregar_bases()
 
@@ -434,14 +437,15 @@ if status_carga == "ARQUIVO_BLOQUEADO":
     st.stop()
 
 if (df_master is None or df_master.empty) and (df_div_op is None or df_div_op.empty):
-    st.error(f"⚠️ Base consolidada de divergências não encontrada.")
+    st.error("⚠️ Base consolidada de divergências não encontrada.")
     st.stop()
 
 COL_GERENTE = "Área Resp. Operação"
 COL_SETOR = "Setor"
 COL_EMISSOR = "Consultor_Lemon"
 
-df_list = [d for d in [df_master, df_div_op] if not d.empty]
+# CONSOLIDAÇÃO TOTAL ACUMULADA
+df_list = [d for d in [df_master, df_div_op, df_sem_div] if not d.empty]
 df_acao_total = pd.concat(df_list, ignore_index=True, sort=False) if len(df_list) > 0 else pd.DataFrame()
 
 if "Bilhetes" in df_acao_total.columns:
@@ -513,10 +517,18 @@ if btn_mudar_senha or st.session_state.get("abrir_modal_senha", False):
 st.sidebar.markdown("---")
 st.sidebar.title("🔍 Filtros Operacionais")
 
-opcoes_setor = sorted(list(df_acao_total[COL_SETOR].dropna().astype(str).unique()))
+# 1. FILTRO DE MÊS DA EMISSÃO
+df_meses = df_acao_total.dropna(subset=["Mes_Ano_Label"]).sort_values(by="Mes_Ano_Sort")
+opcoes_meses = sorted(list(df_meses["Mes_Ano_Label"].unique()))
+mes_sel = st.sidebar.multiselect("📅 Mês de Emissão:", options=opcoes_meses, default=opcoes_meses)
+
+df_f_mes = df_acao_total[df_acao_total["Mes_Ano_Label"].isin(mes_sel)] if mes_sel else df_acao_total
+
+# 2. DEMAIS FILTROS DINÂMICOS
+opcoes_setor = sorted(list(df_f_mes[COL_SETOR].dropna().astype(str).unique()))
 setor_sel = st.sidebar.multiselect("Setor Responsável:", options=opcoes_setor, default=opcoes_setor)
 
-df_f_1 = df_acao_total[df_acao_total[COL_SETOR].astype(str).isin(setor_sel)]
+df_f_1 = df_f_mes[df_f_mes[COL_SETOR].astype(str).isin(setor_sel)]
 
 opcoes_gerente = sorted(list(df_f_1[COL_GERENTE].dropna().astype(str).unique()))
 gerente_sel = st.sidebar.multiselect("Gerente (Área Resp. Operação):", options=opcoes_gerente, default=opcoes_gerente)
@@ -539,6 +551,7 @@ cia_sel = st.sidebar.multiselect("Companhia Aérea:", options=cias, default=cias
 def aplicar_filtros_globais(df):
     if df is None or df.empty: return df
     m = pd.Series(True, index=df.index)
+    if "Mes_Ano_Label" in df.columns and mes_sel: m = m & df["Mes_Ano_Label"].isin(mes_sel)
     if COL_SETOR in df.columns and setor_sel: m = m & df[COL_SETOR].astype(str).isin(setor_sel)
     if COL_GERENTE in df.columns and gerente_sel: m = m & df[COL_GERENTE].astype(str).isin(gerente_sel)
     if COL_EMISSOR in df.columns and emissor_sel: m = m & df[COL_EMISSOR].astype(str).isin(emissor_sel)
@@ -582,10 +595,11 @@ gerentes_base_unicos = sorted([g for g in df_acao_total[COL_GERENTE].dropna().as
 
 dt_str_export = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
-# ABA 0: DASHBOARD
+# ABA 0: DASHBOARD INTERATIVO E PROFISSIONAL
 with abas_objetos[0]:
     st.subheader("📊 Painel Executivo e Métricas de Controladoria")
     
+    # Kpis Principais
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Bilhetes/LOCs em Ação", f"{len(df_acao_filtrado):,}")
     k2.metric("Tarifa Pendente (R$)", f"R$ {df_acao_filtrado['A credito'].sum():,.2f}" if "A credito" in df_acao_filtrado.columns else "R$ 0.00")
@@ -594,24 +608,93 @@ with abas_objetos[0]:
     
     st.markdown("---")
     
+    # AREA GRÁFICA AVANÇADA COM PLOTLY
     col_chart1, col_chart2 = st.columns(2)
+    
     with col_chart1:
         st.markdown("##### 📌 Distribuição de Volumetria por Status Geral")
         if not df_acao_filtrado.empty and "Status_Geral" in df_acao_filtrado.columns:
-            chart_status = df_acao_filtrado["Status_Geral"].value_counts().reset_index()
-            chart_status.columns = ["Status", "Quantidade"]
-            st.bar_chart(data=chart_status, x="Status", y="Quantidade", color="#002060")
+            df_status = df_acao_filtrado["Status_Geral"].value_counts().reset_index()
+            df_status.columns = ["Status", "Quantidade"]
+            
+            fig_donut = px.pie(
+                df_status, 
+                names="Status", 
+                values="Quantidade", 
+                hole=0.45,
+                color_discrete_sequence=["#002060", "#00509d", "#0077b6", "#0096c7", "#48cae4"]
+            )
+            fig_donut.update_traces(
+                textposition='inside', 
+                textinfo='percent+label+value',
+                marker=dict(line=dict(color='#FFFFFF', width=2))
+            )
+            fig_donut.update_layout(
+                showlegend=True, 
+                height=380,
+                margin=dict(l=10, r=10, t=20, b=20),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+            )
+            st.plotly_chart(fig_donut, use_container_width=True)
         else:
             st.info("Sem dados para exibir o gráfico.")
             
     with col_chart2:
         st.markdown("##### 👤 Top Gerentes Responsáveis por Volume de Pendências")
         if not df_acao_filtrado.empty and COL_GERENTE in df_acao_filtrado.columns:
-            chart_gerente = df_acao_filtrado[COL_GERENTE].value_counts().head(8).reset_index()
-            chart_gerente.columns = ["Gerente", "Quantidade"]
-            st.bar_chart(data=chart_gerente, x="Gerente", y="Quantidade", color="#003366")
+            df_ger = df_acao_filtrado[COL_GERENTE].value_counts().head(8).reset_index()
+            df_ger.columns = ["Gerente", "Quantidade"]
+            
+            fig_bar = px.bar(
+                df_ger, 
+                x="Gerente", 
+                y="Quantidade", 
+                text="Quantidade",
+                color="Quantidade",
+                color_continuous_scale=["#00509d", "#002060"]
+            )
+            fig_bar.update_traces(
+                texttemplate='%{text}', 
+                textposition='outside',
+                cliponaxis=False
+            )
+            fig_bar.update_layout(
+                height=380,
+                xaxis_title="",
+                yaxis_title="Qtd. Bilhetes",
+                coloraxis_showscale=False,
+                margin=dict(l=10, r=10, t=20, b=20),
+                xaxis=dict(tickangle=-25)
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
         else:
             st.info("Sem dados para exibir o gráfico.")
+
+    st.markdown("---")
+    
+    # GRÁFICO 3: EVOLUÇÃO MENSAL POR SETOR
+    st.markdown("##### 📈 Comparativo Mensal de Pendências por Setor Responsável")
+    if not df_acao_filtrado.empty and "Mes_Ano_Label" in df_acao_filtrado.columns:
+        df_mes_setor = df_acao_filtrado.groupby(["Mes_Ano_Label", COL_SETOR]).size().reset_index(name="Quantidade")
+        
+        fig_line = px.bar(
+            df_mes_setor, 
+            x="Mes_Ano_Label", 
+            y="Quantidade", 
+            color=COL_SETOR,
+            barmode="group",
+            text="Quantidade",
+            color_discrete_sequence=["#002060", "#0077b6", "#7209b7", "#4361ee", "#4cc9f0", "#f72585"]
+        )
+        fig_line.update_traces(textposition='outside', cliponaxis=False)
+        fig_line.update_layout(
+            height=350,
+            xaxis_title="Mês da Emissão",
+            yaxis_title="Volume de Bilhetes",
+            legend_title="Setor",
+            margin=dict(l=10, r=10, t=20, b=20)
+        )
+        st.plotly_chart(fig_line, use_container_width=True)
 
 # ABA 1: TRATATIVA OPERACIONAL GERAL
 with abas_objetos[1]:
@@ -683,7 +766,7 @@ with abas_objetos[1]:
                     st.text_input("Gerente Responsável:", value="Suporte Backoffice", disabled=True)
                     gerente_indicado_sel = "Suporte Backoffice"
                     novo_gerente_texto = ""
-                else: # Operação
+                else:
                     gerentes_reservados = ["Silvana Celani", "Silvana Celane", "Jaime Schinaider", "Jaime Schnaider", "Fabiano Souza", "Alexandre Souza", "Central de Eventos", "Suporte Backoffice", "Suporte backoffice", "Katia Martins"]
                     gerentes_operacao_puros = sorted(list(set([g for g in gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Ivanete Bertasol"] if g not in gerentes_reservados])))
                     
@@ -1110,7 +1193,6 @@ with abas_objetos[5]:
         st.markdown(f"### 📊 Lista Completa dos Casos em Réplica ({len(bilhetes_com_tratativa)} registros)")
         st.dataframe(bilhetes_com_tratativa, hide_index=True)
 
-# ABAS EXCLUSIVAS DO COMPLIANCE
 idx_aba_compliance = 6
 
 if st.session_state["perfil_atual"] == "Compliance":
@@ -1174,7 +1256,6 @@ if st.session_state["perfil_atual"] == "Compliance":
 
     idx_aba_compliance += 1
 
-# ABA VISÃO GERAL BASE TOTAL
 with abas_objetos[idx_aba_compliance]:
     col_tv, col_ev = st.columns([3, 1])
     with col_tv:
