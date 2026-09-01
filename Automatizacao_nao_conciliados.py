@@ -71,6 +71,45 @@ def extract_keys(val):
                 
     return list(keys)
 
+def carregar_mapa_bilhetes_oficial():
+    """ Indexa as informações oficiais de GERENTES, ÁREA RESPONSÁVEL e OBS cruzando pela coluna BILHETES """
+    mapa = {}
+    
+    # 1. Ler NÃO CONCILIADOS.xlsx
+    if os.path.exists('NÃO CONCILIADOS.xlsx'):
+        try:
+            df_nc = pd.read_excel('NÃO CONCILIADOS.xlsx')
+            if 'BILHETES' in df_nc.columns:
+                for _, r in df_nc.iterrows():
+                    b_key = clean_str_strict(r['BILHETES'])
+                    if b_key:
+                        mapa[b_key] = {
+                            'GERENTES': clean_str_strict(r.get('GERENTES')),
+                            'ÁREA RESPONSÁVEL': clean_str_strict(r.get('ÁREA RESPONSÁVEL')),
+                            'OBS': clean_str_strict(r.get('OBS'))
+                        }
+        except Exception as e:
+            print(f"⚠️ Aviso ao carregar NÃO CONCILIADOS.xlsx: {e}")
+
+    # 2. Ler CONCILIADOS _ REGULARIZADOS.xlsx
+    if os.path.exists('CONCILIADOS _ REGULARIZADOS.xlsx'):
+        try:
+            xls_c = pd.ExcelFile('CONCILIADOS _ REGULARIZADOS.xlsx')
+            df_cr = pd.read_excel(xls_c, sheet_name=xls_c.sheet_names[0])
+            if 'BILHETES' in df_cr.columns:
+                for _, r in df_cr.iterrows():
+                    b_key = clean_str_strict(r['BILHETES'])
+                    if b_key and b_key not in mapa:
+                        mapa[b_key] = {
+                            'GERENTES': clean_str_strict(r.get('GERENTES')),
+                            'ÁREA RESPONSÁVEL': clean_str_strict(r.get('ÁREA RESPONSÁVEL')),
+                            'OBS': clean_str_strict(r.get('OBS'))
+                        }
+        except Exception as e:
+            print(f"⚠️ Aviso ao carregar CONCILIADOS _ REGULARIZADOS.xlsx: {e}")
+            
+    return mapa
+
 def carregar_tratativas_e_logs_anteriores(out_file):
     if not os.path.exists(out_file):
         return {}, pd.DataFrame()
@@ -104,6 +143,8 @@ def executar_auditoria():
     out_file_model = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
     
     dict_historico, df_log_acumulado = carregar_tratativas_e_logs_anteriores(out_file_model)
+    mapa_bilhetes_oficial = carregar_mapa_bilhetes_oficial()
+
     if os.path.exists(out_file_model):
         dt_bkp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         try:
@@ -114,16 +155,17 @@ def executar_auditoria():
 
     print("\n[1/6] Carregando Relação IATA...")
     caminho_iata = 'Relacao_Iata_2.xlsx' if os.path.exists('Relacao_Iata_2.xlsx') else 'Relacao_Iata.xlsx'
-    df_iata = pd.read_excel(caminho_iata)
+    df_iata = pd.read_excel(caminho_iata) if os.path.exists(caminho_iata) else pd.DataFrame()
     iata_dict = {}
 
-    for idx, r in tqdm(df_iata.iterrows(), total=len(df_iata), desc="Indexando IATAs", unit="reg"):
-        k = clean_iata(r.get('Código IATA'))
-        if k:
-            iata_dict[k] = {
-                'Nome_IATA_Oficial': clean_str_strict(r.get('Nome IATA')),
-                'Gerente_Responsavel': clean_str_strict(r.get('Gerentes'))
-            }
+    if not df_iata.empty:
+        for idx, r in tqdm(df_iata.iterrows(), total=len(df_iata), desc="Indexando IATAs", unit="reg"):
+            k = clean_iata(r.get('Código IATA'))
+            if k:
+                iata_dict[k] = {
+                    'Nome_IATA_Oficial': clean_str_strict(r.get('Nome IATA')),
+                    'Gerente_Responsavel': clean_str_strict(r.get('Gerentes'))
+                }
 
     print("\n[2/6] Indexando Extrato OBT Lemontech...")
     caminho_lemon = 'Extrato_Bilhetes_lemontech.xlsx'
@@ -150,54 +192,56 @@ def executar_auditoria():
                         lemon_index[k] = info_lemon
 
     print("\n[3/6] Indexando ERP Benner (Multicolunas)...")
-    df_benner = pd.read_excel('Acumulado.xlsx', sheet_name='Planilha1')
+    df_benner = pd.read_excel('Acumulado.xlsx', sheet_name='Planilha1') if os.path.exists('Acumulado.xlsx') else pd.DataFrame()
     benner_index = {}
     key_cols_benner = ['Bilhete', 'Localizador', 'Rloc Cia', 'Código Rloc', 'Pedido', 'Fatura/Documento', 'Handle Accounting', 'Accounting VM', 'Apurações Fee']
 
-    for idx, r in tqdm(df_benner.iterrows(), total=len(df_benner), desc="Indexando Benner", unit="linha"):
-        info = {
-            'Benner_Index': idx,
-            'Benner_Situação': clean_str_strict(r.get('Situação')) or 'ATIVO',
-            'Benner_Fornecedor': clean_str_strict(r.get('Apelido Fornecedor') or r.get('Fornecedor')) or '-',
-            'Benner_Localizador': clean_str_strict(r.get('Rloc Cia') or r.get('Localizador') or r.get('Código Rloc')) or '-',
-            'Benner_Bilhete': clean_str_strict(r.get('Bilhete')) or '-',
-            'Benner_Tarifa': clean_num(r.get('Tarifa')),
-            'Benner_Taxas': clean_num(r.get('Taxas')) + clean_num(r.get('Taxa BR')),
-            'Benner_Receita': clean_num(r.get('Comissão')) + clean_num(r.get('Taxa DU')) + clean_num(r.get('Incentivo')) + clean_num(r.get('Fee')) + clean_num(r.get('RAV')),
-            'Benner_Cliente': clean_str_strict(r.get('Cliente') or r.get('Apelido Cliente')) or '-',
-            'Benner_Emissor': clean_str_strict(r.get('Emissor') or r.get('Agente Criação')) or '-',
-            'Benner_Passageiro': clean_str_strict(r.get('Passageiro')) or '-',
-            'Benner_Sistema_Reserva': clean_str_strict(r.get('Sistema Reserva')) or '-'
-        }
-        for col in key_cols_benner:
-            for k in extract_keys(r.get(col)):
-                if k not in benner_index:
-                    benner_index[k] = info
+    if not df_benner.empty:
+        for idx, r in tqdm(df_benner.iterrows(), total=len(df_benner), desc="Indexando Benner", unit="linha"):
+            info = {
+                'Benner_Index': idx,
+                'Benner_Situação': clean_str_strict(r.get('Situação')) or 'ATIVO',
+                'Benner_Fornecedor': clean_str_strict(r.get('Apelido Fornecedor') or r.get('Fornecedor')) or '-',
+                'Benner_Localizador': clean_str_strict(r.get('Rloc Cia') or r.get('Localizador') or r.get('Código Rloc')) or '-',
+                'Benner_Bilhete': clean_str_strict(r.get('Bilhete')) or '-',
+                'Benner_Tarifa': clean_num(r.get('Tarifa')),
+                'Benner_Taxas': clean_num(r.get('Taxas')) + clean_num(r.get('Taxa BR')),
+                'Benner_Receita': clean_num(r.get('Comissão')) + clean_num(r.get('Taxa DU')) + clean_num(r.get('Incentivo')) + clean_num(r.get('Fee')) + clean_num(r.get('RAV')),
+                'Benner_Cliente': clean_str_strict(r.get('Cliente') or r.get('Apelido Cliente')) or '-',
+                'Benner_Emissor': clean_str_strict(r.get('Emissor') or r.get('Agente Criação')) or '-',
+                'Benner_Passageiro': clean_str_strict(r.get('Passageiro')) or '-',
+                'Benner_Sistema_Reserva': clean_str_strict(r.get('Sistema Reserva')) or '-'
+            }
+            for col in key_cols_benner:
+                for k in extract_keys(r.get(col)):
+                    if k not in benner_index:
+                        benner_index[k] = info
 
     print("\n[4/6] Indexando Relatório Sabre...")
     caminho_sabre = 'Relacao_Sabre_3.xlsx' if os.path.exists('Relacao_Sabre_3.xlsx') else 'Relacao_Sabre.xlsx'
-    lines = pd.read_excel(caminho_sabre).iloc[:, 0].dropna().astype(str).tolist()
-    sabre_rows = []
-
-    for line in lines:
-        if 'Total Amount' in line or 'Total Commission' in line or 'PCC,DATE,AL CODE' in line: continue
-        parts = list(csv.reader([line]))[0]
-        if len(parts) >= 15 and parts[0] != 'PCC':
-            cleaned = [p.replace('="', '').replace('"', '').strip() for p in parts]
-            sabre_rows.append(cleaned[:15])
-
-    df_sabre = pd.DataFrame(sabre_rows, columns=['PCC', 'DATE', 'AL_CODE', 'TICKET_NUM', 'PNR', 'NAME', 'LAST_NAME', 'CUR', 'OB', 'COM_AMT', 'TOTAL', 'FOP', 'AGT', 'TIME', 'STATUS'])
     sabre_index = {}
+    if os.path.exists(caminho_sabre):
+        lines = pd.read_excel(caminho_sabre).iloc[:, 0].dropna().astype(str).tolist()
+        sabre_rows = []
 
-    for idx, r in tqdm(df_sabre.iterrows(), total=len(df_sabre), desc="Indexando Sabre", unit="reg"):
-        info = {
-            'Sabre_PCC': r['PCC'],
-            'Sabre_AGT': r['AGT'],
-            'Sabre_Passageiro': f"{r['NAME']} {r['LAST_NAME']}".strip()
-        }
-        for k in extract_keys(r['TICKET_NUM']) + extract_keys(r['PNR']):
-            if k not in sabre_index:
-                sabre_index[k] = info
+        for line in lines:
+            if 'Total Amount' in line or 'Total Commission' in line or 'PCC,DATE,AL CODE' in line: continue
+            parts = list(csv.reader([line]))[0]
+            if len(parts) >= 15 and parts[0] != 'PCC':
+                cleaned = [p.replace('="', '').replace('"', '').strip() for p in parts]
+                sabre_rows.append(cleaned[:15])
+
+        df_sabre = pd.DataFrame(sabre_rows, columns=['PCC', 'DATE', 'AL_CODE', 'TICKET_NUM', 'PNR', 'NAME', 'LAST_NAME', 'CUR', 'OB', 'COM_AMT', 'TOTAL', 'FOP', 'AGT', 'TIME', 'STATUS'])
+
+        for idx, r in tqdm(df_sabre.iterrows(), total=len(df_sabre), desc="Indexando Sabre", unit="reg"):
+            info = {
+                'Sabre_PCC': r['PCC'],
+                'Sabre_AGT': r['AGT'],
+                'Sabre_Passageiro': f"{r['NAME']} {r['LAST_NAME']}".strip()
+            }
+            for k in extract_keys(r['TICKET_NUM']) + extract_keys(r['PNR']):
+                if k not in sabre_index:
+                    sabre_index[k] = info
 
     print("\n[5/6] Auditando e Conciliando Emissões das Cias Aéreas...")
     fontes = [('AZUL.XLSX', 'Azul'), ('BSP.XLSX', 'BSP'), ('HOT.XLSX', 'HOT')]
@@ -224,12 +268,52 @@ def executar_auditoria():
                 if col3.upper() in ['BILHETE\\RLOC', 'BILHETE', 'RLOC'] or col5.upper() in ['EMISSÃO', 'EMISSAO'] or col3 == '[]':
                     continue
                     
+                bilhete_chave = clean_str_strict(col3)
                 iata_clean = clean_iata(curr_iata)
                 m_iata = iata_dict.get(iata_clean, {})
-                nome_iata_oficial = m_iata.get('Nome_IATA_Oficial', 'Não Encontrado na Relação IATA')
-                gerente_resp = m_iata.get('Gerente_Responsavel', 'Não Mapeado')
                 doc_val = clean_str_strict(df_raw.iloc[r, 23])
                 
+                # --- CRUZAMENTO DIRETO DO BILHETE NAS BASES DE CONCILIAÇÃO ---
+                d_oficial = mapa_bilhetes_oficial.get(bilhete_chave, {})
+                gerente_resp = d_oficial.get('GERENTES') or d_oficial.get('ÁREA RESPONSÁVEL') or m_iata.get('Gerente_Responsavel', 'Não Mapeado')
+                area_resp_oficial = d_oficial.get('ÁREA RESPONSÁVEL') or gerente_resp
+                obs_op = d_oficial.get('OBS') or 'Sem tratativa na operação'
+                obs_replica = '-'
+
+                # Respeitar alterações e tratativas vindas do Dashboard Streamlit
+                if bilhete_chave in dict_historico:
+                    hist_data = dict_historico[bilhete_chave]
+                    if hist_data.get("Área Resp. Operação"): 
+                        gerente_resp = hist_data["Área Resp. Operação"]
+                        area_resp_oficial = hist_data["Área Resp. Operação"]
+                    if hist_data.get("Obs. Operação"): obs_op = hist_data["Obs. Operação"]
+                    if hist_data.get("Obs_Auditoria_Replica"): obs_replica = hist_data["Obs_Auditoria_Replica"]
+
+                # REGRAS DE SETORIZAÇÃO PRECISAS E INDIVIDUALIZADAS
+                area_resp_upper = str(area_resp_oficial).strip().upper()
+                obs_op_lower = str(obs_op).strip().lower()
+
+                e_suporte_backoffice = (
+                    'SUPORTE BENNER' in area_resp_upper or 
+                    'SUPORTE BACKOFFICE' in area_resp_upper or
+                    'KATIA MARTINS' in area_resp_upper or
+                    any(p in obs_op_lower for p in ['ticket 375', 'chamado no backoffice', 'erro de integração', 'erro integração', 'aguardando suporte'])
+                )
+
+                if e_suporte_backoffice:
+                    setor_final = 'Suporte backoffice'
+                    gerente_resp = 'Suporte Backoffice'
+                elif 'JAIME SCHNAIDER' in area_resp_upper or 'UNIQUE' in area_resp_upper:
+                    setor_final = 'Unique'
+                elif 'CENTRAL DE EVENTOS' in area_resp_upper or 'EVENTO' in area_resp_upper:
+                    setor_final = 'Central de Eventos'
+                elif 'FABIANO SOUZA' in area_resp_upper or 'LAZER' in area_resp_upper or 'CONCIERGE' in area_resp_upper:
+                    setor_final = 'Concierge/Lazer'
+                elif 'PRIVATE' in area_resp_upper or 'SILVANA CELANI' in area_resp_upper:
+                    setor_final = 'Private'
+                else:
+                    setor_final = 'Operação'
+
                 keys_emissao = set(extract_keys(col3) + extract_keys(doc_val))
                 
                 b_match = next((benner_index[ek] for ek in keys_emissao if ek in benner_index), None)
@@ -245,28 +329,6 @@ def executar_auditoria():
                 incentivo = clean_num(df_raw.iloc[r, 19])
                 receita_emitida = comissao + taxa_du + incentivo
                 vl_liquido = clean_num(df_raw.iloc[r, 21])
-                
-                gerente_norm = gerente_resp.strip().upper()
-                if 'JAIME SCHNAIDER' in gerente_norm:
-                    setor_inicial = 'Unique'
-                elif 'CENTRAL DE EVENTOS' in gerente_norm:
-                    setor_inicial = 'Central de Eventos'
-                elif 'FABIANO SOUZA' in gerente_norm:
-                    setor_inicial = 'Concierge/Lazer'
-                else:
-                    setor_inicial = 'Operação'
-                    
-                area_op_norm = gerente_resp.strip().upper()
-                pv_norm = curr_ponto_venda.strip().upper()
-                
-                if 'CENTRAL DE EVENTOS' in area_op_norm or 'EVENTO' in area_op_norm or 'EVENTOS' in pv_norm:
-                    setor_final = 'Central de Eventos'
-                elif 'PRIVATE' in area_op_norm or 'PRIVATE' in pv_norm:
-                    setor_final = 'Private'
-                elif 'BENNER' in area_op_norm or 'BACKOFFICE' in area_op_norm or 'SUPORTE' in area_op_norm:
-                    setor_final = 'Suporte backoffice'
-                else:
-                    setor_final = setor_inicial
 
                 if b_match:
                     status_sistema = b_match['Benner_Situação']
@@ -289,10 +351,7 @@ def executar_auditoria():
                     dif_receita = receita_emitida - receita_sistema
                     
                     if nome_fonte == 'HOT':
-                        if status_cia != 'OK':
-                            status_divergencia = 'Divergência de Cia Aérea'
-                        else:
-                            status_divergencia = 'Valores Corretos'
+                        status_divergencia = 'Divergência de Cia Aérea' if status_cia != 'OK' else 'Valores Corretos'
                     else:
                         divs = []
                         if round(abs(dif_tarifa), 2) >= 0.01: divs.append('Tarifa')
@@ -310,31 +369,17 @@ def executar_auditoria():
                     fornec_sistema = '-'
                     loc_sistema = col3
                     bilhete_sistema = col3
-                    tarifa_sistema = 0.0
-                    taxa_sistema = 0.0
-                    receita_sistema = 0.0
+                    tarifa_sistema, taxa_sistema, receita_sistema = 0.0, 0.0, 0.0
                     cliente_sistema = curr_ponto_venda
-                    emissor_sistema = '-'
-                    sist_reserva = '-'
+                    emissor_sistema, sist_reserva = '-', '-'
                     status_cia = 'Pendente'
-                    dif_tarifa = tarifa_emitida
-                    dif_taxa = taxa_emitida
-                    dif_receita = receita_emitida
+                    dif_tarifa, dif_taxa, dif_receita = tarifa_emitida, taxa_emitida, receita_emitida
                     status_divergencia = 'Pendente de Lançamento'
                     status_geral = 'Pendente de Lançamento (Não Consta)'
                     aba_destino = '99_Base_Divergencias_Geral'
 
-                bilhete_chave = clean_str_strict(col3)
-                obs_op = 'Sem tratativa na operação'
-                obs_replica = '-'
-                
-                if bilhete_chave in dict_historico:
-                    hist_data = dict_historico[bilhete_chave]
-                    if hist_data.get("Status_Geral"): status_geral = hist_data["Status_Geral"]
-                    if hist_data.get("Área Resp. Operação"): gerente_resp = hist_data["Área Resp. Operação"]
-                    if hist_data.get("Obs. Operação"): obs_op = hist_data["Obs. Operação"]
-                    if hist_data.get("Setor"): setor_final = hist_data["Setor"]
-                    if hist_data.get("Obs_Auditoria_Replica"): obs_replica = hist_data["Obs_Auditoria_Replica"]
+                if bilhete_chave in dict_historico and dict_historico[bilhete_chave].get("Status_Geral"):
+                    status_geral = dict_historico[bilhete_chave]["Status_Geral"]
 
                 rec = {
                     'Ponto de venda': curr_ponto_venda,

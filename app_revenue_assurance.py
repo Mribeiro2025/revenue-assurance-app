@@ -232,11 +232,22 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     if df is None or df.empty: return pd.DataFrame()
     df = df.loc[:, ~df.columns.duplicated()].copy()
     
+    col_area_resp = None
+    col_gerente = None
+    col_obs = None
+
     renomear = {}
     for col in df.columns:
         c_str = str(col).strip().lower()
-        if c_str in ["gerente", "gerentes", "área resp. operação", "area resp. operacao", "area_resp_operacao", "área responsável", "area responsavel"]:
+        if c_str in ["área responsável", "area responsavel"]:
+            col_area_resp = col
             renomear[col] = "Área Resp. Operação"
+        elif c_str in ["gerente", "gerentes", "área resp. operação", "area resp. operacao", "area_resp_operacao"]:
+            col_gerente = col
+            renomear[col] = "Área Resp. Operação"
+        elif c_str in ["obs", "obs. operação", "observação", "observacao"]:
+            col_obs = col
+            renomear[col] = "Obs. Operação"
         elif c_str == "setor":
             renomear[col] = "Setor"
         elif c_str in ["consultor_lemon", "emissor", "consultor"]:
@@ -252,11 +263,24 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     if "Consultor_Lemon" not in df_out.columns: df_out["Consultor_Lemon"] = "-"
     if "Localizador_Sistema" not in df_out.columns: df_out["Localizador_Sistema"] = "-"
     if "Status_Geral" not in df_out.columns: df_out["Status_Geral"] = "Pendente de Lançamento"
+    if "Obs. Operação" not in df_out.columns: df_out["Obs. Operação"] = ""
+
+    # REGRAS DE IDENTIFICAÇÃO DE SUPORTE BACKOFFICE (PRIORIDADE ABSOLUTA):
+    # 1. Se a coluna original 'ÁREA RESPONSÁVEL' contiver Suporte/Benner
+    # 2. Se a coluna 'Área Resp. Operação' / 'Gerentes' contiver Katia Martins / Suporte / Benner
+    # 3. Se a coluna 'Obs. Operação' contiver menções a chamado, ticket, erro de integração, suporte ou backoffice
     
-    # PADRONIZADOR DE SUPORTE BENNER / BACKOFFICE
-    mascara_suporte = df_out["Área Resp. Operação"].astype(str).str.lower().str.contains("suporte|benner", na=False)
+    val_area_orig = df[col_area_resp].astype(str).str.lower() if col_area_resp and col_area_resp in df.columns else pd.Series("", index=df.index)
+    val_ger_orig = df_out["Área Resp. Operação"].astype(str).str.lower()
+    val_obs_orig = df_out["Obs. Operação"].fillna("").astype(str).str.lower()
+
+    mascara_suporte = (
+        val_area_orig.str.contains("suporte|benner|backoffice|ti", na=False) |
+        val_ger_orig.str.contains("suporte|benner|backoffice|katia martins|ti", na=False) |
+        val_obs_orig.str.contains("suporte|backoffice|benner|chamado|ticket|erro de integração|erro integração|não integrou|não integração", na=False)
+    )
+    
     df_out.loc[mascara_suporte, "Área Resp. Operação"] = "Suporte Backoffice"
-    
     df_out["Origem_Aba"] = origem
     return df_out
 
@@ -295,7 +319,7 @@ def sincronizar_planilhas_auxiliares(bilhete_str, nova_area_resp, observacao_str
     bilhete_target = str(bilhete_str).strip()
     
     if str(nova_area_resp).lower().strip() in ["suporte backoffice", "suporte benner"]:
-        area_gravar = "Suporte Backoffice"
+        area_gravar = "SUPORTE BENNER"
     else:
         area_gravar = nova_area_resp
 
@@ -473,8 +497,8 @@ df_sem_div_filtrado = aplicar_filtros_globais(df_sem_div)
 df_acao_filtrado = aplicar_filtros_globais(df_acao_total)
 
 # BASE DINÂMICA DE SUPORTE BACKOFFICE / BENNER
-mascara_back_m = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte|benner", na=False)
-mascara_back_d = df_div_op[COL_GERENTE].astype(str).str.lower().str.contains("suporte|benner", na=False)
+mascara_back_m = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte|benner|backoffice|katia martins", na=False)
+mascara_back_d = df_div_op[COL_GERENTE].astype(str).str.lower().str.contains("suporte|benner|backoffice|katia martins", na=False)
 
 df_backoffice_dinamico = pd.concat([
     df_backoffice,
@@ -500,7 +524,7 @@ if st.session_state["perfil_atual"] == "Compliance":
 
 abas_objetos = st.tabs(abas_nomes)
 
-gerentes_base_unicos = sorted([g for g in df_acao_total[COL_GERENTE].dropna().astype(str).unique() if str(g).lower() not in ["suporte backoffice", "suporte benner", "não atribuído", "-"]])
+gerentes_base_unicos = sorted([g for g in df_acao_total[COL_GERENTE].dropna().astype(str).unique() if str(g).lower() not in ["suporte backoffice", "suporte benner", "não atribuído", "-", "katia martins"]])
 
 # ABA 0: DASHBOARD
 with abas_objetos[0]:
@@ -557,7 +581,7 @@ with abas_objetos[1]:
         """, unsafe_allow_html=True)
         
         st.markdown("##### 📋 Detalhes do Bilhete e Valores de Emissão")
-        cols_det = ["Ponto de venda", "Área Resp. Operação", "CIA", "Bilhetes", "Localizador_Sistema", "Status_Sistema", "Data Emissão", "Pagto", "A vista", "A credito", "Taxa", "Comissão", "Taxa DU", "Desc.", "Incentivo", "VL. Líquido", "Status_Geral"]
+        cols_det = ["Ponto de venda", "Área Resp. Operação", "CIA", "Bilhetes", "Localizador_Sistema", "Status_Sistema", "Data Emissão", "Pagto", "A vista", "A credito", "Taxa", "Comissão", "Taxa DU", "Desc.", "Incentivo", "VL. Líquido", "Status_Geral", "Obs. Operação"]
         cols_presentes = [c for c in cols_det if c in row_m.index]
         st.dataframe(pd.DataFrame([row_m[cols_presentes]]), hide_index=True)
         st.markdown("---")
@@ -576,7 +600,7 @@ with abas_objetos[1]:
                 elif area_atual in ["Jaime Schinaider", "Jaime Schnaider"]: area_atual = "Unique"
                 elif area_atual in ["Fabiano Souza"]: area_atual = "Concierge/Lazer"
                 elif area_atual in ["Alexandre Souza", "Central de Eventos"]: area_atual = "Central de Eventos"
-                elif "suporte" in area_atual.lower() or "benner" in area_atual.lower(): area_atual = "Suporte backoffice"
+                elif "suporte" in area_atual.lower() or "benner" in area_atual.lower() or "katia" in area_atual.lower(): area_atual = "Suporte backoffice"
                 elif area_atual not in areas_opcoes: area_atual = "Operação"
 
                 index_area = areas_opcoes.index(area_atual)
@@ -604,7 +628,7 @@ with abas_objetos[1]:
                     gerente_indicado_sel = "Suporte Backoffice"
                     novo_gerente_texto = ""
                 else: # Operação
-                    gerentes_reservados = ["Silvana Celani", "Silvana Celane", "Jaime Schinaider", "Jaime Schnaider", "Fabiano Souza", "Alexandre Souza", "Central de Eventos", "Suporte Backoffice", "Suporte backoffice"]
+                    gerentes_reservados = ["Silvana Celani", "Silvana Celane", "Jaime Schinaider", "Jaime Schnaider", "Fabiano Souza", "Alexandre Souza", "Central de Eventos", "Suporte Backoffice", "Suporte backoffice", "Katia Martins"]
                     gerentes_operacao_puros = sorted(list(set([g for g in gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Ivanete Bertasol"] if g not in gerentes_reservados])))
                     
                     if "Outro Gerente..." not in gerentes_operacao_puros:
@@ -672,7 +696,7 @@ with abas_objetos[1]:
                         df_master.loc[idx, "Obs. Operação"] = texto_obs_final
                         msg_res = "atualizado com sucesso"
 
-                    mascara_back_upd = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte|benner", na=False)
+                    mascara_back_upd = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte|benner|katia martins", na=False)
                     df_back_atualizado = df_master[mascara_back_upd].copy()
                     df_log_updated = pd.concat([df_log_master, novo_log], ignore_index=True)
                     
@@ -861,7 +885,7 @@ with abas_objetos[4]:
                 area_devolucao_bk = st.selectbox("Área Operacional de Destino:", options=["Operação", "Central de Eventos", "Concierge/Lazer", "Unique", "Private"])
             else:
                 area_original = str(row_back.get(COL_GERENTE, "Suporte Backoffice"))
-                if area_original.lower() in ["suporte backoffice", "suporte benner"]: area_original = "Suporte Backoffice"
+                if area_original.lower() in ["suporte backoffice", "suporte benner", "katia martins"]: area_original = "Suporte Backoffice"
                 st.text_input("Área Responsável Atribuída:", value=area_original, disabled=True)
                 area_devolucao_bk = area_original
 
@@ -909,7 +933,7 @@ with abas_objetos[4]:
                     "Tipo_Interacao": "Tratativa Suporte Backoffice"
                 }])
 
-                mascara_back_upd = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte|benner", na=False)
+                mascara_back_upd = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte|benner|katia martins", na=False)
                 df_backoffice_atualizado = df_master[mascara_back_upd].copy()
                 df_log_updated = pd.concat([df_log_master, novo_log_bk], ignore_index=True)
 
