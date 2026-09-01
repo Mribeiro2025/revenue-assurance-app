@@ -328,12 +328,16 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     if df is None or df.empty: return pd.DataFrame()
     df = df.loc[:, ~df.columns.duplicated()].copy()
 
-    # DESCARTE DA LINHA DE TOTALIZAÇÃO EXCEL
-    mask_descarte = (
-        df['Ponto de venda'].astype(str).str.strip().str.upper().contains("TOTAL", na=False) |
-        df['Bilhetes'].astype(str).str.strip().str.upper().contains("TOTAL", na=False) |
-        df['Bilhetes'].isna()
-    )
+    # REMOÇÃO SEGURA DAS LINHAS DE TOTALIZAÇÃO EXCEL
+    col_pv = 'Ponto de venda' if 'Ponto de venda' in df.columns else None
+    col_bil = 'Bilhetes' if 'Bilhetes' in df.columns else ('Bilhete' if 'Bilhete' in df.columns else None)
+
+    mask_descarte = pd.Series(False, index=df.index)
+    if col_pv:
+        mask_descarte = mask_descarte | df[col_pv].astype(str).str.strip().str.upper().str.contains("TOTAL", na=False)
+    if col_bil:
+        mask_descarte = mask_descarte | df[col_bil].astype(str).str.strip().str.upper().str.contains("TOTAL", na=False) | df[col_bil].isna()
+
     df = df[~mask_descarte].copy()
 
     col_area_resp = None
