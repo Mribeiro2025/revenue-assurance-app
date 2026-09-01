@@ -7,8 +7,15 @@
         "data_solicitacao": "2026-08-31"
     },
     "mribeiro": {
-        "senha": "123",
+        "senha": "M@r!beiro2026",
         "nome": "Marcos Ribeiro",
+        "perfil": "Compliance",
+        "status": "APROVADO",
+        "data_solicitacao": "2026-08-31"
+    },
+    "ffernandes": {
+        "senha": "123",
+        "nome": "Felipe Fernandes",
         "perfil": "Compliance",
         "status": "APROVADO",
         "data_solicitacao": "2026-08-31"
