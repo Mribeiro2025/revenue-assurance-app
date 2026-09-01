@@ -9,7 +9,6 @@ from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 import streamlit as st
 import plotly.express as px
-import plotly.graph_objects as go
 
 # 1. Configuração Inicial da Página
 st.set_page_config(
@@ -131,7 +130,7 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
     if df_export is None or df_export.empty:
         df_export = pd.DataFrame(columns=["Aviso"], data=[["Nenhum registro encontrado para os filtros selecionados"]])
 
-    cols_remover = [c for c in ["Dt_Parsed", "Mes_Ano_Sort"] if c in df_export.columns]
+    cols_remover = [c for c in ["Dt_Parsed", "Mes_Ano_Sort", "Bilhetes_Str"] if c in df_export.columns]
     df_clean = df_export.drop(columns=cols_remover) if cols_remover else df_export
 
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
@@ -294,25 +293,20 @@ if not st.session_state["autenticado"]:
         st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
-# 4. Leitura, Limpeza Cadastral e Padronização
+# 4. Funções de Padronização e Tratamento
 def padronizar_gerentes_e_setores(val):
     if pd.isna(val) or not str(val).strip():
         return "Não Atribuído"
     v = str(val).strip()
     
-    # Padronização Rosângela Pallu (com e sem acento)
     if v in ["Rosangela Pallu", "Rosângela Pallu", "ROSANGELA PALLU", "ROSÂNGELA PALLU"]:
         return "Rosângela Pallu"
-    # Padronização Central de Eventos
     elif v in ["CENTRAL DE EVENTOS", "Central de Eventos", "central de eventos"]:
         return "Central de Eventos"
-    # Padronização Jaime Schnaider
     elif v in ["Jaime Schinaider", "Jaime Schnaider", "JAIME SCHNAIDER"]:
         return "Jaime Schnaider"
-    # Padronização Silvana Celani
     elif v in ["Silvana Celane", "Silvana Celani", "SILVANA CELANI"]:
         return "Silvana Celani"
-    # Suporte Backoffice
     elif "suporte" in v.lower() or "benner" in v.lower() or "katia" in v.lower():
         return "Suporte Backoffice"
     return v
@@ -366,7 +360,6 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     if "Obs. Operação" not in df_out.columns: df_out["Obs. Operação"] = ""
     if "Data Emissão" not in df_out.columns: df_out["Data Emissão"] = "-"
 
-    # PADRONIZAÇÃO DE GERENTES E SETORES
     df_out["Área Resp. Operação"] = df_out["Área Resp. Operação"].apply(padronizar_gerentes_e_setores)
     df_out["Setor"] = df_out["Setor"].apply(lambda s: "Central de Eventos" if str(s).upper() == "CENTRAL DE EVENTOS" else s)
 
@@ -384,7 +377,6 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     df_out["Origem_Aba"] = origem
     df_out["Tipo_Inconsistencia"] = df_out.apply(categorizar_tipo_inconsistencia, axis=1)
 
-    # EXTRAÇÃO E PADRONIZAÇÃO DE MÊS/ANO PARA FILTRO
     df_out["Dt_Parsed"] = pd.to_datetime(df_out["Data Emissão"], errors="coerce", dayfirst=True)
     df_out["Mes_Ano_Sort"] = df_out["Dt_Parsed"].dt.strftime("%Y-%m")
     
@@ -488,7 +480,7 @@ COL_GERENTE = "Área Resp. Operação"
 COL_SETOR = "Setor"
 COL_EMISSOR = "Consultor_Lemon"
 
-# CONSOLIDAÇÃO DE 100% DAS ABAS (344 + 43 + 31 = 418 LINHAS / 407 BILHETES ÚNICOS)
+# CONSOLIDAÇÃO ABSOLUTA E SEM PERDAS DE 100% DA BASE AUDITADA
 df_list = [d for d in [df_master, df_div_op, df_sem_div] if not d.empty]
 df_acao_total = pd.concat(df_list, ignore_index=True, sort=False) if len(df_list) > 0 else pd.DataFrame()
 
@@ -564,43 +556,44 @@ st.sidebar.title("🔍 Filtros Operacionais")
 # 1. FILTRO DE MÊS DA EMISSÃO
 df_meses = df_acao_total.dropna(subset=["Mes_Ano_Label"]).sort_values(by="Mes_Ano_Sort")
 opcoes_meses = sorted(list(df_meses["Mes_Ano_Label"].unique()))
-mes_sel = st.sidebar.multiselect("📅 Mês de Emissão:", options=opcoes_meses, default=opcoes_meses)
+mes_sel = st.sidebar.multiselect("📅 Mês de Emissão:", options=opcoes_meses, default=[])
 
-df_f_mes = df_acao_total[df_acao_total["Mes_Ano_Label"].isin(mes_sel)] if mes_sel else df_acao_total
+# SE NENHUM MÊS SELECIONADO, EXIBE O ACUMULADO COMPLETO (100%)
+df_f_mes = df_acao_total[df_acao_total["Mes_Ano_Label"].isin(mes_sel)] if len(mes_sel) > 0 else df_acao_total
 
 # 2. DEMAIS FILTROS DINÂMICOS
 opcoes_setor = sorted(list(df_f_mes[COL_SETOR].dropna().astype(str).unique()))
-setor_sel = st.sidebar.multiselect("Setor Responsável:", options=opcoes_setor, default=opcoes_setor)
+setor_sel = st.sidebar.multiselect("Setor Responsável:", options=opcoes_setor, default=[])
 
-df_f_1 = df_f_mes[df_f_mes[COL_SETOR].astype(str).isin(setor_sel)]
+df_f_1 = df_f_mes[df_f_mes[COL_SETOR].astype(str).isin(setor_sel)] if len(setor_sel) > 0 else df_f_mes
 
 opcoes_gerente = sorted(list(df_f_1[COL_GERENTE].dropna().astype(str).unique()))
-gerente_sel = st.sidebar.multiselect("Gerente (Área Resp. Operação):", options=opcoes_gerente, default=opcoes_gerente)
+gerente_sel = st.sidebar.multiselect("Gerente (Área Resp. Operação):", options=opcoes_gerente, default=[])
 
-df_f_2 = df_f_1[df_f_1[COL_GERENTE].astype(str).isin(gerente_sel)]
+df_f_2 = df_f_1[df_f_1[COL_GERENTE].astype(str).isin(gerente_sel)] if len(gerente_sel) > 0 else df_f_1
 
 opcoes_emissor = sorted(list(df_f_2[COL_EMISSOR].dropna().astype(str).unique()))
-emissor_sel = st.sidebar.multiselect("Emissor / Consultor (OBT):", options=opcoes_emissor, default=opcoes_emissor)
+emissor_sel = st.sidebar.multiselect("Emissor / Consultor (OBT):", options=opcoes_emissor, default=[])
 
-df_f_3 = df_f_2[df_f_2[COL_EMISSOR].astype(str).isin(emissor_sel)]
+df_f_3 = df_f_2[df_f_2[COL_EMISSOR].astype(str).isin(emissor_sel)] if len(emissor_sel) > 0 else df_f_2
 
 tipos_emissao = sorted(list(df_f_3["Tipo_Emissao_Lemon"].dropna().astype(str).unique())) if "Tipo_Emissao_Lemon" in df_f_3.columns else []
-emissao_sel = st.sidebar.multiselect("Tipo de Emissão (OBT):", options=tipos_emissao, default=tipos_emissao)
+emissao_sel = st.sidebar.multiselect("Tipo de Emissão (OBT):", options=tipos_emissao, default=[])
 
-df_f_4 = df_f_3[df_f_3["Tipo_Emissao_Lemon"].astype(str).isin(emissao_sel)] if "Tipo_Emissao_Lemon" in df_f_3.columns else df_f_3
+df_f_4 = df_f_3[df_f_3["Tipo_Emissao_Lemon"].astype(str).isin(emissao_sel)] if len(emissao_sel) > 0 and "Tipo_Emissao_Lemon" in df_f_3.columns else df_f_3
 
 cias = sorted(list(df_f_4["CIA"].dropna().astype(str).unique())) if "CIA" in df_f_4.columns else []
-cia_sel = st.sidebar.multiselect("Companhia Aérea:", options=cias, default=cias)
+cia_sel = st.sidebar.multiselect("Companhia Aérea:", options=cias, default=[])
 
 def aplicar_filtros_globais(df):
     if df is None or df.empty: return df
     m = pd.Series(True, index=df.index)
-    if "Mes_Ano_Label" in df.columns and mes_sel: m = m & df["Mes_Ano_Label"].isin(mes_sel)
-    if COL_SETOR in df.columns and setor_sel: m = m & df[COL_SETOR].astype(str).isin(setor_sel)
-    if COL_GERENTE in df.columns and gerente_sel: m = m & df[COL_GERENTE].astype(str).isin(gerente_sel)
-    if COL_EMISSOR in df.columns and emissor_sel: m = m & df[COL_EMISSOR].astype(str).isin(emissor_sel)
-    if "Tipo_Emissao_Lemon" in df.columns and emissao_sel: m = m & df["Tipo_Emissao_Lemon"].astype(str).isin(emissao_sel)
-    if "CIA" in df.columns and cia_sel: m = m & df["CIA"].astype(str).isin(cia_sel)
+    if "Mes_Ano_Label" in df.columns and len(mes_sel) > 0: m = m & df["Mes_Ano_Label"].isin(mes_sel)
+    if COL_SETOR in df.columns and len(setor_sel) > 0: m = m & df[COL_SETOR].astype(str).isin(setor_sel)
+    if COL_GERENTE in df.columns and len(gerente_sel) > 0: m = m & df[COL_GERENTE].astype(str).isin(gerente_sel)
+    if COL_EMISSOR in df.columns and len(emissor_sel) > 0: m = m & df[COL_EMISSOR].astype(str).isin(emissor_sel)
+    if "Tipo_Emissao_Lemon" in df.columns and len(emissao_sel) > 0: m = m & df["Tipo_Emissao_Lemon"].astype(str).isin(emissao_sel)
+    if "CIA" in df.columns and len(cia_sel) > 0: m = m & df["CIA"].astype(str).isin(cia_sel)
     return df[m].copy()
 
 df_master_filtrado = aplicar_filtros_globais(df_master)
@@ -639,24 +632,29 @@ gerentes_base_unicos = sorted([g for g in df_acao_total[COL_GERENTE].dropna().as
 
 dt_str_export = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
-# ABA 0: DASHBOARD INTERATIVO - 100% DOS CASOS AUDITADOS
+# ABA 0: DASHBOARD INTERATIVO - 100% DA BASE AUDITADA
 with abas_objetos[0]:
     st.subheader("📊 Painel Executivo e Métricas Globais (100% da Base Auditada)")
     
+    # Conversão para numérico para soma correta
+    val_tarifa = pd.to_numeric(df_acao_filtrado['A credito'], errors='coerce').sum() if 'A credito' in df_acao_filtrado.columns else 0.0
+    val_taxa = pd.to_numeric(df_acao_filtrado['Taxa'], errors='coerce').sum() if 'Taxa' in df_acao_filtrado.columns else 0.0
+    val_receita = pd.to_numeric(df_acao_filtrado['Incentivo'], errors='coerce').sum() if 'Incentivo' in df_acao_filtrado.columns else 0.0
+
     # KPIs Principais
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Bilhetes Auditados em Ação", f"{len(df_acao_filtrado):,}")
-    k2.metric("Tarifa Pendente (R$)", f"R$ {df_acao_filtrado['A credito'].sum():,.2f}" if "A credito" in df_acao_filtrado.columns else "R$ 0.00")
-    k3.metric("Taxas Pendentes (R$)", f"R$ {df_acao_filtrado['Taxa'].sum():,.2f}" if "Taxa" in df_acao_filtrado.columns else "R$ 0.00")
-    k4.metric("Receita em Risco (R$)", f"R$ {df_acao_filtrado['Incentivo'].sum():,.2f}" if "Incentivo" in df_acao_filtrado.columns else "R$ 0.00")
+    k2.metric("Tarifa Pendente (R$)", f"R$ {val_tarifa:,.2f}")
+    k3.metric("Taxas Pendentes (R$)", f"R$ {val_taxa:,.2f}")
+    k4.metric("Receita em Risco (R$)", f"R$ {val_receita:,.2f}")
     
     st.markdown("---")
     
-    # PAINEL GRÁFICO 1: DISTRIBUIÇÃO E DIVERGÊNCIAS
+    # PAINEL GRÁFICO 1: DISTRIBUIÇÃO DE INCONSISTÊNCIAS E GERENTES
     col_chart1, col_chart2 = st.columns(2)
     
     with col_chart1:
-        st.markdown("##### ⚠️ Classificação Detalhada dos Tipos de Inconsistência")
+        st.markdown("##### ⚠️ Classificação Detalhada dos Tipos de Inconsistência (100% dos Casos)")
         if not df_acao_filtrado.empty and "Tipo_Inconsistencia" in df_acao_filtrado.columns:
             df_inc = df_acao_filtrado["Tipo_Inconsistencia"].value_counts().reset_index()
             df_inc.columns = ["Inconsistencia", "Quantidade"]
@@ -668,7 +666,7 @@ with abas_objetos[0]:
                 orientation="h",
                 text="Quantidade",
                 color="Inconsistencia",
-                color_discrete_sequence=["#002060", "#c1121f", "#7209b7", "#4361ee", "#4cc9f0", "#2b9348"]
+                color_discrete_sequence=["#002060", "#2b9348", "#c1121f", "#7209b7", "#4361ee", "#4cc9f0"]
             )
             fig_inc.update_traces(
                 texttemplate='%{text}', 
@@ -680,14 +678,14 @@ with abas_objetos[0]:
                 xaxis_title="Qtd. Bilhetes",
                 yaxis_title="",
                 showlegend=False,
-                margin=dict(l=10, r=20, t=20, b=20)
+                margin=dict(l=10, r=30, t=20, b=20)
             )
             st.plotly_chart(fig_inc, use_container_width=True)
         else:
             st.info("Sem dados para exibir o gráfico.")
             
     with col_chart2:
-        st.markdown("##### 👤 Volumetria Total por Gerente Responsável (Sem Duplicações)")
+        st.markdown("##### 👤 Volumetria Total por Gerente Responsável (100% da Base)")
         if not df_acao_filtrado.empty and COL_GERENTE in df_acao_filtrado.columns:
             df_ger = df_acao_filtrado[COL_GERENTE].value_counts().head(10).reset_index()
             df_ger.columns = ["Gerente", "Quantidade"]
@@ -748,7 +746,7 @@ with abas_objetos[1]:
     st.subheader("📝 Módulo de Resolução e Detalhamento Operacional")
     
     if len(df_master_filtrado) == 0:
-        st.warning("Nenum bilhete encontrado na base geral para os filtros selecionados.")
+        st.warning("Nenhum bilhete encontrado na base geral para os filtros selecionados.")
     else:
         lista_busca_geral = df_master_filtrado["Bilhetes"].astype(str).tolist()
         opcao_sel_m = st.selectbox("Procure ou Selecione o Bilhete / LOC para Tratativa:", options=lista_busca_geral, key="sb_geral")
