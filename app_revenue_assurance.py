@@ -1,8 +1,12 @@
 import os
 import json
 import datetime
+import re
+import io
 import pandas as pd
 import openpyxl
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 import streamlit as st
 
 # 1. Configuração Inicial da Página
@@ -48,7 +52,6 @@ st.markdown("""
     <style>
         .stApp { background-color: #f8f9fa; }
         
-        /* Botões Principais */
         div.stButton > button[kind="primary"], div.stButton > button {
             background-color: #002060 !important;
             color: #ffffff !important;
@@ -61,7 +64,6 @@ st.markdown("""
             color: #ffffff !important;
         }
         
-        /* Cabeçalho */
         .header-box {
             background: linear-gradient(135deg, #002060 0%, #003366 100%);
             padding: 15px 25px;
@@ -76,7 +78,6 @@ st.markdown("""
         .header-box h1 { color: #ffffff !important; margin: 0; font-size: 24px; font-weight: 700; }
         .header-box p { color: #d0e0ff !important; margin-top: 4px; font-size: 13px; margin-bottom: 0; }
         
-        /* Card de Login */
         .login-card {
             background-color: #ffffff;
             padding: 30px 35px;
@@ -86,7 +87,6 @@ st.markdown("""
             margin-top: 20px;
         }
         
-        /* Métricas KPI */
         div[data-testid="stMetric"] {
             background-color: #ffffff;
             border-radius: 8px;
@@ -95,7 +95,6 @@ st.markdown("""
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
 
-        /* COR CINZA CORPORATIVO PARA AS TAGS DO MULTISELECT */
         [data-baseweb="tag"], 
         span[data-baseweb="tag"], 
         div[data-baseweb="tag"], 
@@ -111,7 +110,6 @@ st.markdown("""
             color: #ffffff !important;
         }
 
-        /* Marca Textual Corporativa */
         .brand-header {
             font-size: 22px;
             font-weight: 800;
@@ -126,7 +124,79 @@ st.markdown("""
 def renderizar_marca():
     st.markdown('<div class="brand-header">GRUPO ARBAITMAN</div>', unsafe_allow_html=True)
 
-# 4. Autenticação e Sessão
+# 4. Funções de Exportação Formatada em Excel
+def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
+    """Gera um buffer binário do Excel formatado com cabeçalhos azul-marinho e moedas em R$."""
+    buffer = io.BytesIO()
+    
+    if df_export is None or df_export.empty:
+        df_export = pd.DataFrame(columns=["Aviso"], data=[["Nenhum registro encontrado para os filtros selecionados"]])
+
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df_export.to_excel(writer, sheet_name=nome_aba[:30], index=False)
+        
+    buffer.seek(0)
+    wb = openpyxl.load_workbook(buffer)
+    ws = wb.active
+    
+    # Estilos Corporativos
+    header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True, size=11)
+    thin_border = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='thin', color='D9D9D9')
+    )
+    
+    currency_cols = [
+        'A vista', 'A credito', 'Tarifa_Sistema', 'Dif_Tarifa', 'Taxa', 'Taxa_Sistema', 
+        'Dif_Taxa', 'Comissão', 'Taxa DU', 'Desc.', 'Incentivo', 'Receita_Sistema', 
+        'Dif_Receita', 'VL. Líquido', 'Tarifa_Pendente_R$', 'Taxa_Pendente_R$', 'Receita_Pendente_R$'
+    ]
+
+    ws.views.sheetView[0].showGridLines = True
+
+    # Formatar Cabeçalhos
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border = thin_border
+
+    max_row = ws.max_row
+    max_col = ws.max_column
+
+    # Formatar Dados e Ajustar Larguras
+    for col_idx in range(1, max_col + 1):
+        col_letter = get_column_letter(col_idx)
+        col_name = str(ws.cell(row=1, column=col_idx).value or '')
+        
+        # Ajuste dinâmico de largura
+        len_vals = [len(str(ws.cell(row=r, column=col_idx).value or '')) for r in range(1, max_row + 1)]
+        max_len = max(len_vals) if len_vals else 10
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+        
+        # Formatação Numérica e Bordas
+        for r in range(2, max_row + 1):
+            cell = ws.cell(row=r, column=col_idx)
+            cell.border = thin_border
+            
+            if col_name in currency_cols:
+                try:
+                    if cell.value is not None and str(cell.value).strip() not in ['-', '']:
+                        cell.value = float(cell.value)
+                        cell.number_format = 'R$ #,##0.00'
+                        cell.alignment = Alignment(horizontal='right', vertical='center')
+                except:
+                    pass
+
+    output_buffer = io.BytesIO()
+    wb.save(output_buffer)
+    output_buffer.seek(0)
+    return output_buffer
+
+# 5. Autenticação e Sessão
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
     st.session_state["usuario_atual"] = None
@@ -227,15 +297,12 @@ if not st.session_state["autenticado"]:
         st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
-# 5. Leitura de Bases e Tratamento de Colunas
+# 6. Leitura de Bases e Tratamento Sem Falsos Positivos
 def padronizar_e_deduplicar_colunas(df, origem=""):
     if df is None or df.empty: return pd.DataFrame()
     df = df.loc[:, ~df.columns.duplicated()].copy()
     
     col_area_resp = None
-    col_gerente = None
-    col_obs = None
-
     renomear = {}
     for col in df.columns:
         c_str = str(col).strip().lower()
@@ -243,10 +310,8 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
             col_area_resp = col
             renomear[col] = "Área Resp. Operação"
         elif c_str in ["gerente", "gerentes", "área resp. operação", "area resp. operacao", "area_resp_operacao"]:
-            col_gerente = col
             renomear[col] = "Área Resp. Operação"
         elif c_str in ["obs", "obs. operação", "observação", "observacao"]:
-            col_obs = col
             renomear[col] = "Obs. Operação"
         elif c_str == "setor":
             renomear[col] = "Setor"
@@ -265,19 +330,14 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     if "Status_Geral" not in df_out.columns: df_out["Status_Geral"] = "Pendente de Lançamento"
     if "Obs. Operação" not in df_out.columns: df_out["Obs. Operação"] = ""
 
-    # REGRAS DE IDENTIFICAÇÃO DE SUPORTE BACKOFFICE (PRIORIDADE ABSOLUTA):
-    # 1. Se a coluna original 'ÁREA RESPONSÁVEL' contiver Suporte/Benner
-    # 2. Se a coluna 'Área Resp. Operação' / 'Gerentes' contiver Katia Martins / Suporte / Benner
-    # 3. Se a coluna 'Obs. Operação' contiver menções a chamado, ticket, erro de integração, suporte ou backoffice
-    
     val_area_orig = df[col_area_resp].astype(str).str.lower() if col_area_resp and col_area_resp in df.columns else pd.Series("", index=df.index)
     val_ger_orig = df_out["Área Resp. Operação"].astype(str).str.lower()
     val_obs_orig = df_out["Obs. Operação"].fillna("").astype(str).str.lower()
 
     mascara_suporte = (
-        val_area_orig.str.contains("suporte|benner|backoffice|ti", na=False) |
-        val_ger_orig.str.contains("suporte|benner|backoffice|katia martins|ti", na=False) |
-        val_obs_orig.str.contains("suporte|backoffice|benner|chamado|ticket|erro de integração|erro integração|não integrou|não integração", na=False)
+        val_area_orig.str.contains("suporte benner|suporte backoffice|suporte ti|backoffice", na=False) |
+        val_ger_orig.str.contains("suporte benner|suporte backoffice|katia martins", na=False) |
+        val_obs_orig.str.contains("ticket 375|chamado no backoffice|chamado backoffice|erro de integração|erro integração|não integrou|não integração|aguardando suporte", na=False)
     )
     
     df_out.loc[mascara_suporte, "Área Resp. Operação"] = "Suporte Backoffice"
@@ -314,7 +374,6 @@ def carregar_bases():
     except Exception as e:
         return None, None, None, None, None, str(e)
 
-# FUNÇÃO PARA SINCRONIZAR EM LOTE AS PLANILHAS AUXILIARES
 def sincronizar_planilhas_auxiliares(bilhete_str, nova_area_resp, observacao_str):
     bilhete_target = str(bilhete_str).strip()
     
@@ -323,7 +382,6 @@ def sincronizar_planilhas_auxiliares(bilhete_str, nova_area_resp, observacao_str
     else:
         area_gravar = nova_area_resp
 
-    # 1. Atualizar NÃO CONCILIADOS.xlsx
     if os.path.exists(ARQUIVO_NAO_CONCILIADOS):
         try:
             df_nc = pd.read_excel(ARQUIVO_NAO_CONCILIADOS, sheet_name="NÃO CONCILIADOS")
@@ -344,7 +402,6 @@ def sincronizar_planilhas_auxiliares(bilhete_str, nova_area_resp, observacao_str
         except Exception as e:
             st.warning(f"⚠️ Nota: Não foi possível atualizar 'NÃO CONCILIADOS.xlsx': {str(e)}")
 
-    # 2. Atualizar CONCILIADOS _ REGULARIZADOS.xlsx
     if os.path.exists(ARQUIVO_CONCILIADOS):
         try:
             xls_c = pd.ExcelFile(ARQUIVO_CONCILIADOS)
@@ -395,7 +452,6 @@ else:
 
 usuario_log_formatado = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
 
-# 6. Cabeçalho Principal do Dashboard
 col_hdr1, col_hdr2 = st.columns([3, 1])
 with col_hdr1:
     st.markdown(f"""
@@ -416,7 +472,6 @@ if "msg_sucesso" in st.session_state:
     st.success(st.session_state["msg_sucesso"])
     del st.session_state["msg_sucesso"]
 
-# Sidebar / Filtros Operacionais
 renderizar_marca()
 st.sidebar.markdown(f"### 👤 {st.session_state['usuario_atual']}")
 
@@ -496,9 +551,8 @@ df_div_op_filtrado = aplicar_filtros_globais(df_div_op)
 df_sem_div_filtrado = aplicar_filtros_globais(df_sem_div)
 df_acao_filtrado = aplicar_filtros_globais(df_acao_total)
 
-# BASE DINÂMICA DE SUPORTE BACKOFFICE / BENNER
-mascara_back_m = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte|benner|backoffice|katia martins", na=False)
-mascara_back_d = df_div_op[COL_GERENTE].astype(str).str.lower().str.contains("suporte|benner|backoffice|katia martins", na=False)
+mascara_back_m = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte backoffice|suporte benner|katia martins", na=False)
+mascara_back_d = df_div_op[COL_GERENTE].astype(str).str.lower().str.contains("suporte backoffice|suporte benner|katia martins", na=False)
 
 df_backoffice_dinamico = pd.concat([
     df_backoffice,
@@ -525,6 +579,8 @@ if st.session_state["perfil_atual"] == "Compliance":
 abas_objetos = st.tabs(abas_nomes)
 
 gerentes_base_unicos = sorted([g for g in df_acao_total[COL_GERENTE].dropna().astype(str).unique() if str(g).lower() not in ["suporte backoffice", "suporte benner", "não atribuído", "-", "katia martins"]])
+
+dt_str_export = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
 # ABA 0: DASHBOARD
 with abas_objetos[0]:
@@ -696,7 +752,7 @@ with abas_objetos[1]:
                         df_master.loc[idx, "Obs. Operação"] = texto_obs_final
                         msg_res = "atualizado com sucesso"
 
-                    mascara_back_upd = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte|benner|katia martins", na=False)
+                    mascara_back_upd = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte backoffice|suporte benner|katia martins", na=False)
                     df_back_atualizado = df_master[mascara_back_upd].copy()
                     df_log_updated = pd.concat([df_log_master, novo_log], ignore_index=True)
                     
@@ -717,7 +773,17 @@ with abas_objetos[1]:
                         st.error("❌ O arquivo Excel está aberto em outro programa. Feche a planilha para salvar.")
 
         st.markdown("---")
-        st.markdown(f"### 📊 Lista Completa dos Casos Filtrados ({len(df_master_filtrado)} registros)")
+        col_t1, col_e1 = st.columns([3, 1])
+        with col_t1:
+            st.markdown(f"### 📊 Lista Completa dos Casos Filtrados ({len(df_master_filtrado)} registros)")
+        with col_e1:
+            st.download_button(
+                label="📥 Exportar Excel Formatado",
+                data=gerar_excel_formatado(df_master_filtrado, "Base_Geral"),
+                file_name=f"Relatorio_Base_Geral_Filtrado_{dt_str_export}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_exp_geral"
+            )
         st.dataframe(df_master_filtrado, hide_index=True)
 
 # ABA 2: DIVERGÊNCIA OPERAÇÃO
@@ -725,7 +791,7 @@ with abas_objetos[2]:
     st.subheader("⚠️ Base 98 - Divergência de Operação / CIAs Aéreas / Arquivos HOT")
     
     if len(df_div_op_filtrado) == 0:
-        st.warning("Nenhuma divergência de operação encontrada.")
+        st.warning("Nenhuma divergência de operação encontrada para os filtros selecionados.")
     else:
         lista_busca_div = df_div_op_filtrado["Bilhetes"].astype(str).tolist()
         bilhete_div_sel = st.selectbox("Selecione o Bilhete / LOC para Tratativa Direta:", options=lista_busca_div, key="sb_div_op")
@@ -794,7 +860,17 @@ with abas_objetos[2]:
                     st.error("❌ O arquivo Excel está aberto em outro programa.")
                     
         st.markdown("---")
-        st.markdown(f"### 📊 Lista Completa das Divergências ({len(df_div_op_filtrado)} registros)")
+        col_t2, col_e2 = st.columns([3, 1])
+        with col_t2:
+            st.markdown(f"### 📊 Lista Completa das Divergências ({len(df_div_op_filtrado)} registros)")
+        with col_e2:
+            st.download_button(
+                label="📥 Exportar Excel Formatado",
+                data=gerar_excel_formatado(df_div_op_filtrado, "Divergencias_Operacao"),
+                file_name=f"Relatorio_Divergencias_Operacao_Filtrado_{dt_str_export}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_exp_div"
+            )
         st.dataframe(df_div_op_filtrado, hide_index=True)
 
 # ABA 3: SEM DIVERGÊNCIA
@@ -865,6 +941,17 @@ with abas_objetos[3]:
                             except PermissionError:
                                 st.error("❌ O arquivo Excel está aberto em outro programa. Feche a planilha para salvar.")
 
+    col_t3, col_e3 = st.columns([3, 1])
+    with col_t3:
+        st.markdown(f"### 📊 Lista Completa dos Bilhetes Sem Divergência ({len(df_sem_div_filtrado)} registros)")
+    with col_e3:
+        st.download_button(
+            label="📥 Exportar Excel Formatado",
+            data=gerar_excel_formatado(df_sem_div_filtrado, "Sem_Divergencia"),
+            file_name=f"Relatorio_Sem_Divergencia_Filtrado_{dt_str_export}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="btn_exp_sem_div"
+        )
     st.dataframe(df_sem_div_filtrado, hide_index=True)
 
 # ABA 4: SUPORTE BACKOFFICE
@@ -933,7 +1020,7 @@ with abas_objetos[4]:
                     "Tipo_Interacao": "Tratativa Suporte Backoffice"
                 }])
 
-                mascara_back_upd = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte|benner|katia martins", na=False)
+                mascara_back_upd = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte backoffice|suporte benner|katia martins", na=False)
                 df_backoffice_atualizado = df_master[mascara_back_upd].copy()
                 df_log_updated = pd.concat([df_log_master, novo_log_bk], ignore_index=True)
 
@@ -954,7 +1041,17 @@ with abas_objetos[4]:
                     st.error("❌ O arquivo Excel está aberto em outro programa.")
 
         st.markdown("---")
-        st.markdown(f"### 📊 Lista Completa dos Chamados ({len(df_backoffice_filtrado)} registros)")
+        col_t4, col_e4 = st.columns([3, 1])
+        with col_t4:
+            st.markdown(f"### 📊 Lista Completa dos Chamados no Suporte ({len(df_backoffice_filtrado)} registros)")
+        with col_e4:
+            st.download_button(
+                label="📥 Exportar Excel Formatado",
+                data=gerar_excel_formatado(df_backoffice_filtrado, "Suporte_Backoffice"),
+                file_name=f"Relatorio_Suporte_Backoffice_Filtrado_{dt_str_export}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_exp_back"
+            )
         st.dataframe(df_backoffice_filtrado, hide_index=True)
 
 # ABA 5: RÉPLICA DA AUDITORIA
@@ -1017,7 +1114,6 @@ with abas_objetos[5]:
 idx_aba_compliance = 6
 
 if st.session_state["perfil_atual"] == "Compliance":
-    # ABA TRILHA DE AUDITORIA
     with abas_objetos[idx_aba_compliance]:
         st.subheader("📜 Histórico Completo de Alterações e Trilha de Auditoria")
         
@@ -1045,7 +1141,6 @@ if st.session_state["perfil_atual"] == "Compliance":
         st.dataframe(df_log_master, hide_index=False)
     idx_aba_compliance += 1
 
-    # ABA GESTÃO DE ACESSOS & APROVAÇÕES
     with abas_objetos[idx_aba_compliance]:
         st.subheader("⚙️ Central de Aprovações de Acesso e Governança")
         
@@ -1081,5 +1176,15 @@ if st.session_state["perfil_atual"] == "Compliance":
 
 # ABA VISÃO GERAL BASE TOTAL
 with abas_objetos[idx_aba_compliance]:
-    st.subheader("📋 Visão Geral da Base Total de Divergências")
+    col_tv, col_ev = st.columns([3, 1])
+    with col_tv:
+        st.subheader("📋 Visão Geral da Base Total de Divergências")
+    with col_ev:
+        st.download_button(
+            label="📥 Exportar Excel Formatado",
+            data=gerar_excel_formatado(df_acao_filtrado, "Base_Total_Filtrada"),
+            file_name=f"Relatorio_Base_Total_Filtrado_{dt_str_export}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="btn_exp_total"
+        )
     st.dataframe(df_acao_filtrado, hide_index=True)
