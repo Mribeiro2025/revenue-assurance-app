@@ -149,11 +149,7 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
         bottom=Side(style='thin', color='D9D9D9')
     )
     
-    currency_cols = [
-        'A vista', 'A credito', 'Tarifa_Sistema', 'Dif_Tarifa', 'Taxa', 'Taxa_Sistema', 
-        'Dif_Taxa', 'Comissão', 'Taxa DU', 'Desc.', 'Incentivo', 'Receita_Sistema', 
-        'Dif_Receita', 'VL. Líquido', 'Tarifa_Pendente_R$', 'Taxa_Pendente_R$', 'Receita_Pendente_R$'
-    ]
+    currency_cols = ['A vista', 'A credito', 'Taxa', 'Comissão', 'Taxa DU', 'Desc.', 'Incentivo', 'VL. Líquido']
 
     ws.views.sheetView[0].showGridLines = True
 
@@ -192,11 +188,14 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
     output_buffer.seek(0)
     return output_buffer
 
-# 3. Autenticação e Sessão
+# 3. Autenticação e Sessão Persistente
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
+if "usuario_atual" not in st.session_state:
     st.session_state["usuario_atual"] = None
+if "perfil_atual" not in st.session_state:
     st.session_state["perfil_atual"] = None
+if "login_user_id" not in st.session_state:
     st.session_state["login_user_id"] = None
 
 if not st.session_state["autenticado"]:
@@ -293,7 +292,7 @@ if not st.session_state["autenticado"]:
         st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
-# 4. Funções de Padronização e Tratamento
+# 4. Funções de Padronização, Limpeza de Linhas TOTAL e Tratamento
 def padronizar_gerentes_e_setores(val):
     if pd.isna(val) or not str(val).strip():
         return "Não Atribuído"
@@ -328,7 +327,15 @@ def categorizar_tipo_inconsistencia(row):
 def padronizar_e_deduplicar_colunas(df, origem=""):
     if df is None or df.empty: return pd.DataFrame()
     df = df.loc[:, ~df.columns.duplicated()].copy()
-    
+
+    # DESCARTE DA LINHA DE TOTALIZAÇÃO EXCEL
+    mask_descarte = (
+        df['Ponto de venda'].astype(str).str.strip().str.upper().contains("TOTAL", na=False) |
+        df['Bilhetes'].astype(str).str.strip().str.upper().contains("TOTAL", na=False) |
+        df['Bilhetes'].isna()
+    )
+    df = df[~mask_descarte].copy()
+
     col_area_resp = None
     renomear = {}
     for col in df.columns:
@@ -480,15 +487,12 @@ COL_GERENTE = "Área Resp. Operação"
 COL_SETOR = "Setor"
 COL_EMISSOR = "Consultor_Lemon"
 
-# CONSOLIDAÇÃO ABSOLUTA E SEM PERDAS DE 100% DA BASE AUDITADA
+# CONSOLIDAÇÃO TOTAL (415 EMISSÕES SEM A LINHA TOTAL)
 df_list = [d for d in [df_master, df_div_op, df_sem_div] if not d.empty]
 df_acao_total = pd.concat(df_list, ignore_index=True, sort=False) if len(df_list) > 0 else pd.DataFrame()
 
 if "Bilhetes" in df_acao_total.columns:
     df_acao_total["Bilhetes_Str"] = df_acao_total["Bilhetes"].astype(str).str.strip()
-    df_acao_total = df_acao_total.drop_duplicates(subset=["Bilhetes_Str"], keep="first")
-else:
-    df_acao_total["Bilhetes_Str"] = ""
 
 usuario_log_formatado = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
 
@@ -553,15 +557,13 @@ if btn_mudar_senha or st.session_state.get("abrir_modal_senha", False):
 st.sidebar.markdown("---")
 st.sidebar.title("🔍 Filtros Operacionais")
 
-# 1. FILTRO DE MÊS DA EMISSÃO
+# FILTROS DINÂMICOS
 df_meses = df_acao_total.dropna(subset=["Mes_Ano_Label"]).sort_values(by="Mes_Ano_Sort")
 opcoes_meses = sorted(list(df_meses["Mes_Ano_Label"].unique()))
 mes_sel = st.sidebar.multiselect("📅 Mês de Emissão:", options=opcoes_meses, default=[])
 
-# SE NENHUM MÊS SELECIONADO, EXIBE O ACUMULADO COMPLETO (100%)
 df_f_mes = df_acao_total[df_acao_total["Mes_Ano_Label"].isin(mes_sel)] if len(mes_sel) > 0 else df_acao_total
 
-# 2. DEMAIS FILTROS DINÂMICOS
 opcoes_setor = sorted(list(df_f_mes[COL_SETOR].dropna().astype(str).unique()))
 setor_sel = st.sidebar.multiselect("Setor Responsável:", options=opcoes_setor, default=[])
 
@@ -632,21 +634,24 @@ gerentes_base_unicos = sorted([g for g in df_acao_total[COL_GERENTE].dropna().as
 
 dt_str_export = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
-# ABA 0: DASHBOARD INTERATIVO - 100% DA BASE AUDITADA
+# ABA 0: DASHBOARD INTERATIVO - REGRAS DE SOMA E EXCLUSÃO DO TOTAL
 with abas_objetos[0]:
     st.subheader("📊 Painel Executivo e Métricas Globais (100% da Base Auditada)")
     
-    # Conversão para numérico para soma correta
-    val_tarifa = pd.to_numeric(df_acao_filtrado['A credito'], errors='coerce').sum() if 'A credito' in df_acao_filtrado.columns else 0.0
-    val_taxa = pd.to_numeric(df_acao_filtrado['Taxa'], errors='coerce').sum() if 'Taxa' in df_acao_filtrado.columns else 0.0
-    val_receita = pd.to_numeric(df_acao_filtrado['Incentivo'], errors='coerce').sum() if 'Incentivo' in df_acao_filtrado.columns else 0.0
+    # REGRA DE CÁLCULO ESTREITA: SOMA APENAS A VISTA, A CREDITO E TAXA
+    a_vista_sum = pd.to_numeric(df_acao_filtrado['A vista'], errors='coerce').fillna(0.0).sum() if 'A vista' in df_acao_filtrado.columns else 0.0
+    a_credito_sum = pd.to_numeric(df_acao_filtrado['A credito'], errors='coerce').fillna(0.0).sum() if 'A credito' in df_acao_filtrado.columns else 0.0
+    val_tarifa = a_vista_sum + a_credito_sum
+    
+    val_taxa = pd.to_numeric(df_acao_filtrado['Taxa'], errors='coerce').fillna(0.0).sum() if 'Taxa' in df_acao_filtrado.columns else 0.0
+    val_receita = pd.to_numeric(df_acao_filtrado['Incentivo'], errors='coerce').fillna(0.0).sum() if 'Incentivo' in df_acao_filtrado.columns else 0.0
 
     # KPIs Principais
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Bilhetes Auditados em Ação", f"{len(df_acao_filtrado):,}")
-    k2.metric("Tarifa Pendente (R$)", f"R$ {val_tarifa:,.2f}")
-    k3.metric("Taxas Pendentes (R$)", f"R$ {val_taxa:,.2f}")
-    k4.metric("Receita em Risco (R$)", f"R$ {val_receita:,.2f}")
+    k2.metric("Tarifa Pendente (A vista + A credito)", f"R$ {val_tarifa:,.2f}")
+    k3.metric("Taxas Pendentes (Taxa)", f"R$ {val_taxa:,.2f}")
+    k4.metric("Receita em Risco (Incentivo)", f"R$ {val_receita:,.2f}")
     
     st.markdown("---")
     
@@ -654,7 +659,7 @@ with abas_objetos[0]:
     col_chart1, col_chart2 = st.columns(2)
     
     with col_chart1:
-        st.markdown("##### ⚠️ Classificação Detalhada dos Tipos de Inconsistência (100% dos Casos)")
+        st.markdown("##### ⚠️ Classificação Detalhada dos Tipos de Inconsistência")
         if not df_acao_filtrado.empty and "Tipo_Inconsistencia" in df_acao_filtrado.columns:
             df_inc = df_acao_filtrado["Tipo_Inconsistencia"].value_counts().reset_index()
             df_inc.columns = ["Inconsistencia", "Quantidade"]
@@ -685,7 +690,7 @@ with abas_objetos[0]:
             st.info("Sem dados para exibir o gráfico.")
             
     with col_chart2:
-        st.markdown("##### 👤 Volumetria Total por Gerente Responsável (100% da Base)")
+        st.markdown("##### 👤 Volumetria Total por Gerente Responsável")
         if not df_acao_filtrado.empty and COL_GERENTE in df_acao_filtrado.columns:
             df_ger = df_acao_filtrado[COL_GERENTE].value_counts().head(10).reset_index()
             df_ger.columns = ["Gerente", "Quantidade"]
