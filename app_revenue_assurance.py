@@ -55,6 +55,16 @@ USUARIOS_PADRAO = {
 }
 
 
+def clean_str_strict(val):
+  if pd.isna(val) or val is None:
+    return ""
+  s = str(val).strip()
+  s = re.sub(r"\.0$", "", s)
+  if s.lower() in ["nan", "none", "null", "<na>"]:
+    return ""
+  return s
+
+
 def carregar_usuarios():
   if not os.path.exists(ARQUIVO_USUARIOS):
     with open(ARQUIVO_USUARIOS, "w", encoding="utf-8") as f:
@@ -74,7 +84,6 @@ def salvar_usuarios(dict_users):
 
 usuarios_db = carregar_usuarios()
 
-# 2. Estilização CSS Corporativa
 st.markdown(
     """
     <style>
@@ -232,7 +241,7 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
   return output_buffer
 
 
-# 3. Autenticação e Sessão Persistente
+# 3. Autenticação e Sessão
 if "autenticado" not in st.session_state:
   st.session_state["autenticado"] = False
 if "usuario_atual" not in st.session_state:
@@ -465,6 +474,8 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
       renomear[col] = "Consultor_Lemon"
     elif c_str in ["bilhete", "bilhetes"]:
       renomear[col] = "Bilhetes"
+    elif c_str in ["rloc_cia", "rloc cia", "rloc_cia", "localizador_cia"]:
+      renomear[col] = "Rloc_Cia"
     elif c_str in ["data emissão", "data emissao", "data_emissao"]:
       renomear[col] = "Data Emissão"
 
@@ -479,12 +490,21 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     df_out["Consultor_Lemon"] = "-"
   if "Localizador_Sistema" not in df_out.columns:
     df_out["Localizador_Sistema"] = "-"
+  if "Rloc_Cia" not in df_out.columns:
+    df_out["Rloc_Cia"] = df_out["Localizador_Sistema"]
   if "Status_Geral" not in df_out.columns:
     df_out["Status_Geral"] = "Pendente de Lançamento"
   if "Obs. Operação" not in df_out.columns:
     df_out["Obs. Operação"] = ""
   if "Data Emissão" not in df_out.columns:
     df_out["Data Emissão"] = "-"
+
+  # Limpeza rigorosa de strings identificadoras
+  df_out["Bilhetes"] = df_out["Bilhetes"].apply(clean_str_strict)
+  df_out["Localizador_Sistema"] = df_out["Localizador_Sistema"].apply(
+      clean_str_strict
+  )
+  df_out["Rloc_Cia"] = df_out["Rloc_Cia"].apply(clean_str_strict)
 
   df_out["Área Resp. Operação"] = df_out["Área Resp. Operação"].apply(
       padronizar_gerentes_e_setores
@@ -524,11 +544,13 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
       categorizar_tipo_inconsistencia, axis=1
   )
 
-  # TRATAMENTO E FORMATÇÃO RIGOROSA DE DATAS PARA MANTER ORDEM CRONOLÓGICA
+  # Datas e ordenação cronológica
   df_out["Dt_Parsed"] = pd.to_datetime(
       df_out["Data Emissão"], errors="coerce", dayfirst=True
   )
-  df_out["Mes_Ano_Sort"] = df_out["Dt_Parsed"].dt.strftime("%Y-%m").fillna("0000-00")
+  df_out["Mes_Ano_Sort"] = df_out["Dt_Parsed"].dt.strftime("%Y-%m").fillna(
+      "0000-00"
+  )
 
   mapa_meses = {
       "01": "Jan",
@@ -559,7 +581,6 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
 
   df_out["Mes_Ano_Label"] = df_out.apply(extrair_rotulo_mes, axis=1)
 
-  # Ordenar dados por data mais recente
   df_out = df_out.sort_values(
       by="Dt_Parsed", ascending=False, na_position="last"
   )
@@ -628,7 +649,7 @@ def carregar_bases():
 def sincronizar_planilhas_auxiliares(
     bilhete_str, nova_area_resp, observacao_str
 ):
-  bilhete_target = str(bilhete_str).strip()
+  bilhete_target = clean_str_strict(bilhete_str)
   area_gravar = (
       "SUPORTE BENNER"
       if str(nova_area_resp).lower().strip()
@@ -647,7 +668,8 @@ def sincronizar_planilhas_auxiliares(
           else ("Bilhete" if "Bilhete" in df_nc.columns else None)
       )
       if col_b:
-        m_nc = df_nc[col_b].astype(str).str.strip() == bilhete_target
+        df_nc[col_b] = df_nc[col_b].apply(clean_str_strict)
+        m_nc = df_nc[col_b] == bilhete_target
         if m_nc.any():
           if "ÁREA RESPONSÁVEL" in df_nc.columns:
             df_nc.loc[m_nc, "ÁREA RESPONSÁVEL"] = area_gravar
@@ -676,7 +698,8 @@ def sincronizar_planilhas_auxiliares(
           else ("Bilhete" if "Bilhete" in df_cr.columns else None)
       )
       if col_b:
-        m_cr = df_cr[col_b].astype(str).str.strip() == bilhete_target
+        df_cr[col_b] = df_cr[col_b].apply(clean_str_strict)
+        m_cr = df_cr[col_b] == bilhete_target
         if m_cr.any():
           if "ÁREA RESPONSÁVEL" in df_cr.columns:
             df_cr.loc[m_cr, "ÁREA RESPONSÁVEL"] = area_gravar
@@ -729,8 +752,8 @@ df_acao_total = (
 )
 
 if "Bilhetes" in df_acao_total.columns:
-  df_acao_total["Bilhetes_Str"] = (
-      df_acao_total["Bilhetes"].astype(str).str.strip()
+  df_acao_total["Bilhetes_Str"] = df_acao_total["Bilhetes"].apply(
+      clean_str_strict
   )
 
 usuario_log_formatado = (
@@ -803,7 +826,6 @@ if btn_mudar_senha or st.session_state.get("abrir_modal_senha", False):
 st.sidebar.markdown("---")
 st.sidebar.title("🔍 Filtros Operacionais")
 
-# FILTRO DE MÊS CORRIGIDO - ORDENAÇÃO CRONOLÓGICA PRESERVADA
 df_meses_ord = df_acao_total.dropna(subset=["Mes_Ano_Label"]).sort_values(
     by="Mes_Ano_Sort"
 )
@@ -911,26 +933,31 @@ df_div_op_filtrado = aplicar_filtros_globais(df_div_op)
 df_sem_div_filtrado = aplicar_filtros_globais(df_sem_div)
 df_acao_filtrado = aplicar_filtros_globais(df_acao_total)
 
+# DEDUPLICAÇÃO E PADRONIZAÇÃO DO SUPORTE BACKOFFICE
 mascara_back_m = (
     df_master[COL_GERENTE]
     .astype(str)
     .str.lower()
-    .str.contains(
-        "suporte backoffice|suporte benner|katia martins", na=False
-    )
+    .str.contains("suporte backoffice|suporte benner|katia martins", na=False)
 )
 mascara_back_d = (
     df_div_op[COL_GERENTE]
     .astype(str)
     .str.lower()
-    .str.contains(
-        "suporte backoffice|suporte benner|katia martins", na=False
-    )
+    .str.contains("suporte backoffice|suporte benner|katia martins", na=False)
 )
+
+df_b_copy = df_backoffice.copy()
+df_m_copy = df_master[mascara_back_m].copy()
+df_d_copy = df_div_op[mascara_back_d].copy()
+
+for df_sub in [df_b_copy, df_m_copy, df_d_copy]:
+  if not df_sub.empty and "Bilhetes" in df_sub.columns:
+    df_sub["Bilhetes"] = df_sub["Bilhetes"].apply(clean_str_strict)
 
 df_backoffice_dinamico = (
     pd.concat(
-        [df_backoffice, df_master[mascara_back_m], df_div_op[mascara_back_d]],
+        [df_b_copy, df_m_copy, df_d_copy],
         ignore_index=True,
     ).drop_duplicates(subset=["Bilhetes"], keep="last")
     if "Bilhetes" in df_master.columns
@@ -970,7 +997,7 @@ gerentes_base_unicos = sorted([
 
 dt_str_export = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
-# ABA 0: DASHBOARD INTERATIVO
+# ABA 0: DASHBOARD
 with abas_objetos[0]:
   st.subheader(
       "📊 Painel Executivo e Métricas Globais (100% da Base Auditada)"
@@ -1112,7 +1139,6 @@ with abas_objetos[0]:
 
   st.markdown("---")
 
-  # GRÁFICO 2: COMPARATIVO MENSAL POR SETOR (AGRUPAMENTO E ORDENAÇÃO CRONOLÓGICA CORRIGIDA)
   st.markdown(
       "##### 📈 Volumetria Mensal de Pendências por Setor Responsável"
   )
@@ -1153,7 +1179,7 @@ with abas_objetos[0]:
     )
     st.plotly_chart(fig_line, use_container_width=True)
 
-# DEMAIS ABAS PERMANECEM IDENTICAS E PLENAMENTE FUNCIONAIS
+# ABA 1: TRATATIVA GERAL
 with abas_objetos[1]:
   st.subheader("📝 Módulo de Resolução e Detalhamento Operacional")
   if len(df_master_filtrado) == 0:
@@ -1161,14 +1187,14 @@ with abas_objetos[1]:
         "Nenhum bilhete encontrado na base geral para os filtros selecionados."
     )
   else:
-    lista_busca_geral = df_master_filtrado["Bilhetes"].astype(str).tolist()
+    lista_busca_geral = df_master_filtrado["Bilhetes"].apply(clean_str_strict).tolist()
     opcao_sel_m = st.selectbox(
         "Procure ou Selecione o Bilhete / LOC para Tratativa:",
         options=lista_busca_geral,
         key="sb_geral",
     )
     row_m = df_master_filtrado[
-        df_master_filtrado["Bilhetes"].astype(str) == opcao_sel_m
+        df_master_filtrado["Bilhetes"].apply(clean_str_strict) == opcao_sel_m
     ].iloc[0]
 
     st.markdown(
@@ -1178,6 +1204,8 @@ with abas_objetos[1]:
                 <p style="margin: 5px 0 0 0; color: #856404;">
                     <b>Área / Gerente Resp.:</b> {row_m.get(COL_GERENTE, '-')} | 
                     <b>CIA:</b> {row_m.get('CIA', '-')} | 
+                    <b>Rloc CIA:</b> {row_m.get('Rloc_Cia', '-')} | 
+                    <b>LOC Sistema:</b> {row_m.get('Localizador_Sistema', '-')} | 
                     <b>Status Geral:</b> {row_m.get('Status_Geral', 'Pendente')}
                 </p>
             </div>
@@ -1192,6 +1220,7 @@ with abas_objetos[1]:
         "CIA",
         "Bilhetes",
         "Localizador_Sistema",
+        "Rloc_Cia",
         "Status_Sistema",
         "Data Emissão",
         "Pagto",
@@ -1371,7 +1400,7 @@ with abas_objetos[1]:
               else obs_detalhe
           )
           mascara_m_bilhete = (
-              df_master["Bilhetes"].astype(str).str.strip()
+              df_master["Bilhetes"].apply(clean_str_strict)
               == str(opcao_sel_m).strip()
           )
           idx = df_master[mascara_m_bilhete].index
@@ -1477,6 +1506,7 @@ with abas_objetos[1]:
       )
     st.dataframe(df_master_filtrado, hide_index=True)
 
+# ABA 2: DIVERGÊNCIA OPERAÇÃO
 with abas_objetos[2]:
   st.subheader(
       "⚠️ Base 98 - Divergência de Operação / CIAs Aéreas / Arquivos HOT"
@@ -1487,14 +1517,14 @@ with abas_objetos[2]:
         " selecionados."
     )
   else:
-    lista_busca_div = df_div_op_filtrado["Bilhetes"].astype(str).tolist()
+    lista_busca_div = df_div_op_filtrado["Bilhetes"].apply(clean_str_strict).tolist()
     bilhete_div_sel = st.selectbox(
         "Selecione o Bilhete / LOC para Tratativa Direta:",
         options=lista_busca_div,
         key="sb_div_op",
     )
     row_d = df_div_op_filtrado[
-        df_div_op_filtrado["Bilhetes"].astype(str) == bilhete_div_sel
+        df_div_op_filtrado["Bilhetes"].apply(clean_str_strict) == bilhete_div_sel
     ].iloc[0]
 
     with st.form("form_tratativa_div_op"):
@@ -1526,7 +1556,7 @@ with abas_objetos[2]:
 
       if btn_salvar_d:
         mascara_d_bilhete = (
-            df_div_op["Bilhetes"].astype(str).str.strip()
+            df_div_op["Bilhetes"].apply(clean_str_strict)
             == str(bilhete_div_sel).strip()
         )
         idx_d = df_div_op[mascara_d_bilhete].index
@@ -1626,6 +1656,7 @@ with abas_objetos[2]:
       )
     st.dataframe(df_div_op_filtrado, hide_index=True)
 
+# ABA 3: SEM DIVERGÊNCIA
 with abas_objetos[3]:
   st.subheader("✅ Base 98 - Bilhetes Prontos para Conciliação Operacional")
   if st.session_state.get("perfil_atual") == "Compliance":
@@ -1643,7 +1674,7 @@ with abas_objetos[3]:
         )
       else:
         lista_bilhetes_sd = (
-            df_sem_div_filtrado["Bilhetes"].astype(str).tolist()
+            df_sem_div_filtrado["Bilhetes"].apply(clean_str_strict).tolist()
         )
         bilhete_devolver_sel = st.selectbox(
             "Selecione o Bilhete / LOC para Devolução:",
@@ -1651,13 +1682,14 @@ with abas_objetos[3]:
             key="sb_devolucao_compliance",
         )
         row_sd = df_sem_div_filtrado[
-            df_sem_div_filtrado["Bilhetes"].astype(str) == bilhete_devolver_sel
+            df_sem_div_filtrado["Bilhetes"].apply(clean_str_strict) == bilhete_devolver_sel
         ].iloc[0]
 
         with st.form("form_devolucao_compliance"):
           st.write(
-              f"**Bilhete:** {row_sd.get('Bilhetes', '-')} | **Gerente"
-              f" Atual:** {row_sd.get(COL_GERENTE, '-')} | **CIA:**"
+              f"**Bilhete:** {row_sd.get('Bilhetes', '-')} | **Rloc CIA:**"
+              f" {row_sd.get('Rloc_Cia', '-')} | **Gerente Atual:**"
+              f" {row_sd.get(COL_GERENTE, '-')} | **CIA:**"
               f" {row_sd.get('CIA', '-')}"
           )
           area_devolucao_comp = st.selectbox(
@@ -1688,7 +1720,7 @@ with abas_objetos[3]:
               )
             else:
               mascara_sd_bilhete = (
-                  df_sem_div["Bilhetes"].astype(str).str.strip()
+                  df_sem_div["Bilhetes"].apply(clean_str_strict)
                   == str(bilhete_devolver_sel).strip()
               )
               idx_sd = df_sem_div[mascara_sd_bilhete].index
@@ -1786,6 +1818,7 @@ with abas_objetos[3]:
     )
   st.dataframe(df_sem_div_filtrado, hide_index=True)
 
+# ABA 4: SUPORTE BACKOFFICE
 with abas_objetos[4]:
   st.subheader(
       "🎧 Base 99 - Chamados Atribuídos ao Suporte Backoffice / Suporte Benner"
@@ -1794,7 +1827,7 @@ with abas_objetos[4]:
     st.info("Nenhum chamado pendente no Suporte Backoffice no momento.")
   else:
     lista_back_bilhetes = (
-        df_backoffice_filtrado["Bilhetes"].astype(str).tolist()
+        df_backoffice_filtrado["Bilhetes"].apply(clean_str_strict).tolist()
     )
     bilhete_back_sel = st.selectbox(
         "Selecione o Chamado / Bilhete para Tratativa do Suporte:",
@@ -1802,10 +1835,16 @@ with abas_objetos[4]:
         key="sb_backoffice",
     )
     row_back = df_backoffice_filtrado[
-        df_backoffice_filtrado["Bilhetes"].astype(str) == bilhete_back_sel
+        df_backoffice_filtrado["Bilhetes"].apply(clean_str_strict) == bilhete_back_sel
     ].iloc[0]
 
     with st.form("form_solucao_backoffice"):
+      st.markdown(
+          f"**Bilhete:** `{row_back.get('Bilhetes', '-')}` | **Rloc CIA:**"
+          f" `{row_back.get('Rloc_Cia', '-')}` | **LOC Sistema:**"
+          f" `{row_back.get('Localizador_Sistema', '-')}` | **CIA:**"
+          f" `{row_back.get('CIA', '-')}`"
+      )
       acao_back = st.selectbox(
           "Ação do Suporte / Auditoria:",
           options=[
@@ -1849,7 +1888,7 @@ with abas_objetos[4]:
 
       if btn_salvar_back:
         mascara_bk_bilhete = (
-            df_master["Bilhetes"].astype(str).str.strip()
+            df_master["Bilhetes"].apply(clean_str_strict)
             == str(bilhete_back_sel).strip()
             if "Bilhetes" in df_master.columns
             else []
@@ -1973,6 +2012,7 @@ with abas_objetos[4]:
       )
     st.dataframe(df_backoffice_filtrado, hide_index=True)
 
+# ABA 5: RÉPLICA DA AUDITORIA
 with abas_objetos[5]:
   st.subheader("⚖️ Módulo de Contestação e Réplica da Auditoria")
   bilhetes_com_tratativa = df_acao_filtrado[
@@ -2012,7 +2052,7 @@ with abas_objetos[5]:
 
       if btn_replica:
         mascara_rep_bilhete = (
-            df_master["Bilhetes"].astype(str).str.strip()
+            df_master["Bilhetes"].apply(clean_str_strict)
             == str(bilhete_rep).strip()
             if "Bilhetes" in df_master.columns
             else []

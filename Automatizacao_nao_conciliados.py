@@ -81,6 +81,8 @@ def clean_str_strict(val):
     return ""
   s = str(val).strip()
   s = re.sub(r"\.0$", "", s)
+  if s.lower() in ["nan", "none", "null", "<na>"]:
+    return ""
   return s
 
 
@@ -124,49 +126,52 @@ def extract_keys(val):
 
 
 def carregar_mapa_bilhetes_oficial():
-  """Indexa as informações oficiais de GERENTES, ÁREA RESPONSÁVEL e OBS cruzando pela coluna BILHETES."""
   mapa = {}
+  for arq_nome in ["NÃO CONCILIADOS.xlsx", "NÃO CONCILIADOS.XLSX"]:
+    if os.path.exists(arq_nome):
+      try:
+        df_nc = pd.read_excel(arq_nome)
+        if "BILHETES" in df_nc.columns:
+          for _, r in df_nc.iterrows():
+            b_key = clean_str_strict(r["BILHETES"])
+            if b_key:
+              mapa[b_key] = {
+                  "PONTO DE VENDA": clean_str_strict(r.get("PONTO DE VENDA")),
+                  "CÓDIGO IATA": clean_str_strict(r.get("CÓDIGO IATA")),
+                  "GERENTES": clean_str_strict(r.get("GERENTES")),
+                  "ÁREA RESPONSÁVEL": clean_str_strict(
+                      r.get("ÁREA RESPONSÁVEL")
+                  ),
+                  "OBS": clean_str_strict(r.get("OBS")),
+              }
+        break
+      except Exception as e:
+        print(f"⚠️ Aviso ao carregar {arq_nome}: {e}")
 
-  # 1. Ler NÃO CONCILIADOS.xlsx
-  if os.path.exists("NÃO CONCILIADOS.xlsx"):
-    try:
-      df_nc = pd.read_excel("NÃO CONCILIADOS.xlsx")
-      if "BILHETES" in df_nc.columns:
-        for _, r in df_nc.iterrows():
-          b_key = clean_str_strict(r["BILHETES"])
-          if b_key:
-            mapa[b_key] = {
-                "PONTO DE VENDA": clean_str_strict(r.get("PONTO DE VENDA")),
-                "CÓDIGO IATA": clean_str_strict(r.get("CÓDIGO IATA")),
-                "GERENTES": clean_str_strict(r.get("GERENTES")),
-                "ÁREA RESPONSÁVEL": clean_str_strict(
-                    r.get("ÁREA RESPONSÁVEL")
-                ),
-                "OBS": clean_str_strict(r.get("OBS")),
-            }
-    except Exception as e:
-      print(f"⚠️ Aviso ao carregar NÃO CONCILIADOS.xlsx: {e}")
-
-  # 2. Ler CONCILIADOS _ REGULARIZADOS.xlsx
-  if os.path.exists("CONCILIADOS _ REGULARIZADOS.xlsx"):
-    try:
-      xls_c = pd.ExcelFile("CONCILIADOS _ REGULARIZADOS.xlsx")
-      df_cr = pd.read_excel(xls_c, sheet_name=xls_c.sheet_names[0])
-      if "BILHETES" in df_cr.columns:
-        for _, r in df_cr.iterrows():
-          b_key = clean_str_strict(r["BILHETES"])
-          if b_key and b_key not in mapa:
-            mapa[b_key] = {
-                "PONTO DE VENDA": clean_str_strict(r.get("PONTO DE VENDA")),
-                "CÓDIGO IATA": clean_str_strict(r.get("CÓDIGO IATA")),
-                "GERENTES": clean_str_strict(r.get("GERENTES")),
-                "ÁREA RESPONSÁVEL": clean_str_strict(
-                    r.get("ÁREA RESPONSÁVEL")
-                ),
-                "OBS": clean_str_strict(r.get("OBS")),
-            }
-    except Exception as e:
-      print(f"⚠️ Aviso ao carregar CONCILIADOS _ REGULARIZADOS.xlsx: {e}")
+  for arq_nome in [
+      "CONCILIADOS _ REGULARIZADOS.xlsx",
+      "CONCILIADOS _ REGULARIZADOS.XLSX",
+  ]:
+    if os.path.exists(arq_nome):
+      try:
+        xls_c = pd.ExcelFile(arq_nome)
+        df_cr = pd.read_excel(xls_c, sheet_name=xls_c.sheet_names[0])
+        if "BILHETES" in df_cr.columns:
+          for _, r in df_cr.iterrows():
+            b_key = clean_str_strict(r["BILHETES"])
+            if b_key and b_key not in mapa:
+              mapa[b_key] = {
+                  "PONTO DE VENDA": clean_str_strict(r.get("PONTO DE VENDA")),
+                  "CÓDIGO IATA": clean_str_strict(r.get("CÓDIGO IATA")),
+                  "GERENTES": clean_str_strict(r.get("GERENTES")),
+                  "ÁREA RESPONSÁVEL": clean_str_strict(
+                      r.get("ÁREA RESPONSÁVEL")
+                  ),
+                  "OBS": clean_str_strict(r.get("OBS")),
+              }
+        break
+      except Exception as e:
+        print(f"⚠️ Aviso ao carregar {arq_nome}: {e}")
 
   return mapa
 
@@ -209,6 +214,13 @@ def carregar_tratativas_e_logs_anteriores(out_file):
     return {}, pd.DataFrame()
 
 
+def encontrar_arquivo(nomes_possiveis):
+  for nome in nomes_possiveis:
+    if os.path.exists(nome):
+      return nome
+  return None
+
+
 def executar_auditoria():
   out_file_model = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 
@@ -226,16 +238,10 @@ def executar_auditoria():
       print(f"⚠️ Aviso ao criar backup: {e}")
 
   print("\n[1/6] Carregando Relação IATA...")
-  caminho_iata = (
-      "Relacao_Iata_2.xlsx"
-      if os.path.exists("Relacao_Iata_2.xlsx")
-      else "Relacao_Iata.xlsx"
+  caminho_iata = encontrar_arquivo(
+      ["Relacao_Iata_2.xlsx", "Relacao_Iata.xlsx", "Relacao_Iata_2.XLSX"]
   )
-  df_iata = (
-      pd.read_excel(caminho_iata)
-      if os.path.exists(caminho_iata)
-      else pd.DataFrame()
-  )
+  df_iata = pd.read_excel(caminho_iata) if caminho_iata else pd.DataFrame()
   iata_dict = {}
 
   if not df_iata.empty:
@@ -253,10 +259,12 @@ def executar_auditoria():
         }
 
   print("\n[2/6] Indexando Extrato OBT Lemontech...")
-  caminho_lemon = "Extrato_Bilhetes_lemontech.xlsx"
+  caminho_lemon = encontrar_arquivo(
+      ["Extrato_Bilhetes_lemontech.xlsx", "Extrato_Bilhetes_lemontech.XLSX"]
+  )
   lemon_index = {}
 
-  if os.path.exists(caminho_lemon):
+  if caminho_lemon:
     df_lemon = pd.read_excel(caminho_lemon, engine="openpyxl")
     for idx, r in tqdm(
         df_lemon.iterrows(),
@@ -290,10 +298,11 @@ def executar_auditoria():
           if k not in lemon_index:
             lemon_index[k] = info_lemon
 
-  print("\n[3/6] Indexando ERP Benner (Multicolunas)...")
+  print("\n[3/6] Indexando ERP Benner (Multicolunas & Rloc CIA)...")
+  caminho_benner = encontrar_arquivo(["Acumulado.xlsx", "Acumulado.XLSX"])
   df_benner = (
-      pd.read_excel("Acumulado.xlsx", sheet_name="Planilha1")
-      if os.path.exists("Acumulado.xlsx")
+      pd.read_excel(caminho_benner, sheet_name="Planilha1")
+      if caminho_benner
       else pd.DataFrame()
   )
   benner_index = {}
@@ -301,6 +310,7 @@ def executar_auditoria():
       "Bilhete",
       "Localizador",
       "Rloc Cia",
+      "Rloc CIA",
       "Código Rloc",
       "Pedido",
       "Fatura/Documento",
@@ -316,6 +326,15 @@ def executar_auditoria():
         desc="Indexando Benner",
         unit="linha",
     ):
+      rloc_cia_val = (
+          clean_str_strict(
+              r.get("Rloc Cia")
+              or r.get("Rloc CIA")
+              or r.get("Código Rloc")
+              or r.get("Localizador")
+          )
+          or "-"
+      )
       info = {
           "Benner_Index": idx,
           "Benner_Situação": clean_str_strict(r.get("Situação")) or "ATIVO",
@@ -324,9 +343,10 @@ def executar_auditoria():
           )
           or "-",
           "Benner_Localizador": clean_str_strict(
-              r.get("Rloc Cia") or r.get("Localizador") or r.get("Código Rloc")
+              r.get("Localizador") or r.get("Código Rloc") or r.get("Rloc Cia")
           )
           or "-",
+          "Benner_Rloc_Cia": rloc_cia_val,
           "Benner_Bilhete": clean_str_strict(r.get("Bilhete")) or "-",
           "Benner_Tarifa": clean_num(r.get("Tarifa")),
           "Benner_Taxas": clean_num(r.get("Taxas"))
@@ -354,13 +374,11 @@ def executar_auditoria():
             benner_index[k] = info
 
   print("\n[4/6] Indexando Relatório Sabre...")
-  caminho_sabre = (
-      "Relacao_Sabre_3.xlsx"
-      if os.path.exists("Relacao_Sabre_3.xlsx")
-      else "Relacao_Sabre.xlsx"
+  caminho_sabre = encontrar_arquivo(
+      ["Relacao_Sabre_3.xlsx", "Relacao_Sabre.xlsx", "Relacao_Sabre_3.XLSX"]
   )
   sabre_index = {}
-  if os.path.exists(caminho_sabre):
+  if caminho_sabre:
     lines = (
         pd.read_excel(caminho_sabre)
         .iloc[:, 0]
@@ -419,18 +437,19 @@ def executar_auditoria():
           sabre_index[k] = info
 
   print("\n[5/6] Auditando e Conciliando Emissões das Cias Aéreas...")
-  # Incluído o arquivo GOL.XLSX na auditoria
   fontes = [
-      ("AZUL.XLSX", "Azul"),
-      ("BSP.XLSX", "BSP"),
-      ("HOT.XLSX", "HOT"),
-      ("GOL.XLSX", "GOL"),
+      (["AZUL.XLSX", "AZUL.xlsx"], "Azul"),
+      (["BSP.XLSX", "BSP.xlsx"], "BSP"),
+      (["HOT.XLSX", "HOT.xlsx"], "HOT"),
+      (["GOL.XLSX", "GOL.xlsx"], "GOL"),
   ]
   registros_conciliados = []
 
-  for caminho_arq, nome_fonte in fontes:
-    if not os.path.exists(caminho_arq):
+  for lista_nomes, nome_fonte in fontes:
+    caminho_arq = encontrar_arquivo(lista_nomes)
+    if not caminho_arq:
       continue
+
     df_raw = pd.read_excel(caminho_arq, header=None)
     curr_iata, curr_ponto_venda = "", ""
 
@@ -464,7 +483,6 @@ def executar_auditoria():
 
         bilhete_chave = clean_str_strict(col3)
 
-        # Detecção dinâmica da Data de Emissão e Forma de Pagamento (Atende BSP, AZUL, HOT e GOL)
         dt_emissao = ""
         pagto = ""
         if re.match(r"^\d{2}/\d{2}/\d{4}", col4):
@@ -496,7 +514,6 @@ def executar_auditoria():
             else ""
         )
 
-        # --- CRUZAMENTO DIRETO DO BILHETE NAS BASES DE CONCILIAÇÃO ---
         d_oficial = mapa_bilhetes_oficial.get(bilhete_chave, {})
 
         ponto_venda_final = (
@@ -518,7 +535,6 @@ def executar_auditoria():
         obs_op = d_oficial.get("OBS") or "Sem tratativa na operação"
         obs_replica = "-"
 
-        # Respeitar alterações e tratativas vindas do Dashboard Streamlit
         if bilhete_chave in dict_historico:
           hist_data = dict_historico[bilhete_chave]
           if hist_data.get("Área Resp. Operação"):
@@ -529,7 +545,6 @@ def executar_auditoria():
           if hist_data.get("Obs_Auditoria_Replica"):
             obs_replica = hist_data["Obs_Auditoria_Replica"]
 
-        # REGRAS DE SETORIZAÇÃO PRECISAS E INDIVIDUALIZADAS
         area_resp_upper = str(area_resp_oficial).strip().upper()
         obs_op_lower = str(obs_op).strip().lower()
 
@@ -613,6 +628,7 @@ def executar_auditoria():
           status_sistema = b_match["Benner_Situação"]
           fornec_sistema = b_match["Benner_Fornecedor"]
           loc_sistema = b_match["Benner_Localizador"]
+          rloc_cia_sistema = b_match["Benner_Rloc_Cia"]
           bilhete_sistema = b_match["Benner_Bilhete"]
           tarifa_sistema = b_match["Benner_Tarifa"]
           taxa_sistema = b_match["Benner_Taxas"]
@@ -668,6 +684,15 @@ def executar_auditoria():
           status_sistema = "NAO_CONSTA"
           fornec_sistema = "-"
           loc_sistema = col3
+          rloc_cia_sistema = (
+              col3
+              if (
+                  len(col3) <= 8
+                  and not col3.isdigit()
+                  and col3.upper() not in ["[]", "NAN"]
+              )
+              else "-"
+          )
           bilhete_sistema = col3
           tarifa_sistema, taxa_sistema, receita_sistema = 0.0, 0.0, 0.0
           cliente_sistema = ponto_venda_final
@@ -695,8 +720,9 @@ def executar_auditoria():
             "CIA": col1,
             "Fornecedor_Sistema": fornec_sistema,
             "Status_Cia": status_cia,
-            "Bilhetes": bilhete_chave,
-            "Localizador_Sistema": loc_sistema,
+            "Bilhetes": clean_str_strict(bilhete_chave),
+            "Localizador_Sistema": clean_str_strict(loc_sistema),
+            "Rloc_Cia": clean_str_strict(rloc_cia_sistema),
             "Status_Sistema": status_sistema,
             "Data Emissão": dt_emissao,
             "Pagto": pagto,
@@ -754,16 +780,50 @@ def executar_auditoria():
         }
         registros_conciliados.append(rec)
 
+  if not registros_conciliados:
+    print(
+        "\n⚠️ NENHUM REGISTRO DE EMISSÃO FOI PROCESSADO!\n"
+        "   Verifique se os arquivos de emissão (ex: AZUL.XLSX, BSP.XLSX,"
+        " HOT.XLSX, GOL.XLSX)\n"
+        f"   estão salvos na pasta atual: '{DIR_ATUAL}'\n"
+    )
+    return
+
   df_master = pd.DataFrame(registros_conciliados)
 
-  # UNIFICAÇÃO DE CÁLCULO DE TARIFA E RECEITA NA PARETO
-  df_master["Tarifa_Total"] = df_master["A vista"].fillna(0.0) + df_master[
-      "A credito"
-  ].fillna(0.0)
+  a_vista_col = (
+      df_master["A vista"]
+      if "A vista" in df_master.columns
+      else pd.Series(0.0, index=df_master.index)
+  )
+  a_credito_col = (
+      df_master["A credito"]
+      if "A credito" in df_master.columns
+      else pd.Series(0.0, index=df_master.index)
+  )
+  df_master["Tarifa_Total"] = pd.to_numeric(
+      a_vista_col, errors="coerce"
+  ).fillna(0.0) + pd.to_numeric(a_credito_col, errors="coerce").fillna(0.0)
+
+  inc_col = (
+      df_master["Incentivo"]
+      if "Incentivo" in df_master.columns
+      else pd.Series(0.0, index=df_master.index)
+  )
+  com_col = (
+      df_master["Comissão"]
+      if "Comissão" in df_master.columns
+      else pd.Series(0.0, index=df_master.index)
+  )
+  tdu_col = (
+      df_master["Taxa DU"]
+      if "Taxa DU" in df_master.columns
+      else pd.Series(0.0, index=df_master.index)
+  )
   df_master["Receita_Total"] = (
-      df_master["Incentivo"].fillna(0.0)
-      + df_master["Comissão"].fillna(0.0)
-      + df_master["Taxa DU"].fillna(0.0)
+      pd.to_numeric(inc_col, errors="coerce").fillna(0.0)
+      + pd.to_numeric(com_col, errors="coerce").fillna(0.0)
+      + pd.to_numeric(tdu_col, errors="coerce").fillna(0.0)
   )
 
   pareto_df = (
@@ -788,7 +848,7 @@ def executar_auditoria():
       )
   )
 
-  cols_34 = [
+  cols_35 = [
       "Ponto de venda",
       "Código Iata",
       "Gerentes",
@@ -797,6 +857,7 @@ def executar_auditoria():
       "Status_Cia",
       "Bilhetes",
       "Localizador_Sistema",
+      "Rloc_Cia",
       "Status_Sistema",
       "Data Emissão",
       "Pagto",
@@ -825,13 +886,14 @@ def executar_auditoria():
       "Setor",
   ]
 
-  cols_29_furo = [
+  cols_30_furo = [
       "Ponto de venda",
       "Código Iata",
       "Gerentes",
       "CIA",
       "Bilhetes",
       "Localizador_Sistema",
+      "Rloc_Cia",
       "Status_Sistema",
       "Data Emissão",
       "Pagto",
@@ -859,64 +921,64 @@ def executar_auditoria():
 
   df_98_div = (
       df_master[df_master["Aba_Destino"] == "98_OK_Divergencia_Operacao"][
-          cols_34
+          cols_35
       ]
       if len(
           df_master[df_master["Aba_Destino"] == "98_OK_Divergencia_Operacao"]
       )
       > 0
-      else pd.DataFrame(columns=cols_34)
+      else pd.DataFrame(columns=cols_35)
   )
   df_98_ok = (
       df_master[df_master["Aba_Destino"] == "98_OK_Sem_Divergencia_Concil"][
-          cols_34
+          cols_35
       ]
       if len(
           df_master[df_master["Aba_Destino"] == "98_OK_Sem_Divergencia_Concil"]
       )
       > 0
-      else pd.DataFrame(columns=cols_34)
+      else pd.DataFrame(columns=cols_35)
   )
   df_99_gen = (
       df_master[df_master["Aba_Destino"] == "99_Base_Divergencias_Geral"][
-          cols_29_furo
+          cols_30_furo
       ]
       if len(
           df_master[df_master["Aba_Destino"] == "99_Base_Divergencias_Geral"]
       )
       > 0
-      else pd.DataFrame(columns=cols_29_furo)
+      else pd.DataFrame(columns=cols_30_furo)
   )
 
   df_99_suporte = (
       df_99_gen[df_99_gen["Setor"] == "Suporte backoffice"]
       if len(df_99_gen) > 0
-      else pd.DataFrame(columns=cols_29_furo)
+      else pd.DataFrame(columns=cols_30_furo)
   )
   df_99_eventos = (
       df_99_gen[df_99_gen["Setor"] == "Central de Eventos"]
       if len(df_99_gen) > 0
-      else pd.DataFrame(columns=cols_29_furo)
+      else pd.DataFrame(columns=cols_30_furo)
   )
   df_99_lazer = (
       df_99_gen[df_99_gen["Setor"] == "Concierge/Lazer"]
       if len(df_99_gen) > 0
-      else pd.DataFrame(columns=cols_29_furo)
+      else pd.DataFrame(columns=cols_30_furo)
   )
   df_99_unique = (
       df_99_gen[df_99_gen["Setor"] == "Unique"]
       if len(df_99_gen) > 0
-      else pd.DataFrame(columns=cols_29_furo)
+      else pd.DataFrame(columns=cols_30_furo)
   )
   df_99_private = (
       df_99_gen[df_99_gen["Setor"] == "Private"]
       if len(df_99_gen) > 0
-      else pd.DataFrame(columns=cols_29_furo)
+      else pd.DataFrame(columns=cols_30_furo)
   )
   df_99_operacao = (
       df_99_gen[df_99_gen["Setor"] == "Operação"]
       if len(df_99_gen) > 0
-      else pd.DataFrame(columns=cols_29_furo)
+      else pd.DataFrame(columns=cols_30_furo)
   )
 
   print("\n[6/6] Exportando Dashboard Formatado em Excel...")
