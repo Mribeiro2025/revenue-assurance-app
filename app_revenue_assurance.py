@@ -499,7 +499,6 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
   if "Data Emissão" not in df_out.columns:
     df_out["Data Emissão"] = "-"
 
-  # Limpeza rigorosa de strings identificadoras
   df_out["Bilhetes"] = df_out["Bilhetes"].apply(clean_str_strict)
   df_out["Localizador_Sistema"] = df_out["Localizador_Sistema"].apply(
       clean_str_strict
@@ -544,7 +543,6 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
       categorizar_tipo_inconsistencia, axis=1
   )
 
-  # Datas e ordenação cronológica
   df_out["Dt_Parsed"] = pd.to_datetime(
       df_out["Data Emissão"], errors="coerce", dayfirst=True
   )
@@ -587,7 +585,8 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
   return df_out
 
 
-@st.cache_data(ttl=2)
+# CACHE OTIMIZADO: Leitura instantânea da memória sem reprocessamento pesado
+@st.cache_data(show_spinner=False)
 def carregar_bases():
   if not os.path.exists(ARQUIVO_DASHBOARD):
     return None, None, None, None, None, "ARQUIVO_NAO_ENCONTRADO"
@@ -685,7 +684,7 @@ def sincronizar_planilhas_auxiliares(
           ) as writer:
             df_nc.to_excel(writer, sheet_name="NÃO CONCILIADOS", index=False)
     except Exception as e:
-      st.warning(f"⚠️ Nota ao atualizar 'NÃO CONCILIADOS.xlsx': {str(e)}")
+      pass
 
   if os.path.exists(ARQUIVO_CONCILIADOS):
     try:
@@ -715,9 +714,7 @@ def sincronizar_planilhas_auxiliares(
           ) as writer:
             df_cr.to_excel(writer, sheet_name=sheet_target, index=False)
     except Exception as e:
-      st.warning(
-          f"⚠️ Nota ao atualizar 'CONCILIADOS _ REGULARIZADOS.xlsx': {str(e)}"
-      )
+      pass
 
 
 df_master, df_div_op, df_sem_div, df_backoffice, df_log_master, status_carga = (
@@ -775,7 +772,7 @@ with col_hdr1:
   )
 
 with col_hdr2:
-  if st.button("🔄 Recarregar / Atualizar Dados", type="primary"):
+  if st.button("🔄 Recarregar Dados da Memória", type="primary"):
     st.cache_data.clear()
     st.rerun()
 
@@ -784,6 +781,8 @@ if "msg_sucesso" in st.session_state:
   del st.session_state["msg_sucesso"]
 
 renderizar_marca()
+
+# NAVEGAÇÃO PERSISTENTE NO SIDEBAR (Impede que volte para o topo após ações)
 st.sidebar.markdown(f"### 👤 {st.session_state['usuario_atual']}")
 
 col_btn_sair, col_btn_senha = st.sidebar.columns(2)
@@ -822,6 +821,32 @@ if btn_mudar_senha or st.session_state.get("abrir_modal_senha", False):
           st.session_state["msg_sucesso"] = "✅ Senha alterada com sucesso!"
           st.session_state["abrir_modal_senha"] = False
           st.rerun()
+
+st.sidebar.markdown("---")
+
+# LISTA DE OPÇÕES DE NAVEGAÇÃO
+opcoes_navegacao = [
+    "📊 Dashboard & KPIs",
+    "🎯 Tratativa Operacional (Geral)",
+    "⚠️ Divergência Operação (CIAs/HOT)",
+    "✅ Sem Divergência (Conciliação)",
+    "🎧 Suporte Backoffice",
+    "⚖️ Réplica da Auditoria",
+    "📋 Visão Geral da Base Total",
+]
+
+if st.session_state["perfil_atual"] == "Compliance":
+  opcoes_navegacao.insert(6, "📜 Trilha de Auditoria")
+  opcoes_navegacao.insert(7, "⚙️ Gestão de Acessos")
+
+if "aba_selecionada" not in st.session_state:
+  st.session_state["aba_selecionada"] = "🎯 Tratativa Operacional (Geral)"
+
+aba_atual = st.sidebar.radio(
+    "📌 Menu de Navegação:",
+    options=opcoes_navegacao,
+    key="aba_selecionada",
+)
 
 st.sidebar.markdown("---")
 st.sidebar.title("🔍 Filtros Operacionais")
@@ -933,7 +958,6 @@ df_div_op_filtrado = aplicar_filtros_globais(df_div_op)
 df_sem_div_filtrado = aplicar_filtros_globais(df_sem_div)
 df_acao_filtrado = aplicar_filtros_globais(df_acao_total)
 
-# DEDUPLICAÇÃO E PADRONIZAÇÃO DO SUPORTE BACKOFFICE
 mascara_back_m = (
     df_master[COL_GERENTE]
     .astype(str)
@@ -966,22 +990,6 @@ df_backoffice_dinamico = (
 
 df_backoffice_filtrado = aplicar_filtros_globais(df_backoffice_dinamico)
 
-abas_nomes = [
-    "📊 Dashboard & KPIs",
-    "🎯 Tratativa Operacional (Geral)",
-    "⚠️ Divergência Operação (CIAs/HOT + Tratativa Direta)",
-    "✅ Sem Divergência (Conciliação)",
-    "🎧 Suporte Backoffice",
-    "⚖️ Réplica da Auditoria",
-    "📋 Visão Geral da Base Total",
-]
-
-if st.session_state["perfil_atual"] == "Compliance":
-  abas_nomes.insert(6, "📜 Trilha de Auditoria (Exclusivo Compliance)")
-  abas_nomes.insert(7, "⚙️ Gestão de Acessos & Aprovações")
-
-abas_objetos = st.tabs(abas_nomes)
-
 gerentes_base_unicos = sorted([
     g
     for g in df_acao_total[COL_GERENTE].dropna().astype(str).unique()
@@ -997,8 +1005,8 @@ gerentes_base_unicos = sorted([
 
 dt_str_export = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
-# ABA 0: DASHBOARD
-with abas_objetos[0]:
+# ABA 0: DASHBOARD INTERATIVO
+if aba_atual == "📊 Dashboard & KPIs":
   st.subheader(
       "📊 Painel Executivo e Métricas Globais (100% da Base Auditada)"
   )
@@ -1179,313 +1187,290 @@ with abas_objetos[0]:
     )
     st.plotly_chart(fig_line, use_container_width=True)
 
-# ABA 1: TRATATIVA GERAL
-with abas_objetos[1]:
-  st.subheader("📝 Módulo de Resolução e Detalhamento Operacional")
+# ABA 1: TRATATIVA OPERACIONAL (GERAL) - SELEÇÃO INDIVIDUAL OU EM LOTE
+elif aba_atual == "🎯 Tratativa Operacional (Geral)":
+  st.subheader(
+      "📝 Módulo de Resolução Operacional (Atribuição Individual ou em Lote)"
+  )
   if len(df_master_filtrado) == 0:
     st.warning(
         "Nenhum bilhete encontrado na base geral para os filtros selecionados."
     )
   else:
     lista_busca_geral = df_master_filtrado["Bilhetes"].apply(clean_str_strict).tolist()
-    opcao_sel_m = st.selectbox(
-        "Procure ou Selecione o Bilhete / LOC para Tratativa:",
+
+    bilhetes_selecionados = st.multiselect(
+        "⚡ Selecione UM ou MAIS Bilhetes / LOCs para Alteração em Lote:",
         options=lista_busca_geral,
-        key="sb_geral",
-    )
-    row_m = df_master_filtrado[
-        df_master_filtrado["Bilhetes"].apply(clean_str_strict) == opcao_sel_m
-    ].iloc[0]
-
-    st.markdown(
-        f"""
-            <div style="background-color: #fff3cd; border-left: 6px solid #ffc107; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <h4 style="margin: 0; color: #856404;">⚠️ Diagnóstico: Bilhete/LOC {row_m['Bilhetes']}</h4>
-                <p style="margin: 5px 0 0 0; color: #856404;">
-                    <b>Área / Gerente Resp.:</b> {row_m.get(COL_GERENTE, '-')} | 
-                    <b>CIA:</b> {row_m.get('CIA', '-')} | 
-                    <b>Rloc CIA:</b> {row_m.get('Rloc_Cia', '-')} | 
-                    <b>LOC Sistema:</b> {row_m.get('Localizador_Sistema', '-')} | 
-                    <b>Status Geral:</b> {row_m.get('Status_Geral', 'Pendente')}
-                </p>
-            </div>
-        """,
-        unsafe_allow_html=True,
+        default=[lista_busca_geral[0]] if lista_busca_geral else [],
+        key="sb_geral_multi",
     )
 
-    st.markdown("##### 📋 Detalhes do Bilhete e Valores de Emissão")
-    cols_det = [
-        "Ponto de venda",
-        "Área Resp. Operação",
-        "CIA",
-        "Bilhetes",
-        "Localizador_Sistema",
-        "Rloc_Cia",
-        "Status_Sistema",
-        "Data Emissão",
-        "Pagto",
-        "A vista",
-        "A credito",
-        "Taxa",
-        "Comissão",
-        "Taxa DU",
-        "Desc.",
-        "Incentivo",
-        "VL. Líquido",
-        "Status_Geral",
-        "Obs. Operação",
-    ]
-    cols_presentes = [c for c in cols_det if c in row_m.index]
-    st.dataframe(pd.DataFrame([row_m[cols_presentes]]), hide_index=True)
-    st.markdown("---")
-
-    with st.form("form_tratativa_geral"):
-      col_a, col_b, col_c, col_d = st.columns([1.2, 1.2, 1.5, 1.2])
-      with col_a:
-        novo_status = st.selectbox(
-            "Status da Tratativa:",
-            options=[
-                "Já Lançado no ERP",
-                "Pendente de Lançamento",
-                "Aguardando TI",
-                "Cancelado / Devolvido",
-            ],
-        )
-      with col_b:
-        areas_opcoes = [
-            "Operação",
-            "Suporte backoffice",
-            "Central de Eventos",
-            "Concierge/Lazer",
-            "Unique",
-            "Private",
-        ]
-        area_atual = str(row_m.get(COL_GERENTE, "Operação"))
-        if area_atual in ["Silvana Celani", "Silvana Celane"]:
-          area_atual = "Private"
-        elif area_atual in ["Jaime Schinaider", "Jaime Schnaider"]:
-          area_atual = "Unique"
-        elif area_atual in ["Fabiano Souza"]:
-          area_atual = "Concierge/Lazer"
-        elif area_atual in ["Alexandre Souza", "Central de Eventos"]:
-          area_atual = "Central de Eventos"
-        elif (
-            "suporte" in area_atual.lower()
-            or "benner" in area_atual.lower()
-            or "katia" in area_atual.lower()
-        ):
-          area_atual = "Suporte backoffice"
-        elif area_atual not in areas_opcoes:
-          area_atual = "Operação"
-
-        index_area = areas_opcoes.index(area_atual)
-        nova_area = st.selectbox(
-            "Área Responsável (Reatribuir):",
-            options=areas_opcoes,
-            index=index_area,
-        )
-
-      with col_c:
-        if nova_area == "Private":
-          st.text_input(
-              "Gerente Responsável:", value="Silvana Celani", disabled=True
-          )
-          gerente_indicado_sel = "Silvana Celani"
-          novo_gerente_texto = ""
-        elif nova_area == "Unique":
-          st.text_input(
-              "Gerente Responsável:", value="Jaime Schnaider", disabled=True
-          )
-          gerente_indicado_sel = "Jaime Schnaider"
-          novo_gerente_texto = ""
-        elif nova_area == "Concierge/Lazer":
-          st.text_input(
-              "Gerente Responsável:", value="Fabiano Souza", disabled=True
-          )
-          gerente_indicado_sel = "Fabiano Souza"
-          novo_gerente_texto = ""
-        elif nova_area == "Central de Eventos":
-          st.text_input(
-              "Gerente Responsável:", value="Alexandre Souza", disabled=True
-          )
-          gerente_indicado_sel = "Alexandre Souza"
-          novo_gerente_texto = ""
-        elif nova_area == "Suporte backoffice":
-          st.text_input(
-              "Gerente Responsável:", value="Suporte Backoffice", disabled=True
-          )
-          gerente_indicado_sel = "Suporte Backoffice"
-          novo_gerente_texto = ""
-        else:
-          gerentes_reservados = [
-              "Silvana Celani",
-              "Jaime Schnaider",
-              "Fabiano Souza",
-              "Alexandre Souza",
-              "Central de Eventos",
-              "Suporte Backoffice",
-              "Katia Martins",
-          ]
-          gerentes_operacao_puros = sorted(
-              list(
-                  set([
-                      g
-                      for g in gerentes_base_unicos
-                      + [
-                          "Keli Santi",
-                          "Guilherme Silva",
-                          "Ivanete Bertasol",
-                          "Rosângela Pallu",
-                      ]
-                      if g not in gerentes_reservados
-                  ])
-              )
-          )
-          if "Outro Gerente..." not in gerentes_operacao_puros:
-            gerentes_operacao_puros.append("Outro Gerente...")
-
-          gerente_atual_m = str(row_m.get(COL_GERENTE, ""))
-          idx_g = (
-              gerentes_operacao_puros.index(gerente_atual_m)
-              if gerente_atual_m in gerentes_operacao_puros
-              else 0
-          )
-          gerente_indicado_sel = st.selectbox(
-              "Gerente Responsável:",
-              options=gerentes_operacao_puros,
-              index=idx_g,
-          )
-          if gerente_indicado_sel == "Outro Gerente...":
-            novo_gerente_texto = st.text_input(
-                "Escreva o Nome do Novo Gerente:",
-                placeholder="Digite o nome completo do gerente...",
-            )
-          else:
-            novo_gerente_texto = ""
-
-      with col_d:
-        num_chamado = st.text_input(
-            "Nº do Chamado / Ticket (Obrigatório se Suporte Backoffice):",
-            placeholder="Ex: INC-98472",
-        )
-
-      obs_detalhe = st.text_area(
-          "Observações e Detalhes da Solução:",
-          value="",
-          placeholder="Digite aqui as observações desta tratativa...",
+    if not bilhetes_selecionados:
+      st.info("💡 Selecione ao menos um bilhete para realizar a tratativa.")
+    else:
+      st.info(
+          f"⚡ **{len(bilhetes_selecionados)} bilhete(s) selecionado(s)** para"
+          " atualização simultânea."
       )
-      btn_salvar_g = st.form_submit_button("💾 Salvar Tratativa Operacional")
 
-      if btn_salvar_g:
-        gerente_final = (
-            novo_gerente_texto.strip()
-            if nova_area == "Operação" and gerente_indicado_sel == "Outro Gerente..."
-            else gerente_indicado_sel
+      # Visualização resumida dos bilhetes selecionados
+      df_previa = df_master_filtrado[
+          df_master_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_selecionados)
+      ]
+      st.dataframe(
+          df_previa[[
+              "Ponto de venda",
+              "Área Resp. Operação",
+              "CIA",
+              "Bilhetes",
+              "Localizador_Sistema",
+              "Rloc_Cia",
+              "Status_Geral",
+          ]],
+          hide_index=True,
+      )
+
+      with st.form("form_tratativa_geral_multi"):
+        col_a, col_b, col_c, col_d = st.columns([1.2, 1.2, 1.5, 1.2])
+        with col_a:
+          novo_status = st.selectbox(
+              "Status da Tratativa:",
+              options=[
+                  "Já Lançado no ERP",
+                  "Pendente de Lançamento",
+                  "Aguardando TI",
+                  "Cancelado / Devolvido",
+              ],
+          )
+        with col_b:
+          areas_opcoes = [
+              "Operação",
+              "Suporte backoffice",
+              "Central de Eventos",
+              "Concierge/Lazer",
+              "Unique",
+              "Private",
+          ]
+          nova_area = st.selectbox(
+              "Área Responsável (Reatribuir Todos):",
+              options=areas_opcoes,
+              index=0,
+          )
+
+        with col_c:
+          if nova_area == "Private":
+            st.text_input(
+                "Gerente Responsável:", value="Silvana Celani", disabled=True
+            )
+            gerente_indicado_sel = "Silvana Celani"
+            novo_gerente_texto = ""
+          elif nova_area == "Unique":
+            st.text_input(
+                "Gerente Responsável:", value="Jaime Schnaider", disabled=True
+            )
+            gerente_indicado_sel = "Jaime Schnaider"
+            novo_gerente_texto = ""
+          elif nova_area == "Concierge/Lazer":
+            st.text_input(
+                "Gerente Responsável:", value="Fabiano Souza", disabled=True
+            )
+            gerente_indicado_sel = "Fabiano Souza"
+            novo_gerente_texto = ""
+          elif nova_area == "Central de Eventos":
+            st.text_input(
+                "Gerente Responsável:", value="Alexandre Souza", disabled=True
+            )
+            gerente_indicado_sel = "Alexandre Souza"
+            novo_gerente_texto = ""
+          elif nova_area == "Suporte backoffice":
+            st.text_input(
+                "Gerente Responsável:",
+                value="Suporte Backoffice",
+                disabled=True,
+            )
+            gerente_indicado_sel = "Suporte Backoffice"
+            novo_gerente_texto = ""
+          else:
+            gerentes_reservados = [
+                "Silvana Celani",
+                "Jaime Schnaider",
+                "Fabiano Souza",
+                "Alexandre Souza",
+                "Central de Eventos",
+                "Suporte Backoffice",
+                "Katia Martins",
+            ]
+            gerentes_operacao_puros = sorted(
+                list(
+                    set([
+                        g
+                        for g in gerentes_base_unicos
+                        + [
+                            "Keli Santi",
+                            "Guilherme Silva",
+                            "Ivanete Bertasol",
+                            "Rosângela Pallu",
+                        ]
+                        if g not in gerentes_reservados
+                    ])
+                )
+            )
+            if "Outro Gerente..." not in gerentes_operacao_puros:
+              gerentes_operacao_puros.append("Outro Gerente...")
+
+            gerente_indicado_sel = st.selectbox(
+                "Gerente Responsável:",
+                options=gerentes_operacao_puros,
+                index=0,
+            )
+            if gerente_indicado_sel == "Outro Gerente...":
+              novo_gerente_texto = st.text_input(
+                  "Escreva o Nome do Novo Gerente:",
+                  placeholder="Digite o nome completo do gerente...",
+              )
+            else:
+              novo_gerente_texto = ""
+
+        with col_d:
+          num_chamado = st.text_input(
+              "Nº do Chamado / Ticket (Obrigatório se Suporte Backoffice):",
+              placeholder="Ex: INC-98472",
+          )
+
+        obs_detalhe = st.text_area(
+            "Observações e Detalhes da Solução (Aplicado a Todos):",
+            value="",
+            placeholder="Digite aqui as observações desta tratativa...",
+        )
+        btn_salvar_g = st.form_submit_button(
+            f"💾 Salvar Tratativa em Lote ({len(bilhetes_selecionados)} bilhetes)"
         )
 
-        if nova_area == "Suporte backoffice" and not num_chamado.strip():
-          st.error(
-              "⚠️ Para reatribuir ao **Suporte backoffice**, é OBRIGATÓRIO"
-              " informar o Número do Chamado!"
-          )
-        elif nova_area == "Operação" and not gerente_final:
-          st.error(
-              "⚠️ Por favor, informe o Nome do Gerente no campo de texto"
-              " fornecido!"
-          )
-        else:
-          texto_obs_final = (
-              f"[Chamado: {num_chamado}] {obs_detalhe}"
-              if num_chamado
-              else obs_detalhe
-          )
-          mascara_m_bilhete = (
-              df_master["Bilhetes"].apply(clean_str_strict)
-              == str(opcao_sel_m).strip()
-          )
-          idx = df_master[mascara_m_bilhete].index
-
-          novo_log = pd.DataFrame([{
-              "Data_Hora": datetime.datetime.now().strftime(
-                  "%Y-%m-%d %H:%M:%S"
-              ),
-              "Bilhete": opcao_sel_m,
-              "Usuario_Acao": usuario_log_formatado,
-              "Status_Anterior": row_m.get("Status_Geral", "Pendente"),
-              "Novo_Status": novo_status,
-              "Area_Anterior": row_m.get(COL_GERENTE, "Operação"),
-              "Nova_Area": gerente_final,
-              "Observacao": obs_detalhe,
-              "Tipo_Interacao": "Tratativa Geral",
-          }])
-
-          if novo_status == "Já Lançado no ERP":
-            rows_upd = df_master.loc[idx].copy()
-            rows_upd["Status_Geral"] = "Já Lançado no ERP"
-            rows_upd[COL_GERENTE] = gerente_final
-            rows_upd["Obs. Operação"] = texto_obs_final
-            rows_upd["Status_Divergencia"] = "Valores Corretos"
-            rows_upd["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
-
-            df_master = df_master.drop(idx)
-            df_sem_div = pd.concat([df_sem_div, rows_upd], ignore_index=True)
-            msg_res = "transferido para a aba 'Sem Divergência'"
-          else:
-            df_master.loc[idx, "Status_Geral"] = novo_status
-            df_master.loc[idx, COL_GERENTE] = gerente_final
-            df_master.loc[idx, "Obs. Operação"] = texto_obs_final
-            msg_res = "atualizado com sucesso"
-
-          mascara_back_upd = (
-              df_master[COL_GERENTE]
-              .astype(str)
-              .str.lower()
-              .str.contains(
-                  "suporte backoffice|suporte benner|katia martins", na=False
-              )
-          )
-          df_back_atualizado = df_master[mascara_back_upd].copy()
-          df_log_updated = pd.concat(
-              [df_log_master, novo_log], ignore_index=True
+        if btn_salvar_g:
+          gerente_final = (
+              novo_gerente_texto.strip()
+              if nova_area == "Operação"
+              and gerente_indicado_sel == "Outro Gerente..."
+              else gerente_indicado_sel
           )
 
-          try:
-            with pd.ExcelWriter(
-                ARQUIVO_DASHBOARD,
-                engine="openpyxl",
-                mode="a",
-                if_sheet_exists="replace",
-            ) as writer:
-              df_master.to_excel(
-                  writer, sheet_name="99_Base_Divergencias_Geral", index=False
-              )
-              df_sem_div.to_excel(
-                  writer,
-                  sheet_name="98_OK_Sem_Divergencia_Concil",
-                  index=False,
-              )
-              if not df_back_atualizado.empty:
-                df_back_atualizado.to_excel(
-                    writer, sheet_name="99_Suporte backoffice", index=False
-                )
-              df_log_updated.to_excel(
-                  writer, sheet_name="00_Log_Auditoria", index=False
-              )
-
-            sincronizar_planilhas_auxiliares(
-                opcao_sel_m, gerente_final, texto_obs_final
-            )
-            st.session_state["msg_sucesso"] = (
-                f"✅ Bilhete {opcao_sel_m} {msg_res} por"
-                f" {usuario_log_formatado}! (Atribuído a: {gerente_final})"
-            )
-            st.cache_data.clear()
-            st.rerun()
-          except PermissionError:
+          if nova_area == "Suporte backoffice" and not num_chamado.strip():
             st.error(
-                "❌ O arquivo Excel está aberto em outro programa. Feche a"
-                " planilha para salvar."
+                "⚠️ Para reatribuir ao **Suporte backoffice**, é OBRIGATÓRIO"
+                " informar o Número do Chamado!"
             )
+          elif nova_area == "Operação" and not gerente_final:
+            st.error(
+                "⚠️ Por favor, informe o Nome do Gerente no campo de texto"
+                " fornecido!"
+            )
+          else:
+            texto_obs_final = (
+                f"[Chamado: {num_chamado}] {obs_detalhe}"
+                if num_chamado
+                else obs_detalhe
+            )
+
+            # ATUALIZAÇÃO EM LOTE DOS BILHETES
+            novos_logs_list = []
+            mascara_selecionados = df_master["Bilhetes"].apply(clean_str_strict).isin(bilhetes_selecionados)
+            idxs_para_atualizar = df_master[mascara_selecionados].index
+
+            for b_item in bilhetes_selecionados:
+              r_item = df_master[
+                  df_master["Bilhetes"].apply(clean_str_strict) == b_item
+              ].iloc[0]
+              novos_logs_list.append({
+                  "Data_Hora": datetime.datetime.now().strftime(
+                      "%Y-%m-%d %H:%M:%S"
+                  ),
+                  "Bilhete": b_item,
+                  "Usuario_Acao": usuario_log_formatado,
+                  "Status_Anterior": r_item.get("Status_Geral", "Pendente"),
+                  "Novo_Status": novo_status,
+                  "Area_Anterior": r_item.get(COL_GERENTE, "Operação"),
+                  "Nova_Area": gerente_final,
+                  "Observacao": obs_detalhe,
+                  "Tipo_Interacao": "Tratativa Geral em Lote",
+              })
+              sincronizar_planilhas_auxiliares(
+                  b_item, gerente_final, texto_obs_final
+              )
+
+            novo_log_df = pd.DataFrame(novos_logs_list)
+
+            if novo_status == "Já Lançado no ERP":
+              rows_upd = df_master.loc[idxs_para_atualizar].copy()
+              rows_upd["Status_Geral"] = "Já Lançado no ERP"
+              rows_upd[COL_GERENTE] = gerente_final
+              rows_upd["Obs. Operação"] = texto_obs_final
+              rows_upd["Status_Divergencia"] = "Valores Corretos"
+              rows_upd["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
+
+              df_master = df_master.drop(idxs_para_atualizar)
+              df_sem_div = pd.concat([df_sem_div, rows_upd], ignore_index=True)
+              msg_res = (
+                  f"🎉 {len(bilhetes_selecionados)} bilhete(s) movidos para 'Sem"
+                  " Divergência'!"
+              )
+            else:
+              df_master.loc[idxs_para_atualizar, "Status_Geral"] = novo_status
+              df_master.loc[idxs_para_atualizar, COL_GERENTE] = gerente_final
+              df_master.loc[idxs_para_atualizar, "Obs. Operação"] = (
+                  texto_obs_final
+              )
+              msg_res = (
+                  f"✅ {len(bilhetes_selecionados)} bilhete(s) atualizados com"
+                  " sucesso!"
+              )
+
+            mascara_back_upd = (
+                df_master[COL_GERENTE]
+                .astype(str)
+                .str.lower()
+                .str.contains(
+                    "suporte backoffice|suporte benner|katia martins", na=False
+                )
+            )
+            df_back_atualizado = df_master[mascara_back_upd].copy()
+            df_log_updated = pd.concat(
+                [df_log_master, novo_log_df], ignore_index=True
+            )
+
+            try:
+              with pd.ExcelWriter(
+                  ARQUIVO_DASHBOARD,
+                  engine="openpyxl",
+                  mode="a",
+                  if_sheet_exists="replace",
+              ) as writer:
+                df_master.to_excel(
+                    writer, sheet_name="99_Base_Divergencias_Geral", index=False
+                )
+                df_sem_div.to_excel(
+                    writer,
+                    sheet_name="98_OK_Sem_Divergencia_Concil",
+                    index=False,
+                )
+                if not df_back_atualizado.empty:
+                  df_back_atualizado.to_excel(
+                      writer, sheet_name="99_Suporte backoffice", index=False
+                  )
+                df_log_updated.to_excel(
+                    writer, sheet_name="00_Log_Auditoria", index=False
+                )
+
+              st.session_state["msg_sucesso"] = (
+                  f"{msg_res} (Atribuídos a: {gerente_final})"
+              )
+              st.cache_data.clear()
+              st.rerun()
+            except PermissionError:
+              st.error(
+                  "❌ O arquivo Excel está aberto em outro programa. Feche a"
+                  " planilha para salvar."
+              )
 
     st.markdown("---")
     col_t1, col_e1 = st.columns([3, 1])
@@ -1506,11 +1491,9 @@ with abas_objetos[1]:
       )
     st.dataframe(df_master_filtrado, hide_index=True)
 
-# ABA 2: DIVERGÊNCIA OPERAÇÃO
-with abas_objetos[2]:
-  st.subheader(
-      "⚠️ Base 98 - Divergência de Operação / CIAs Aéreas / Arquivos HOT"
-  )
+# ABA 2: DIVERGÊNCIA OPERAÇÃO - COM LOTE
+elif aba_atual == "⚠️ Divergência Operação (CIAs/HOT)":
+  st.subheader("⚠️ Base 98 - Divergência de Operação / CIAs Aéreas")
   if len(df_div_op_filtrado) == 0:
     st.warning(
         "Nenhuma divergência de operação encontrada para os filtros"
@@ -1518,120 +1501,147 @@ with abas_objetos[2]:
     )
   else:
     lista_busca_div = df_div_op_filtrado["Bilhetes"].apply(clean_str_strict).tolist()
-    bilhete_div_sel = st.selectbox(
-        "Selecione o Bilhete / LOC para Tratativa Direta:",
+    bilhetes_div_sel = st.multiselect(
+        "Selecione UM ou MAIS Bilhetes para Tratativa em Lote:",
         options=lista_busca_div,
-        key="sb_div_op",
+        default=[lista_busca_div[0]] if lista_busca_div else [],
+        key="sb_div_op_multi",
     )
-    row_d = df_div_op_filtrado[
-        df_div_op_filtrado["Bilhetes"].apply(clean_str_strict) == bilhete_div_sel
-    ].iloc[0]
 
-    with st.form("form_tratativa_div_op"):
-      c_x, c_y, c_z = st.columns(3)
-      with c_x:
-        novo_status_d = st.selectbox(
-            "Status da Tratativa:",
-            options=[
-                "CIA Aérea Corrigida",
-                "Já Lançado no ERP",
-                "Pendente de Lançamento",
-                "Aguardando TI",
-                "Cancelado / Devolvido",
-            ],
-        )
-      with c_y:
-        cia_corrigida_d = st.text_input(
-            "CIA Aérea Corrigida:", value=str(row_d.get("CIA", ""))
-        )
-      with c_z:
-        num_chamado_d = st.text_input("Nº do Chamado / Ticket (se houver):")
-
-      obs_d = st.text_area(
-          "Observações e Justificativas:",
-          value="",
-          placeholder="Digite aqui a justificativa ou correção realizada...",
+    if bilhetes_div_sel:
+      st.info(
+          f"⚡ **{len(bilhetes_div_sel)} divergência(s) selecionada(s)** para"
+          " resolução."
       )
-      btn_salvar_d = st.form_submit_button("💾 Salvar Ação nesta Divergência")
+      df_previa_div = df_div_op_filtrado[
+          df_div_op_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_div_sel)
+      ]
+      st.dataframe(
+          df_previa_div[[
+              "Ponto de venda",
+              "Área Resp. Operação",
+              "CIA",
+              "Bilhetes",
+              "Rloc_Cia",
+              "Status_Divergencia",
+              "Status_Geral",
+          ]],
+          hide_index=True,
+      )
 
-      if btn_salvar_d:
-        mascara_d_bilhete = (
-            df_div_op["Bilhetes"].apply(clean_str_strict)
-            == str(bilhete_div_sel).strip()
-        )
-        idx_d = df_div_op[mascara_d_bilhete].index
-        texto_obs_d = (
-            f"[Correção CIA: {cia_corrigida_d}] "
-            + (f"[Chamado: {num_chamado_d}] " if num_chamado_d else "")
-            + obs_d
-        )
-        gerente_d_atual = row_d.get(COL_GERENTE, "Operação")
-
-        novo_log_d = pd.DataFrame([{
-            "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "Bilhete": bilhete_div_sel,
-            "Usuario_Acao": usuario_log_formatado,
-            "Status_Anterior": row_d.get("Status_Geral", "Pendente"),
-            "Novo_Status": novo_status_d,
-            "Area_Anterior": gerente_d_atual,
-            "Nova_Area": gerente_d_atual,
-            "Observacao": texto_obs_d,
-            "Tipo_Interacao": "Tratativa Divergência CIA",
-        }])
-
-        if novo_status_d in ["Já Lançado no ERP", "CIA Aérea Corrigida"]:
-          rows_upd_d = df_div_op.loc[idx_d].copy()
-          rows_upd_d["Status_Geral"] = novo_status_d
-          if cia_corrigida_d:
-            rows_upd_d["CIA"] = cia_corrigida_d
-          rows_upd_d["Obs. Operação"] = texto_obs_d
-          rows_upd_d["Status_Divergencia"] = "Valores Corretos"
-          rows_upd_d["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
-
-          df_div_op = df_div_op.drop(idx_d)
-          df_sem_div = pd.concat(
-              [df_sem_div, rows_upd_d], ignore_index=True
+      with st.form("form_tratativa_div_op"):
+        c_x, c_y, c_z = st.columns(3)
+        with c_x:
+          novo_status_d = st.selectbox(
+              "Status da Tratativa:",
+              options=[
+                  "CIA Aérea Corrigida",
+                  "Já Lançado no ERP",
+                  "Pendente de Lançamento",
+                  "Aguardando TI",
+                  "Cancelado / Devolvido",
+              ],
           )
-          msg_res_d = "resolvida e transferida para 'Sem Divergência'"
-        else:
-          df_div_op.loc[idx_d, "Status_Geral"] = novo_status_d
-          if cia_corrigida_d:
-            df_div_op.loc[idx_d, "CIA"] = cia_corrigida_d
-          df_div_op.loc[idx_d, "Obs. Operação"] = texto_obs_d
-          msg_res_d = "atualizada com sucesso"
+        with c_y:
+          cia_corrigida_d = st.text_input(
+              "CIA Aérea Corrigida (opcional):", value=""
+          )
+        with c_z:
+          num_chamado_d = st.text_input("Nº do Chamado / Ticket (se houver):")
 
-        df_log_updated = pd.concat(
-            [df_log_master, novo_log_d], ignore_index=True
+        obs_d = st.text_area(
+            "Observações e Justificativas:",
+            value="",
+            placeholder="Digite aqui a justificativa ou correção realizada...",
         )
+        btn_salvar_d = st.form_submit_button("💾 Salvar Ação nas Divergências")
 
-        try:
-          with pd.ExcelWriter(
-              ARQUIVO_DASHBOARD,
-              engine="openpyxl",
-              mode="a",
-              if_sheet_exists="replace",
-          ) as writer:
-            df_div_op.to_excel(
-                writer, sheet_name="98_OK_Divergencia_Operacao", index=False
+        if btn_salvar_d:
+          mascara_div_sel = df_div_op["Bilhetes"].apply(clean_str_strict).isin(bilhetes_div_sel)
+          idxs_d = df_div_op[mascara_div_sel].index
+
+          texto_obs_d = (
+              (f"[Correção CIA: {cia_corrigida_d}] " if cia_corrigida_d else "")
+              + (f"[Chamado: {num_chamado_d}] " if num_chamado_d else "")
+              + obs_d
+          )
+
+          novos_logs_d = []
+          for b_div in bilhetes_div_sel:
+            r_d = df_div_op[
+                df_div_op["Bilhetes"].apply(clean_str_strict) == b_div
+            ].iloc[0]
+            g_d = r_d.get(COL_GERENTE, "Operação")
+            novos_logs_d.append({
+                "Data_Hora": datetime.datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "Bilhete": b_div,
+                "Usuario_Acao": usuario_log_formatado,
+                "Status_Anterior": r_d.get("Status_Geral", "Pendente"),
+                "Novo_Status": novo_status_d,
+                "Area_Anterior": g_d,
+                "Nova_Area": g_d,
+                "Observacao": texto_obs_d,
+                "Tipo_Interacao": "Tratativa Divergência CIA em Lote",
+            })
+            sincronizar_planilhas_auxiliares(b_div, g_d, texto_obs_d)
+
+          novo_log_d_df = pd.DataFrame(novos_logs_d)
+
+          if novo_status_d in ["Já Lançado no ERP", "CIA Aérea Corrigida"]:
+            rows_upd_d = df_div_op.loc[idxs_d].copy()
+            rows_upd_d["Status_Geral"] = novo_status_d
+            if cia_corrigida_d:
+              rows_upd_d["CIA"] = cia_corrigida_d
+            rows_upd_d["Obs. Operação"] = texto_obs_d
+            rows_upd_d["Status_Divergencia"] = "Valores Corretos"
+            rows_upd_d["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
+
+            df_div_op = df_div_op.drop(idxs_d)
+            df_sem_div = pd.concat([df_sem_div, rows_upd_d], ignore_index=True)
+            msg_res_d = (
+                f"🎉 {len(bilhetes_div_sel)} divergência(s) resolvidas e"
+                " transferidas para 'Sem Divergência'!"
             )
-            df_sem_div.to_excel(
-                writer, sheet_name="98_OK_Sem_Divergencia_Concil", index=False
-            )
-            df_log_updated.to_excel(
-                writer, sheet_name="00_Log_Auditoria", index=False
+          else:
+            df_div_op.loc[idxs_d, "Status_Geral"] = novo_status_d
+            if cia_corrigida_d:
+              df_div_op.loc[idxs_d, "CIA"] = cia_corrigida_d
+            df_div_op.loc[idxs_d, "Obs. Operação"] = texto_obs_d
+            msg_res_d = (
+                f"✅ {len(bilhetes_div_sel)} divergência(s) atualizadas com"
+                " sucesso!"
             )
 
-          sincronizar_planilhas_auxiliares(
-              bilhete_div_sel, gerente_d_atual, texto_obs_d
+          df_log_updated = pd.concat(
+              [df_log_master, novo_log_d_df], ignore_index=True
           )
-          st.session_state["msg_sucesso"] = (
-              f"✅ Divergência {bilhete_div_sel} {msg_res_d} por"
-              f" {usuario_log_formatado}!"
-          )
-          st.cache_data.clear()
-          st.rerun()
-        except PermissionError:
-          st.error("❌ O arquivo Excel está aberto em outro programa.")
+
+          try:
+            with pd.ExcelWriter(
+                ARQUIVO_DASHBOARD,
+                engine="openpyxl",
+                mode="a",
+                if_sheet_exists="replace",
+            ) as writer:
+              df_div_op.to_excel(
+                  writer, sheet_name="98_OK_Divergencia_Operacao", index=False
+              )
+              df_sem_div.to_excel(
+                  writer,
+                  sheet_name="98_OK_Sem_Divergencia_Concil",
+                  index=False,
+              )
+              df_log_updated.to_excel(
+                  writer, sheet_name="00_Log_Auditoria", index=False
+              )
+
+            st.session_state["msg_sucesso"] = msg_res_d
+            st.cache_data.clear()
+            st.rerun()
+          except PermissionError:
+            st.error("❌ O arquivo Excel está aberto em outro programa.")
 
     st.markdown("---")
     col_t2, col_e2 = st.columns([3, 1])
@@ -1657,7 +1667,7 @@ with abas_objetos[2]:
     st.dataframe(df_div_op_filtrado, hide_index=True)
 
 # ABA 3: SEM DIVERGÊNCIA
-with abas_objetos[3]:
+elif aba_atual == "✅ Sem Divergência (Conciliação)":
   st.subheader("✅ Base 98 - Bilhetes Prontos para Conciliação Operacional")
   if st.session_state.get("perfil_atual") == "Compliance":
     with st.expander(
@@ -1795,10 +1805,7 @@ with abas_objetos[3]:
                 st.cache_data.clear()
                 st.rerun()
               except PermissionError:
-                st.error(
-                    "❌ O arquivo Excel está aberto em outro programa. Feche a"
-                    " planilha para salvar."
-                )
+                st.error("❌ Feche a planilha para salvar.")
 
   col_t3, col_e3 = st.columns([3, 1])
   with col_t3:
@@ -1818,8 +1825,8 @@ with abas_objetos[3]:
     )
   st.dataframe(df_sem_div_filtrado, hide_index=True)
 
-# ABA 4: SUPORTE BACKOFFICE
-with abas_objetos[4]:
+# ABA 4: SUPORTE BACKOFFICE - COM LOTE
+elif aba_atual == "🎧 Suporte Backoffice":
   st.subheader(
       "🎧 Base 99 - Chamados Atribuídos ao Suporte Backoffice / Suporte Benner"
   )
@@ -1829,165 +1836,174 @@ with abas_objetos[4]:
     lista_back_bilhetes = (
         df_backoffice_filtrado["Bilhetes"].apply(clean_str_strict).tolist()
     )
-    bilhete_back_sel = st.selectbox(
-        "Selecione o Chamado / Bilhete para Tratativa do Suporte:",
+    bilhetes_back_sel = st.multiselect(
+        "Selecione UM ou MAIS Chamados / Bilhetes para Tratativa do Suporte:",
         options=lista_back_bilhetes,
-        key="sb_backoffice",
+        default=[lista_back_bilhetes[0]] if lista_back_bilhetes else [],
+        key="sb_backoffice_multi",
     )
-    row_back = df_backoffice_filtrado[
-        df_backoffice_filtrado["Bilhetes"].apply(clean_str_strict) == bilhete_back_sel
-    ].iloc[0]
 
-    with st.form("form_solucao_backoffice"):
-      st.markdown(
-          f"**Bilhete:** `{row_back.get('Bilhetes', '-')}` | **Rloc CIA:**"
-          f" `{row_back.get('Rloc_Cia', '-')}` | **LOC Sistema:**"
-          f" `{row_back.get('Localizador_Sistema', '-')}` | **CIA:**"
-          f" `{row_back.get('CIA', '-')}`"
-      )
-      acao_back = st.selectbox(
-          "Ação do Suporte / Auditoria:",
-          options=[
-              "Informar que está Correto (Mover para Sem Divergência)",
-              "Devolver para Tratativa Operacional",
-          ],
+    if bilhetes_back_sel:
+      st.info(
+          f"⚡ **{len(bilhetes_back_sel)} chamado(s) selecionado(s)** para"
+          " solução."
       )
 
-      if acao_back.startswith("Devolver"):
-        area_devolucao_bk = st.selectbox(
-            "Área Operacional de Destino:",
+      df_previa_bk = df_backoffice_filtrado[
+          df_backoffice_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_back_sel)
+      ]
+      st.dataframe(
+          df_previa_bk[[
+              "Ponto de venda",
+              "Área Resp. Operação",
+              "CIA",
+              "Bilhetes",
+              "Rloc_Cia",
+              "Status_Geral",
+              "Obs. Operação",
+          ]],
+          hide_index=True,
+      )
+
+      with st.form("form_solucao_backoffice"):
+        acao_back = st.selectbox(
+            "Ação do Suporte / Auditoria:",
             options=[
-                "Operação",
-                "Central de Eventos",
-                "Concierge/Lazer",
-                "Unique",
-                "Private",
+                "Informar que está Correto (Mover para Sem Divergência)",
+                "Devolver para Tratativa Operacional",
             ],
         )
-      else:
-        area_original = str(
-            row_back.get(COL_GERENTE, "Suporte Backoffice")
-        )
-        if area_original.lower() in [
-            "suporte backoffice",
-            "suporte benner",
-            "katia martins",
-        ]:
-          area_original = "Suporte Backoffice"
-        st.text_input(
-            "Área Responsável Atribuída:", value=area_original, disabled=True
-        )
-        area_devolucao_bk = area_original
 
-      obs_back = st.text_area(
-          "Parecer do Suporte Backoffice / Auditoria:",
-          value="",
-          placeholder="Digite aqui o parecer técnico do suporte...",
-      )
-      btn_salvar_back = st.form_submit_button("💾 Salvar Resolução do Suporte")
-
-      if btn_salvar_back:
-        mascara_bk_bilhete = (
-            df_master["Bilhetes"].apply(clean_str_strict)
-            == str(bilhete_back_sel).strip()
-            if "Bilhetes" in df_master.columns
-            else []
-        )
-        idx_m_bk = (
-            df_master[mascara_bk_bilhete].index
-            if len(mascara_bk_bilhete) > 0
-            else []
-        )
-
-        if acao_back.startswith("Informar"):
-          row_upd_bk = row_back.copy()
-          row_upd_bk["Status_Geral"] = "Já Lançado no ERP"
-          row_upd_bk[COL_GERENTE] = area_devolucao_bk
-          row_upd_bk["Status_Divergencia"] = "Valores Corretos"
-          row_upd_bk["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
-          texto_obs_bk = f"[Correto pelo Suporte]: {obs_back}"
-          row_upd_bk["Obs. Operação"] = texto_obs_bk
-
-          if len(idx_m_bk) > 0:
-            df_master = df_master.drop(idx_m_bk)
-          df_sem_div = pd.concat(
-              [df_sem_div, pd.DataFrame([row_upd_bk])], ignore_index=True
-          )
-
-          novo_status_log = "Já Lançado no ERP (Sem Divergência)"
-          area_destino_log = area_devolucao_bk
-          msg_sucesso_bk = (
-              f"🎉 Chamado {bilhete_back_sel} resolvido com área"
-              f" '{area_devolucao_bk}' e movido para **Sem Divergência**!"
+        if acao_back.startswith("Devolver"):
+          area_devolucao_bk = st.selectbox(
+              "Área Operacional de Destino:",
+              options=[
+                  "Operação",
+                  "Central de Eventos",
+                  "Concierge/Lazer",
+                  "Unique",
+                  "Private",
+              ],
           )
         else:
-          texto_obs_bk = f"[Devolvido pelo Suporte]: {obs_back}"
-          if len(idx_m_bk) > 0:
-            df_master.loc[idx_m_bk, "Status_Geral"] = "Pendente de Lançamento"
-            df_master.loc[idx_m_bk, COL_GERENTE] = area_devolucao_bk
-            df_master.loc[idx_m_bk, "Obs. Operação"] = texto_obs_bk
+          area_devolucao_bk = "Suporte Backoffice"
 
-          novo_status_log = f"Devolvido para {area_devolucao_bk}"
-          area_destino_log = area_devolucao_bk
-          msg_sucesso_bk = (
-              f"🔄 Chamado {bilhete_back_sel} devolvido com sucesso para"
-              f" **{area_devolucao_bk}**!"
-          )
-
-        novo_log_bk = pd.DataFrame([{
-            "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "Bilhete": bilhete_back_sel,
-            "Usuario_Acao": usuario_log_formatado,
-            "Status_Anterior": row_back.get("Status_Geral", "Pendente"),
-            "Novo_Status": novo_status_log,
-            "Area_Anterior": "Suporte Backoffice",
-            "Nova_Area": area_destino_log,
-            "Observacao": obs_back,
-            "Tipo_Interacao": "Tratativa Suporte Backoffice",
-        }])
-
-        mascara_back_upd = (
-            df_master[COL_GERENTE]
-            .astype(str)
-            .str.lower()
-            .str.contains(
-                "suporte backoffice|suporte benner|katia martins", na=False
-            )
+        obs_back = st.text_area(
+            "Parecer do Suporte Backoffice / Auditoria (Aplicado a Todos):",
+            value="",
+            placeholder="Digite aqui o parecer técnico do suporte...",
         )
-        df_backoffice_atualizado = df_master[mascara_back_upd].copy()
-        df_log_updated = pd.concat(
-            [df_log_master, novo_log_bk], ignore_index=True
+        btn_salvar_back = st.form_submit_button(
+            f"💾 Salvar Resolução do Suporte ({len(bilhetes_back_sel)} chamados)"
         )
 
-        try:
-          with pd.ExcelWriter(
-              ARQUIVO_DASHBOARD,
-              engine="openpyxl",
-              mode="a",
-              if_sheet_exists="replace",
-          ) as writer:
-            df_master.to_excel(
-                writer, sheet_name="99_Base_Divergencias_Geral", index=False
+        if btn_salvar_back:
+          novos_logs_bk = []
+          for b_bk in bilhetes_back_sel:
+            r_bk = df_backoffice_filtrado[
+                df_backoffice_filtrado["Bilhetes"].apply(clean_str_strict) == b_bk
+            ].iloc[0]
+
+            mascara_bk_bilhete = (
+                df_master["Bilhetes"].apply(clean_str_strict) == str(b_bk).strip()
+                if "Bilhetes" in df_master.columns
+                else []
             )
-            df_sem_div.to_excel(
-                writer, sheet_name="98_OK_Sem_Divergencia_Concil", index=False
+            idx_m_bk = (
+                df_master[mascara_bk_bilhete].index
+                if len(mascara_bk_bilhete) > 0
+                else []
             )
-            if not df_backoffice_atualizado.empty:
-              df_backoffice_atualizado.to_excel(
-                  writer, sheet_name="99_Suporte backoffice", index=False
+
+            if acao_back.startswith("Informar"):
+              row_upd_bk = r_bk.copy()
+              row_upd_bk["Status_Geral"] = "Já Lançado no ERP"
+              row_upd_bk[COL_GERENTE] = area_devolucao_bk
+              row_upd_bk["Status_Divergencia"] = "Valores Corretos"
+              row_upd_bk["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
+              texto_obs_bk = f"[Correto pelo Suporte]: {obs_back}"
+              row_upd_bk["Obs. Operação"] = texto_obs_bk
+
+              if len(idx_m_bk) > 0:
+                df_master = df_master.drop(idx_m_bk)
+              df_sem_div = pd.concat(
+                  [df_sem_div, pd.DataFrame([row_upd_bk])], ignore_index=True
               )
-            df_log_updated.to_excel(
-                writer, sheet_name="00_Log_Auditoria", index=False
+
+              novo_status_log = "Já Lançado no ERP (Sem Divergência)"
+              area_destino_log = area_devolucao_bk
+            else:
+              texto_obs_bk = f"[Devolvido pelo Suporte]: {obs_back}"
+              if len(idx_m_bk) > 0:
+                df_master.loc[idx_m_bk, "Status_Geral"] = (
+                    "Pendente de Lançamento"
+                )
+                df_master.loc[idx_m_bk, COL_GERENTE] = area_devolucao_bk
+                df_master.loc[idx_m_bk, "Obs. Operação"] = texto_obs_bk
+
+              novo_status_log = f"Devolvido para {area_devolucao_bk}"
+              area_destino_log = area_devolucao_bk
+
+            sincronizar_planilhas_auxiliares(
+                b_bk, area_destino_log, texto_obs_bk
             )
 
-          sincronizar_planilhas_auxiliares(
-              bilhete_back_sel, area_destino_log, texto_obs_bk
+            novos_logs_bk.append({
+                "Data_Hora": datetime.datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "Bilhete": b_bk,
+                "Usuario_Acao": usuario_log_formatado,
+                "Status_Anterior": r_bk.get("Status_Geral", "Pendente"),
+                "Novo_Status": novo_status_log,
+                "Area_Anterior": "Suporte Backoffice",
+                "Nova_Area": area_destino_log,
+                "Observacao": obs_back,
+                "Tipo_Interacao": "Tratativa Suporte Backoffice em Lote",
+            })
+
+          mascara_back_upd = (
+              df_master[COL_GERENTE]
+              .astype(str)
+              .str.lower()
+              .str.contains(
+                  "suporte backoffice|suporte benner|katia martins", na=False
+              )
           )
-          st.session_state["msg_sucesso"] = msg_sucesso_bk
-          st.cache_data.clear()
-          st.rerun()
-        except PermissionError:
-          st.error("❌ O arquivo Excel está aberto em outro programa.")
+          df_backoffice_atualizado = df_master[mascara_back_upd].copy()
+          df_log_updated = pd.concat(
+              [df_log_master, pd.DataFrame(novos_logs_bk)], ignore_index=True
+          )
+
+          try:
+            with pd.ExcelWriter(
+                ARQUIVO_DASHBOARD,
+                engine="openpyxl",
+                mode="a",
+                if_sheet_exists="replace",
+            ) as writer:
+              df_master.to_excel(
+                  writer, sheet_name="99_Base_Divergencias_Geral", index=False
+              )
+              df_sem_div.to_excel(
+                  writer, sheet_name="98_OK_Sem_Divergencia_Concil", index=False
+              )
+              if not df_backoffice_atualizado.empty:
+                df_backoffice_atualizado.to_excel(
+                    writer, sheet_name="99_Suporte backoffice", index=False
+                )
+              df_log_updated.to_excel(
+                  writer, sheet_name="00_Log_Auditoria", index=False
+              )
+
+            st.session_state["msg_sucesso"] = (
+                f"🎉 {len(bilhetes_back_sel)} chamado(s) processados com"
+                " sucesso!"
+            )
+            st.cache_data.clear()
+            st.rerun()
+          except PermissionError:
+            st.error("❌ O arquivo Excel está aberto em outro programa.")
 
     st.markdown("---")
     col_t4, col_e4 = st.columns([3, 1])
@@ -2013,7 +2029,7 @@ with abas_objetos[4]:
     st.dataframe(df_backoffice_filtrado, hide_index=True)
 
 # ABA 5: RÉPLICA DA AUDITORIA
-with abas_objetos[5]:
+elif aba_atual == "⚖️ Réplica da Auditoria":
   st.subheader("⚖️ Módulo de Contestação e Réplica da Auditoria")
   bilhetes_com_tratativa = df_acao_filtrado[
       df_acao_filtrado["Status_Geral"] != "Pendente de Lançamento"
@@ -2124,88 +2140,91 @@ with abas_objetos[5]:
     )
     st.dataframe(bilhetes_com_tratativa, hide_index=True)
 
-idx_aba_compliance = 6
-
-if st.session_state["perfil_atual"] == "Compliance":
-  with abas_objetos[idx_aba_compliance]:
-    st.subheader("📜 Histórico Completo de Alterações e Trilha de Auditoria")
-    with st.expander("🗑️ Módulo Master de Gerenciamento e Exclusão de Logs"):
-      if not df_log_master.empty:
-        indices_log = df_log_master.index.tolist()
-        log_opcao = st.selectbox(
-            "Selecione o registro de log que deseja EXCLUIR:",
-            options=indices_log,
-            format_func=lambda i: (
-                f"Linha {i} | Data: {df_log_master.loc[i, 'Data_Hora']} |"
-                f" Bilhete: {df_log_master.loc[i, 'Bilhete']} | Usuário:"
-                f" {df_log_master.loc[i, 'Usuario_Acao']}"
-            ),
-        )
-        if st.button("❌ Excluir Registro de Log Selecionado"):
-          df_log_master = df_log_master.drop(log_opcao).reset_index(drop=True)
-          try:
-            with pd.ExcelWriter(
-                ARQUIVO_DASHBOARD,
-                engine="openpyxl",
-                mode="a",
-                if_sheet_exists="replace",
-            ) as writer:
-              df_log_master.to_excel(
-                  writer, sheet_name="00_Log_Auditoria", index=False
-              )
-            st.session_state["msg_sucesso"] = (
-                "🗑️ Registro de log excluído com sucesso!"
+# ABA 6: TRILHA DE AUDITORIA (EXCLUSIVO COMPLIANCE)
+elif (
+    aba_atual == "📜 Trilha de Auditoria"
+    and st.session_state["perfil_atual"] == "Compliance"
+):
+  st.subheader("📜 Histórico Completo de Alterações e Trilha de Auditoria")
+  with st.expander("🗑️ Módulo Master de Gerenciamento e Exclusão de Logs"):
+    if not df_log_master.empty:
+      indices_log = df_log_master.index.tolist()
+      log_opcao = st.selectbox(
+          "Selecione o registro de log que deseja EXCLUIR:",
+          options=indices_log,
+          format_func=lambda i: (
+              f"Linha {i} | Data: {df_log_master.loc[i, 'Data_Hora']} | Bilhete:"
+              f" {df_log_master.loc[i, 'Bilhete']} | Usuário:"
+              f" {df_log_master.loc[i, 'Usuario_Acao']}"
+          ),
+      )
+      if st.button("❌ Excluir Registro de Log Selecionado"):
+        df_log_master = df_log_master.drop(log_opcao).reset_index(drop=True)
+        try:
+          with pd.ExcelWriter(
+              ARQUIVO_DASHBOARD,
+              engine="openpyxl",
+              mode="a",
+              if_sheet_exists="replace",
+          ) as writer:
+            df_log_master.to_excel(
+                writer, sheet_name="00_Log_Auditoria", index=False
             )
-            st.cache_data.clear()
-            st.rerun()
-          except PermissionError:
-            st.error("❌ O arquivo Excel está aberto em outro programa.")
-      else:
-        st.info("Nenhum registro de log para exclusão.")
-
-    st.dataframe(df_log_master, hide_index=False)
-  idx_aba_compliance += 1
-
-  with abas_objetos[idx_aba_compliance]:
-    st.subheader("⚙️ Central de Aprovações de Acesso e Governança")
-    usuarios_atuais = carregar_usuarios()
-    pendentes = {
-        k: v for k, v in usuarios_atuais.items() if v.get("status") == "PENDENTE"
-    }
-
-    if not pendentes:
-      st.info("🎉 Nenhuma solicitação de acesso pendente no momento.")
+          st.session_state["msg_sucesso"] = (
+              "🗑️ Registro de log excluído com sucesso!"
+          )
+          st.cache_data.clear()
+          st.rerun()
+        except PermissionError:
+          st.error("❌ O arquivo Excel está aberto em outro programa.")
     else:
-      for u_id, u_info in pendentes.items():
-        st.markdown(
-            f"""
-                    <div style="background-color: #ffffff; border-left: 5px solid #002060; padding: 15px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.04);">
-                        <b>Nome:</b> {u_info['nome']} | <b>Usuário:</b> {u_id} | <b>Perfil Solicitado:</b> {u_info['perfil']}<br>
-                        <small style="color: #6c757d;">Data da Solicitação: {u_info.get('data_solicitacao', '-')}</small>
-                    </div>
-                """,
-            unsafe_allow_html=True,
-        )
+      st.info("Nenhum registro de log para exclusão.")
 
-        col_ap, col_rej, _ = st.columns([1, 1, 4])
-        with col_ap:
-          if st.button(f"✅ Aprovar {u_id}", key=f"btn_ap_{u_id}"):
-            usuarios_atuais[u_id]["status"] = "APROVADO"
-            salvar_usuarios(usuarios_atuais)
-            st.session_state["msg_sucesso"] = (
-                f"✅ Usuário {u_id} aprovado com sucesso!"
-            )
-            st.rerun()
-        with col_rej:
-          if st.button(f"❌ Rejeitar {u_id}", key=f"btn_rej_{u_id}"):
-            usuarios_atuais[u_id]["status"] = "REJEITADO"
-            salvar_usuarios(usuarios_atuais)
-            st.session_state["msg_sucesso"] = f"🚫 Usuário {u_id} rejeitado!"
-            st.rerun()
+  st.dataframe(df_log_master, hide_index=False)
 
-  idx_aba_compliance += 1
+# ABA 7: GESTÃO DE ACESSOS (EXCLUSIVO COMPLIANCE)
+elif (
+    aba_atual == "⚙️ Gestão de Acessos"
+    and st.session_state["perfil_atual"] == "Compliance"
+):
+  st.subheader("⚙️ Central de Aprovações de Acesso e Governança")
+  usuarios_atuais = carregar_usuarios()
+  pendentes = {
+      k: v for k, v in usuarios_atuais.items() if v.get("status") == "PENDENTE"
+  }
 
-with abas_objetos[idx_aba_compliance]:
+  if not pendentes:
+    st.info("🎉 Nenhuma solicitação de acesso pendente no momento.")
+  else:
+    for u_id, u_info in pendentes.items():
+      st.markdown(
+          f"""
+                <div style="background-color: #ffffff; border-left: 5px solid #002060; padding: 15px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.04);">
+                    <b>Nome:</b> {u_info['nome']} | <b>Usuário:</b> {u_id} | <b>Perfil Solicitado:</b> {u_info['perfil']}<br>
+                    <small style="color: #6c757d;">Data da Solicitação: {u_info.get('data_solicitacao', '-')}</small>
+                </div>
+            """,
+          unsafe_allow_html=True,
+      )
+
+      col_ap, col_rej, _ = st.columns([1, 1, 4])
+      with col_ap:
+        if st.button(f"✅ Aprovar {u_id}", key=f"btn_ap_{u_id}"):
+          usuarios_atuais[u_id]["status"] = "APROVADO"
+          salvar_usuarios(usuarios_atuais)
+          st.session_state["msg_sucesso"] = (
+              f"✅ Usuário {u_id} aprovado com sucesso!"
+          )
+          st.rerun()
+      with col_rej:
+        if st.button(f"❌ Rejeitar {u_id}", key=f"btn_rej_{u_id}"):
+          usuarios_atuais[u_id]["status"] = "REJEITADO"
+          salvar_usuarios(usuarios_atuais)
+          st.session_state["msg_sucesso"] = f"🚫 Usuário {u_id} rejeitado!"
+          st.rerun()
+
+# ABA VISÃO GERAL
+elif aba_atual == "📋 Visão Geral da Base Total":
   col_tv, col_ev = st.columns([3, 1])
   with col_tv:
     st.subheader("📋 Visão Geral da Base Total de Divergências")
@@ -2220,3 +2239,10 @@ with abas_objetos[idx_aba_compliance]:
         key="btn_exp_total",
     )
   st.dataframe(df_acao_filtrado, hide_index=True)
+
+
+#Git commands for version control
+
+#git add .
+#git commit -m "Feat: inclusao de Rloc_Cia, tratamento de bilhetes string e correcao da aba Suporte Backoffice"
+#git push origin main
