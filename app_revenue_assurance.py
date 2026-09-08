@@ -88,6 +88,8 @@ st.markdown(
     """
     <style>
         .stApp { background-color: #f8f9fa; }
+        
+        /* BOTÕES PRINCIPAIS */
         div.stButton > button[kind="primary"], div.stButton > button {
             background-color: #002060 !important;
             color: #ffffff !important;
@@ -99,6 +101,8 @@ st.markdown(
             background-color: #001040 !important;
             color: #ffffff !important;
         }
+        
+        /* CABEÇALHO DO APLICATIVO */
         .header-box {
             background: linear-gradient(135deg, #002060 0%, #003366 100%);
             padding: 15px 25px;
@@ -112,6 +116,8 @@ st.markdown(
         }
         .header-box h1 { color: #ffffff !important; margin: 0; font-size: 24px; font-weight: 700; }
         .header-box p { color: #d0e0ff !important; margin-top: 4px; font-size: 13px; margin-bottom: 0; }
+        
+        /* CARD DE LOGIN */
         .login-card {
             background-color: #ffffff;
             padding: 30px 35px;
@@ -127,13 +133,68 @@ st.markdown(
             border-left: 5px solid #002060;
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
-        [data-baseweb="tag"], span[data-baseweb="tag"], div[data-baseweb="tag"], li[data-baseweb="tag"] {
-            background-color: #6c757d !important;
-            background: #6c757d !important;
-            color: #ffffff !important;
-            border-radius: 4px !important;
+        
+        /* MENU LATERAL MODERNO (DESIGN REVOLUCIONADO) */
+        section[data-testid="stSidebar"] {
+            background-color: #f1f3f7 !important;
+            border-right: 1px solid #e2e8f0 !important;
         }
-        [data-baseweb="tag"] span, span[data-baseweb="tag"] span { color: #ffffff !important; }
+        
+        /* Ocultar os círculos padrão do radio button */
+        div[data-testid="stSidebar"] div[role="radiogroup"] label div:first-child {
+            display: none !important;
+        }
+        
+        /* Transformar opções de navegação em Cards Interativos */
+        div[data-testid="stSidebar"] div[role="radiogroup"] label {
+            background-color: #ffffff !important;
+            border: 1px solid #dcdfe6 !important;
+            padding: 10px 14px !important;
+            border-radius: 8px !important;
+            margin-bottom: 8px !important;
+            cursor: pointer !important;
+            transition: all 0.2s ease-in-out !important;
+            width: 100% !important;
+            display: block !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
+        }
+        
+        div[data-testid="stSidebar"] div[role="radiogroup"] label p {
+            color: #002060 !important;
+            font-weight: 600 !important;
+            font-size: 13px !important;
+            margin: 0 !important;
+        }
+        
+        div[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+            background-color: #e8f0fe !important;
+            border-color: #002060 !important;
+            transform: translateX(4px) !important;
+        }
+        
+        /* Destaque para o item selecionado no Menu */
+        div[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
+            background: linear-gradient(135deg, #002060 0%, #003366 100%) !important;
+            border-color: #002060 !important;
+            box-shadow: 0 4px 10px rgba(0, 32, 96, 0.25) !important;
+        }
+        
+        div[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p {
+            color: #ffffff !important;
+            font-weight: 700 !important;
+        }
+
+        .user-card-sidebar {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 12px 15px;
+            border-left: 4px solid #002060;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        }
+        .user-card-sidebar h4 { margin: 0; color: #002060; font-size: 15px; font-weight: 700; }
+        .user-card-sidebar p { margin: 2px 0 0 0; color: #6c757d; font-size: 12px; }
+
         .brand-header {
             font-size: 22px;
             font-weight: 800;
@@ -543,6 +604,7 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
       categorizar_tipo_inconsistencia, axis=1
   )
 
+  # TRATAMENTO DE DATAS E ORDENAÇÃO CRONOLÓGICA RIGOROSA (YYYY-MM)
   df_out["Dt_Parsed"] = pd.to_datetime(
       df_out["Data Emissão"], errors="coerce", dayfirst=True
   )
@@ -585,7 +647,7 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
   return df_out
 
 
-# CACHE OTIMIZADO: Leitura instantânea da memória sem reprocessamento pesado
+# CACHE OTIMIZADO DA MEMÓRIA
 @st.cache_data(show_spinner=False)
 def carregar_bases():
   if not os.path.exists(ARQUIVO_DASHBOARD):
@@ -683,7 +745,7 @@ def sincronizar_planilhas_auxiliares(
               if_sheet_exists="replace",
           ) as writer:
             df_nc.to_excel(writer, sheet_name="NÃO CONCILIADOS", index=False)
-    except Exception as e:
+    except Exception:
       pass
 
   if os.path.exists(ARQUIVO_CONCILIADOS):
@@ -713,7 +775,7 @@ def sincronizar_planilhas_auxiliares(
               if_sheet_exists="replace",
           ) as writer:
             df_cr.to_excel(writer, sheet_name=sheet_target, index=False)
-    except Exception as e:
+    except Exception:
       pass
 
 
@@ -782,8 +844,16 @@ if "msg_sucesso" in st.session_state:
 
 renderizar_marca()
 
-# NAVEGAÇÃO PERSISTENTE NO SIDEBAR (Impede que volte para o topo após ações)
-st.sidebar.markdown(f"### 👤 {st.session_state['usuario_atual']}")
+# DESIGN EXECUTIVO NO SIDEBAR
+st.sidebar.markdown(
+    f"""
+    <div class="user-card-sidebar">
+        <h4>👤 {st.session_state['usuario_atual']}</h4>
+        <p>Perfil: <b>{st.session_state['perfil_atual']}</b></p>
+    </div>
+""",
+    unsafe_allow_html=True,
+)
 
 col_btn_sair, col_btn_senha = st.sidebar.columns(2)
 with col_btn_sair:
@@ -823,8 +893,13 @@ if btn_mudar_senha or st.session_state.get("abrir_modal_senha", False):
           st.rerun()
 
 st.sidebar.markdown("---")
+st.sidebar.markdown(
+    "<h4 style='color: #002060; font-weight: 700; margin-bottom:"
+    " 10px;'>🧭 Navegação Principal</h4>",
+    unsafe_allow_html=True,
+)
 
-# LISTA DE OPÇÕES DE NAVEGAÇÃO
+# OPÇÕES DO MENU DE NAVEGAÇÃO
 opcoes_navegacao = [
     "📊 Dashboard & KPIs",
     "🎯 Tratativa Operacional (Geral)",
@@ -840,23 +915,31 @@ if st.session_state["perfil_atual"] == "Compliance":
   opcoes_navegacao.insert(7, "⚙️ Gestão de Acessos")
 
 if "aba_selecionada" not in st.session_state:
-  st.session_state["aba_selecionada"] = "🎯 Tratativa Operacional (Geral)"
+  st.session_state["aba_selecionada"] = "📊 Dashboard & KPIs"
 
 aba_atual = st.sidebar.radio(
-    "📌 Menu de Navegação:",
+    "Navegação:",
     options=opcoes_navegacao,
     key="aba_selecionada",
+    label_visibility="collapsed",
 )
 
 st.sidebar.markdown("---")
-st.sidebar.title("🔍 Filtros Operacionais")
+st.sidebar.markdown(
+    "<h4 style='color: #002060; font-weight: 700; margin-bottom: 10px;'>🔍"
+    " Filtros Operacionais</h4>",
+    unsafe_allow_html=True,
+)
 
+# EXTRAÇÃO E ORDENAÇÃO CRONOLÓGICA REAL DOS MESES (Jan, Fev, Mar...)
 df_meses_ord = df_acao_total.dropna(subset=["Mes_Ano_Label"]).sort_values(
     by="Mes_Ano_Sort"
 )
+df_unique_meses = df_meses_ord.drop_duplicates(subset=["Mes_Ano_Sort"])
+
 opcoes_meses = [
     m
-    for m in df_meses_ord["Mes_Ano_Label"].unique()
+    for m in df_unique_meses["Mes_Ano_Label"].tolist()
     if m != "Acumulado / Sem Data"
 ]
 if "Acumulado / Sem Data" in df_acao_total["Mes_Ano_Label"].values:
@@ -1005,7 +1088,7 @@ gerentes_base_unicos = sorted([
 
 dt_str_export = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
-# ABA 0: DASHBOARD INTERATIVO
+# ABA 0: DASHBOARD INTERATIVO COM GRÁFICOS ORDENADOS CRONOLOGICAMENTE
 if aba_atual == "📊 Dashboard & KPIs":
   st.subheader(
       "📊 Painel Executivo e Métricas Globais (100% da Base Auditada)"
@@ -1148,7 +1231,8 @@ if aba_atual == "📊 Dashboard & KPIs":
   st.markdown("---")
 
   st.markdown(
-      "##### 📈 Volumetria Mensal de Pendências por Setor Responsável"
+      "##### 📈 Volumetria Mensal de Pendências por Setor Responsável (Ordem"
+      " Cronológica Real)"
   )
   if (
       not df_acao_filtrado.empty
@@ -1160,6 +1244,11 @@ if aba_atual == "📊 Dashboard & KPIs":
         .reset_index(name="Quantidade")
         .sort_values(by="Mes_Ano_Sort")
     )
+
+    # Array exato para garantir que o Plotly não reordene os meses alfabeticamente
+    ordem_meses_array = df_mes_setor.drop_duplicates(subset=["Mes_Ano_Sort"])[
+        "Mes_Ano_Label"
+    ].tolist()
 
     fig_line = px.bar(
         df_mes_setor,
@@ -1178,6 +1267,9 @@ if aba_atual == "📊 Dashboard & KPIs":
         ],
     )
     fig_line.update_traces(textposition="outside", cliponaxis=False)
+    fig_line.update_xaxes(
+        categoryorder="array", categoryarray=ordem_meses_array
+    )
     fig_line.update_layout(
         height=350,
         xaxis_title="Mês da Emissão",
@@ -1187,7 +1279,7 @@ if aba_atual == "📊 Dashboard & KPIs":
     )
     st.plotly_chart(fig_line, use_container_width=True)
 
-# ABA 1: TRATATIVA OPERACIONAL (GERAL) - SELEÇÃO INDIVIDUAL OU EM LOTE
+# ABA 1: TRATATIVA OPERACIONAL (GERAL)
 elif aba_atual == "🎯 Tratativa Operacional (Geral)":
   st.subheader(
       "📝 Módulo de Resolução Operacional (Atribuição Individual ou em Lote)"
@@ -1214,7 +1306,6 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
           " atualização simultânea."
       )
 
-      # Visualização resumida dos bilhetes selecionados
       df_previa = df_master_filtrado[
           df_master_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_selecionados)
       ]
@@ -1372,7 +1463,6 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                 else obs_detalhe
             )
 
-            # ATUALIZAÇÃO EM LOTE DOS BILHETES
             novos_logs_list = []
             mascara_selecionados = df_master["Bilhetes"].apply(clean_str_strict).isin(bilhetes_selecionados)
             idxs_para_atualizar = df_master[mascara_selecionados].index
@@ -1491,7 +1581,7 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
       )
     st.dataframe(df_master_filtrado, hide_index=True)
 
-# ABA 2: DIVERGÊNCIA OPERAÇÃO - COM LOTE
+# ABA 2: DIVERGÊNCIA OPERAÇÃO
 elif aba_atual == "⚠️ Divergência Operação (CIAs/HOT)":
   st.subheader("⚠️ Base 98 - Divergência de Operação / CIAs Aéreas")
   if len(df_div_op_filtrado) == 0:
@@ -1825,7 +1915,7 @@ elif aba_atual == "✅ Sem Divergência (Conciliação)":
     )
   st.dataframe(df_sem_div_filtrado, hide_index=True)
 
-# ABA 4: SUPORTE BACKOFFICE - COM LOTE
+# ABA 4: SUPORTE BACKOFFICE
 elif aba_atual == "🎧 Suporte Backoffice":
   st.subheader(
       "🎧 Base 99 - Chamados Atribuídos ao Suporte Backoffice / Suporte Benner"
@@ -2140,7 +2230,7 @@ elif aba_atual == "⚖️ Réplica da Auditoria":
     )
     st.dataframe(bilhetes_com_tratativa, hide_index=True)
 
-# ABA 6: TRILHA DE AUDITORIA (EXCLUSIVO COMPLIANCE)
+# ABA 6: TRILHA DE AUDITORIA (COMPLIANCE)
 elif (
     aba_atual == "📜 Trilha de Auditoria"
     and st.session_state["perfil_atual"] == "Compliance"
@@ -2182,7 +2272,7 @@ elif (
 
   st.dataframe(df_log_master, hide_index=False)
 
-# ABA 7: GESTÃO DE ACESSOS (EXCLUSIVO COMPLIANCE)
+# ABA 7: GESTÃO DE ACESSOS (COMPLIANCE)
 elif (
     aba_atual == "⚙️ Gestão de Acessos"
     and st.session_state["perfil_atual"] == "Compliance"
@@ -2239,10 +2329,3 @@ elif aba_atual == "📋 Visão Geral da Base Total":
         key="btn_exp_total",
     )
   st.dataframe(df_acao_filtrado, hide_index=True)
-
-
-#Git commands for version control
-
-#git add .
-#git commit -m "Feat: inclusao de Rloc_Cia, tratamento de bilhetes string e correcao da aba Suporte Backoffice"
-#git push origin main
