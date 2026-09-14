@@ -252,8 +252,6 @@ def categorizar_tipo_inconsistencia(row):
     is_hot = detect_hot(row)
 
     if is_hot:
-        # REGRA BSP HOT (Hand Off Tape): Desconsidera divergências pontuais de alocação de tarifas/taxas/DU.
-        # Apenas se houver divergência no Valor Total é considerado pendência.
         if any(term in status_div for term in ["Total", "Divergência Total", "Divergência no Total", "Divergência de Total"]):
             return "📄 BSP HOT - Divergência no Valor Total"
         elif status_div in ["Valores Corretos", "Sem_Divergencia", "", "nan"] or "Sem_Divergencia" in origem or "Já Lançado" in status_geral:
@@ -302,7 +300,7 @@ def renderizar_marca():
 
 
 def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
-    """Gera Excel formatado com realce azul/amarelo em linhas de arquivo BSP HOT."""
+    """Gera Excel formatado com realce azul suave em linhas de arquivo BSP HOT."""
     buffer = io.BytesIO()
     if df_export is None or df_export.empty:
         df_export = pd.DataFrame(
@@ -329,7 +327,6 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
     header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True, size=11)
     
-    # Estilo especial para BSP HOT
     hot_fill = PatternFill(start_color="E6F0FA", end_color="E6F0FA", fill_type="solid")
     hot_font = Font(color="002060", bold=True, size=10)
     normal_font = Font(size=10)
@@ -1157,13 +1154,13 @@ if aba_atual == "📊 Dashboard & KPIs":
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
-# ABA 1: TRATATIVA OPERACIONAL (GERAL) - LEITURA OTIMIZADA DE RETORNOS
+# ABA 1: TRATATIVA OPERACIONAL (GERAL)
 elif aba_atual == "🎯 Tratativa Operacional (Geral)":
     st.subheader("📝 Módulo de Resolução Operacional (Atribuição Individual ou em Lote)")
 
-    # UPLOAD ULTRA-RÁPIDO COM FOCO NA ABA 'NÃO ENCONTRADOS' / FILTRAGEM INSTANTÂNEA DE LINHAS VAZIAS
+    # UPLOAD ULTRA-RÁPIDO COM PROTEÇÃO CONTRA TRAVAMENTO
     with st.expander("📥 Carga de Retornos Gerenciais (Upload Otimizado de Planilhas de Gerentes)", expanded=False):
-        st.caption("Suba as planilhas enviadas pelos gerentes com as tratativas. O leitor otimizado foca prioritariamente nas abas de pendências (ex: **NÃO ENCONTRADOS**, **NÃO CONCILIADOS**) e descarta linhas vazias instantaneamente.")
+        st.caption("Suba as planilhas enviadas pelos gerentes com as tratativas. O leitor ultra-leve foca nas abas de pendências sem travar a interface.")
         
         arquivos_retorno = st.file_uploader(
             "Arraste ou selecione os arquivos Excel de retorno dos gerentes:",
@@ -1177,154 +1174,158 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
             novos_logs_retorno = []
             relatorio_modificados = []
 
-            # Indexação Hash O(1) de bilhetes nas bases ativas
-            map_index = {}
-            for target_name, target_df in [("df_master", df_master), ("df_div_op", df_div_op), ("df_sem_div", df_sem_div)]:
-                if target_df is not None and not target_df.empty and "Bilhetes" in target_df.columns:
-                    bilhetes_list = target_df["Bilhetes"].tolist()
-                    for idx, b_val in enumerate(bilhetes_list):
-                        for k in extract_keys(b_val):
-                            if k not in map_index:
-                                map_index[k] = []
-                            map_index[k].append((target_name, idx))
+            with st.status("⚡ Processando arquivos de retorno em alta velocidade...", expanded=True) as status:
+                st.write("🔍 Indexando base de dados para busca em milissegundos...")
+                
+                map_index = {}
+                for target_name, target_df in [("df_master", df_master), ("df_div_op", df_div_op), ("df_sem_div", df_sem_div)]:
+                    if target_df is not None and not target_df.empty and "Bilhetes" in target_df.columns:
+                        bilhetes_list = target_df["Bilhetes"].tolist()
+                        for idx, b_val in enumerate(bilhetes_list):
+                            for k in extract_keys(b_val):
+                                if k not in map_index:
+                                    map_index[k] = []
+                                map_index[k].append((target_name, idx))
 
-            for arq in arquivos_retorno:
-                try:
-                    xls_ret = pd.ExcelFile(arq)
-                    all_sheets = xls_ret.sheet_names
-                    
-                    # Prioriza a aba 'NÃO ENCONTRADOS' / 'NÃO CONCILIADOS' para ganho imediato de velocidade
-                    target_sheets = [s for s in all_sheets if any(term in s.upper() for term in ["NÃO ENCONTRADOS", "NAO ENCONTRADOS", "NÃO CONCILIADOS", "NAO CONCILIADOS", "PENDENTES", "RETORNO"])]
-                    if not target_sheets:
-                        target_sheets = all_sheets  # Fallback caso a aba tenha nome customizado
-
-                    for sheet_name in target_sheets:
-                        # Leitura otimizada
-                        df_ret = pd.read_excel(xls_ret, sheet_name=sheet_name)
+                for num_arq, arq in enumerate(arquivos_retorno, 1):
+                    st.write(f"📄 Lendo arquivo {num_arq}/{len(arquivos_retorno)}: **{arq.name}**...")
+                    try:
+                        wb_check = openpyxl.load_workbook(arq, read_only=True, data_only=True)
+                        all_sheets = wb_check.sheetnames
+                        wb_check.close()
                         
-                        col_bil = find_column(df_ret, ["bilhetes", "bilhete", "nº bilhete", "bilhete/rloc", "localizador", "loc", "ticket"])
-                        if not col_bil:
-                            continue
+                        target_sheets = [s for s in all_sheets if any(term in s.upper() for term in ["NÃO ENCONTRADOS", "NAO ENCONTRADOS", "NÃO CONCILIADOS", "NAO CONCILIADOS", "PENDENTES", "RETORNO"])]
+                        if not target_sheets:
+                            target_sheets = all_sheets
 
-                        # OTIMIZAÇÃO: Descarta linhas vazias antes de iterar!
-                        df_ret = df_ret.dropna(subset=[col_bil]).copy()
-                        if df_ret.empty:
-                            continue
-
-                        col_obs = find_column(df_ret, ["obs. operação", "obs", "observação", "observacoes", "observacao", "observações", "tratativa", "resolução", "parecer", "justificativa", "obs operação", "detalhes"])
-                        col_area = find_column(df_ret, ["área resp. operação", "area resp. operacao", "gerentes", "gerente", "área responsável", "area responsavel", "setor", "área"])
-                        col_status = find_column(df_ret, ["status da tratativa", "status_geral", "status geral", "status", "situação", "situacao", "resultado"])
-
-                        ret_records = df_ret.to_dict("records")
-                        for r_ret in ret_records:
-                            b_ret = r_ret.get(col_bil, "")
-                            keys_ret = extract_keys(b_ret)
-                            if not keys_ret:
+                        for sheet_name in target_sheets:
+                            st.write(f"   ↳ Processando aba: **{sheet_name}**...")
+                            df_ret = pd.read_excel(arq, sheet_name=sheet_name)
+                            
+                            col_bil = find_column(df_ret, ["bilhetes", "bilhete", "nº bilhete", "bilhete/rloc", "localizador", "loc", "ticket"])
+                            if not col_bil:
                                 continue
 
-                            nova_obs = clean_str_strict(r_ret.get(col_obs, "")) if col_obs else ""
-                            nova_area = clean_str_strict(r_ret.get(col_area, "")) if col_area else ""
-                            novo_status_raw = clean_str_strict(r_ret.get(col_status, "")) if col_status else ""
-
-                            if nova_obs.lower() in ["sem tratativa na operação", "nan", "-", "none", "null"]:
-                                nova_obs = ""
-                            if nova_area.lower() in ["nan", "não atribuído", "-", "none", "null"]:
-                                nova_area = ""
-
-                            is_lancado = False
-                            if any(w in novo_status_raw.lower() for w in ["já lançado", "lançado", "conciliado", "ok", "lançado no erp"]):
-                                is_lancado = True
-                            elif any(w in nova_obs.lower() for w in ["lançado no benner", "lançado erp", "já lançado", "cadastrado no benner", "regularizado"]):
-                                is_lancado = True
-
-                            if not nova_obs and not nova_area and not is_lancado and not novo_status_raw:
+                            df_ret = df_ret.dropna(subset=[col_bil]).copy()
+                            if df_ret.empty:
                                 continue
 
-                            matched_targets = set()
-                            for k in keys_ret:
-                                if k in map_index:
-                                    for item in map_index[k]:
-                                        matched_targets.add(item)
+                            col_obs = find_column(df_ret, ["obs. operação", "obs", "observação", "observacoes", "observacao", "observações", "tratativa", "resolução", "parecer", "justificativa", "obs operação", "detalhes"])
+                            col_area = find_column(df_ret, ["área resp. operação", "area resp. operacao", "gerentes", "gerente", "área responsável", "area responsavel", "setor", "área"])
+                            col_status = find_column(df_ret, ["status da tratativa", "status_geral", "status geral", "status", "situação", "situacao", "resultado"])
 
-                            for target_name, idx in matched_targets:
-                                if target_name == "df_master" and idx in df_master.index:
-                                    target_df = df_master
-                                elif target_name == "df_div_op" and idx in df_div_op.index:
-                                    target_df = df_div_op
-                                elif target_name == "df_sem_div" and idx in df_sem_div.index:
-                                    target_df = df_sem_div
-                                else:
+                            ret_records = df_ret.to_dict("records")
+                            for r_ret in ret_records:
+                                b_ret = r_ret.get(col_bil, "")
+                                keys_ret = extract_keys(b_ret)
+                                if not keys_ret:
                                     continue
 
-                                obs_ant = clean_str_strict(target_df.loc[idx, "Obs. Operação"]) if "Obs. Operação" in target_df.columns else ""
-                                area_ant = clean_str_strict(target_df.loc[idx, COL_GERENTE]) if COL_GERENTE in target_df.columns else ""
-                                status_ant = clean_str_strict(target_df.loc[idx, "Status_Geral"]) if "Status_Geral" in target_df.columns else ""
+                                nova_obs = clean_str_strict(r_ret.get(col_obs, "")) if col_obs else ""
+                                nova_area = clean_str_strict(r_ret.get(col_area, "")) if col_area else ""
+                                novo_status_raw = clean_str_strict(r_ret.get(col_status, "")) if col_status else ""
 
-                                alterou = False
-                                area_final = area_ant
-                                if nova_area and nova_area != area_ant:
-                                    area_final = padronizar_gerentes_e_setores_vector(pd.Series([nova_area])).iloc[0]
-                                    target_df.loc[idx, COL_GERENTE] = area_final
-                                    alterou = True
+                                if nova_obs.lower() in ["sem tratativa na operação", "nan", "-", "none", "null"]:
+                                    nova_obs = ""
+                                if nova_area.lower() in ["nan", "não atribuído", "-", "none", "null"]:
+                                    nova_area = ""
 
-                                obs_final = obs_ant
-                                if nova_obs and nova_obs != obs_ant:
-                                    obs_final = nova_obs
-                                    target_df.loc[idx, "Obs. Operação"] = obs_final
-                                    alterou = True
+                                is_lancado = False
+                                if any(w in novo_status_raw.lower() for w in ["já lançado", "lançado", "conciliado", "ok", "lançado no erp"]):
+                                    is_lancado = True
+                                elif any(w in nova_obs.lower() for w in ["lançado no benner", "lançado erp", "já lançado", "cadastrado no benner", "regularizado"]):
+                                    is_lancado = True
 
-                                b_str_val = clean_str_strict(target_df.loc[idx, "Bilhetes"])
-                                novo_status_final = "Já Lançado no ERP" if is_lancado else status_ant
+                                if not nova_obs and not nova_area and not is_lancado and not novo_status_raw:
+                                    continue
 
-                                if is_lancado and status_ant != "Já Lançado no ERP":
-                                    target_df.loc[idx, "Status_Geral"] = "Já Lançado no ERP"
-                                    target_df.loc[idx, "Status_Divergencia"] = "Valores Corretos"
-                                    target_df.loc[idx, "Tipo_Inconsistencia"] = categorizar_tipo_inconsistencia(target_df.loc[idx])
-                                    alterou = True
+                                matched_targets = set()
+                                for k in keys_ret:
+                                    if k in map_index:
+                                        for item in map_index[k]:
+                                            matched_targets.add(item)
 
-                                    if target_name in ["df_master", "df_div_op"]:
-                                        row_moved = target_df.loc[[idx]].copy()
-                                        row_moved["Status_Geral"] = "Já Lançado no ERP"
-                                        row_moved["Status_Divergencia"] = "Valores Corretos"
-                                        row_moved["Tipo_Inconsistencia"] = categorizar_tipo_inconsistencia(row_moved.iloc[0])
-                                        if nova_area:
-                                            row_moved[COL_GERENTE] = area_final
-                                        if nova_obs:
-                                            row_moved["Obs. Operação"] = obs_final
+                                for target_name, idx in matched_targets:
+                                    if target_name == "df_master" and idx in df_master.index:
+                                        target_df = df_master
+                                    elif target_name == "df_div_op" and idx in df_div_op.index:
+                                        target_df = df_div_op
+                                    elif target_name == "df_sem_div" and idx in df_sem_div.index:
+                                        target_df = df_sem_div
+                                    else:
+                                        continue
 
-                                        if target_name == "df_master":
-                                            df_master = df_master.drop(idx)
-                                        elif target_name == "df_div_op":
-                                            df_div_op = df_div_op.drop(idx)
+                                    obs_ant = clean_str_strict(target_df.loc[idx, "Obs. Operação"]) if "Obs. Operação" in target_df.columns else ""
+                                    area_ant = clean_str_strict(target_df.loc[idx, COL_GERENTE]) if COL_GERENTE in target_df.columns else ""
+                                    status_ant = clean_str_strict(target_df.loc[idx, "Status_Geral"]) if "Status_Geral" in target_df.columns else ""
 
-                                        df_sem_div = pd.concat([df_sem_div, row_moved], ignore_index=True)
+                                    alterou = False
+                                    area_final = area_ant
+                                    if nova_area and nova_area != area_ant:
+                                        area_final = padronizar_gerentes_e_setores_vector(pd.Series([nova_area])).iloc[0]
+                                        target_df.loc[idx, COL_GERENTE] = area_final
+                                        alterou = True
 
-                                if alterou:
-                                    total_atualizados += 1
-                                    sincronizar_planilhas_auxiliares(b_str_val, area_final, obs_final)
-                                    novos_logs_retorno.append({
-                                        "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                        "Bilhete": b_str_val,
-                                        "Usuario_Acao": usuario_log_formatado,
-                                        "Status_Anterior": status_ant,
-                                        "Novo_Status": novo_status_final,
-                                        "Area_Anterior": area_ant,
-                                        "Nova_Area": area_final,
-                                        "Observacao": f"[Retorno Aba: {sheet_name}]: {obs_final}",
-                                        "Tipo_Interacao": "Carga de Retorno Gerencial",
-                                    })
-                                    relatorio_modificados.append({
-                                        "Aba de Origem": sheet_name,
-                                        "Nº Bilhete / LOC": b_str_val,
-                                        "Área Anterior": area_ant,
-                                        "Nova Área / Gerente": area_final,
-                                        "Status Anterior": status_ant,
-                                        "Novo Status": novo_status_final,
-                                        "Observação Aplicada": obs_final,
-                                        "Ação Executada": "Conciliado (Lançado ERP)" if is_lancado else "Tratativa Atualizada"
-                                    })
-                except Exception as e:
-                    st.error(f"Erro ao processar o arquivo '{arq.name}': {str(e)}")
+                                    obs_final = obs_ant
+                                    if nova_obs and nova_obs != obs_ant:
+                                        obs_final = nova_obs
+                                        target_df.loc[idx, "Obs. Operação"] = obs_final
+                                        alterou = True
+
+                                    b_str_val = clean_str_strict(target_df.loc[idx, "Bilhetes"])
+                                    novo_status_final = "Já Lançado no ERP" if is_lancado else status_ant
+
+                                    if is_lancado and status_ant != "Já Lançado no ERP":
+                                        target_df.loc[idx, "Status_Geral"] = "Já Lançado no ERP"
+                                        target_df.loc[idx, "Status_Divergencia"] = "Valores Corretos"
+                                        target_df.loc[idx, "Tipo_Inconsistencia"] = categorizar_tipo_inconsistencia(target_df.loc[idx])
+                                        alterou = True
+
+                                        if target_name in ["df_master", "df_div_op"]:
+                                            row_moved = target_df.loc[[idx]].copy()
+                                            row_moved["Status_Geral"] = "Já Lançado no ERP"
+                                            row_moved["Status_Divergencia"] = "Valores Corretos"
+                                            row_moved["Tipo_Inconsistencia"] = categorizar_tipo_inconsistencia(row_moved.iloc[0])
+                                            if nova_area:
+                                                row_moved[COL_GERENTE] = area_final
+                                            if nova_obs:
+                                                row_moved["Obs. Operação"] = obs_final
+
+                                            if target_name == "df_master":
+                                                df_master = df_master.drop(idx)
+                                            elif target_name == "df_div_op":
+                                                df_div_op = df_div_op.drop(idx)
+
+                                            df_sem_div = pd.concat([df_sem_div, row_moved], ignore_index=True)
+
+                                    if alterou:
+                                        total_atualizados += 1
+                                        sincronizar_planilhas_auxiliares(b_str_val, area_final, obs_final)
+                                        novos_logs_retorno.append({
+                                            "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                            "Bilhete": b_str_val,
+                                            "Usuario_Acao": usuario_log_formatado,
+                                            "Status_Anterior": status_ant,
+                                            "Novo_Status": novo_status_final,
+                                            "Area_Anterior": area_ant,
+                                            "Nova_Area": area_final,
+                                            "Observacao": f"[Retorno Aba: {sheet_name}]: {obs_final}",
+                                            "Tipo_Interacao": "Carga de Retorno Gerencial",
+                                        })
+                                        relatorio_modificados.append({
+                                            "Aba de Origem": sheet_name,
+                                            "Nº Bilhete / LOC": b_str_val,
+                                            "Área Anterior": area_ant,
+                                            "Nova Área / Gerente": area_final,
+                                            "Status Anterior": status_ant,
+                                            "Novo Status": novo_status_final,
+                                            "Observação Aplicada": obs_final,
+                                            "Ação Executada": "Conciliado (Lançado ERP)" if is_lancado else "Tratativa Atualizada"
+                                        })
+                    except Exception as e:
+                        st.error(f"Erro ao processar o arquivo '{arq.name}': {str(e)}")
+
+                status.update(label="✅ Processamento concluído com sucesso!", state="complete")
 
             if total_atualizados > 0:
                 mascara_back_upd = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte backoffice|suporte benner|katia martins", na=False) if not df_master.empty else pd.Series(False)
@@ -1333,7 +1334,7 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
 
                 sucesso_save, err_msg = salvar_base_consolidada(df_master, df_div_op, df_sem_div, df_back_atualizado, df_log_updated)
                 if sucesso_save:
-                    st.session_state["msg_sucesso"] = f"🎉 Sucesso! {total_atualizados} registro(s) foram atualizados a partir das abas lidas com alta velocidade."
+                    st.session_state["msg_sucesso"] = f"🎉 Sucesso! {total_atualizados} registro(s) foram atualizados sem travamentos."
                     st.session_state["relatorio_modificados"] = relatorio_modificados
                     st.rerun()
                 else:
@@ -1379,10 +1380,12 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
             df_previa = df_master_filtrado[
                 df_master_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_selecionados)
             ]
-            st.dataframe(
-                df_previa[["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Status_Geral"]],
-                hide_index=True,
-            )
+            
+            # FILTRAGEM DINÂMICA SEGURA CONTRA KEYERROR
+            cols_desejadas_g = ["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Status_Geral"]
+            cols_exibir_g = [c for c in cols_desejadas_g if c in df_previa.columns]
+            
+            st.dataframe(df_previa[cols_exibir_g], hide_index=True)
 
             with st.form("form_tratativa_geral_multi"):
                 col_a, col_b, col_c, col_d = st.columns([1.2, 1.2, 1.5, 1.2])
@@ -1519,10 +1522,12 @@ elif aba_atual == "⚠️ Divergência Operação (CIAs/BSP HOT)":
         if bilhetes_div_sel:
             st.info(f"⚡ **{len(bilhetes_div_sel)} divergência(s) selecionada(s)** para resolução.")
             df_previa_div = df_div_op_filtrado[df_div_op_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_div_sel)]
-            st.dataframe(
-                df_previa_div[["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Divergencia", "Status_Geral"]],
-                hide_index=True,
-            )
+            
+            # FILTRAGEM DINÂMICA SEGURA CONTRA KEYERROR
+            cols_desejadas_d = ["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Divergencia", "Status_Geral"]
+            cols_exibir_d = [c for c in cols_desejadas_d if c in df_previa_div.columns]
+            
+            st.dataframe(df_previa_div[cols_exibir_d], hide_index=True)
 
             with st.form("form_tratativa_div_op"):
                 c_x, c_y, c_z = st.columns(3)
@@ -1699,10 +1704,12 @@ elif aba_atual == "🎧 Suporte Backoffice":
             st.info(f"⚡ **{len(bilhetes_back_sel)} chamado(s) selecionado(s)** para solução.")
 
             df_previa_bk = df_backoffice_filtrado[df_backoffice_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_back_sel)]
-            st.dataframe(
-                df_previa_bk[["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Geral", "Obs. Operação"]],
-                hide_index=True,
-            )
+            
+            # FILTRAGEM DINÂMICA SEGURA CONTRA KEYERROR
+            cols_desejadas_bk = ["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Geral", "Obs. Operação"]
+            cols_exibir_bk = [c for c in cols_desejadas_bk if c in df_previa_bk.columns]
+            
+            st.dataframe(df_previa_bk[cols_exibir_bk], hide_index=True)
 
             with st.form("form_solucao_backoffice"):
                 acao_back = st.selectbox(
