@@ -1178,14 +1178,19 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
             bar_progresso = st.progress(0, text="⚡ Iniciando leitura e indexação dos arquivos...")
 
             with st.status("⚡ Processando arquivos de retorno em alta velocidade...", expanded=True) as status:
-                st.write("🔍 Indexando base de dados para busca em milissegundos...")
+                st.write("🔍 Indexando base de dados usando os índices reais para busca em milissegundos...")
                 
+                # INDEXAÇÃO DIRETA PELO ÍNDICE REAL DO DATAFRAME
                 map_index = {}
                 for target_name, target_df in [("df_master", df_master), ("df_div_op", df_div_op), ("df_sem_div", df_sem_div)]:
-                    if target_df is not None and not target_df.empty and "Bilhetes" in target_df.columns:
-                        bilhetes_list = target_df["Bilhetes"].tolist()
-                        for idx, b_val in enumerate(bilhetes_list):
-                            for k in extract_keys(b_val):
+                    if target_df is not None and not target_df.empty:
+                        for idx in target_df.index:
+                            b_val = target_df.loc[idx, "Bilhetes"] if "Bilhetes" in target_df.columns else ""
+                            loc_sys = target_df.loc[idx, "Localizador_Sistema"] if "Localizador_Sistema" in target_df.columns else ""
+                            rloc_cia = target_df.loc[idx, "Rloc_Cia"] if "Rloc_Cia" in target_df.columns else ""
+                            
+                            keys_all = set(extract_keys(b_val) + extract_keys(loc_sys) + extract_keys(rloc_cia))
+                            for k in keys_all:
                                 if k not in map_index:
                                     map_index[k] = []
                                 map_index[k].append((target_name, idx))
@@ -1207,7 +1212,7 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                             st.write(f"   ↳ Processando aba: **{sheet_name}**...")
                             df_ret = pd.read_excel(arq, sheet_name=sheet_name)
                             
-                            col_bil = find_column(df_ret, ["bilhetes", "bilhete", "nº bilhete", "bilhete/rloc", "localizador", "loc", "ticket"])
+                            col_bil = find_column(df_ret, ["bilhetes", "bilhete", "nº bilhete", "bilhete/rloc", "localizador", "loc", "ticket", "rloc_cia", "rloc"])
                             if not col_bil:
                                 continue
 
@@ -1349,31 +1354,36 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
             else:
                 st.warning("⚠️ Nenhuma nova alteração válida foi encontrada nas abas processadas.")
 
-    # EXIBIÇÃO EM DESTAQUE E DOWNLOAD DO RELATÓRIO DE ALTERAÇÕES
+    # EXIBIÇÃO EM DESTAQUE E OPÇÃO DE FECHAR O PAINEL DE RELATÓRIO
     if "relatorio_modificados" in st.session_state and st.session_state["relatorio_modificados"]:
         df_rel_mod = pd.DataFrame(st.session_state["relatorio_modificados"])
         st.markdown(
             f"""
             <div style="background-color: #e6f4ea; border-left: 5px solid #2b9348; padding: 15px; border-radius: 8px; margin-top: 15px; margin-bottom: 15px;">
                 <h4 style="color: #1e4620; margin: 0;">✅ Retornos Processados e Salvos na Planilha Oficial!</h4>
-                <p style="color: #2b9348; margin-top: 4px; margin-bottom: 0;">Foram realizadas <b>{len(df_rel_mod)} alteração(ões)</b>. Baixe o relatório detalhado das modificações abaixo:</p>
+                <p style="color: #2b9348; margin-top: 4px; margin-bottom: 0;">Foram realizadas <b>{len(df_rel_mod)} alteração(ões)</b>. Baixe o relatório detalhado ou feche este painel abaixo:</p>
             </div>
             """,
             unsafe_allow_html=True,
         )
         
-        col_rm1, col_rm2 = st.columns([3, 1])
+        col_rm1, col_rm2, col_rm3 = st.columns([2.5, 1.2, 1])
         with col_rm1:
             st.markdown(f"##### 📄 Relação Detalhada das Alterações Realizadas ({len(df_rel_mod)} registros)")
         with col_rm2:
             st.download_button(
-                label="📥 Extrair Relatório de Alterações (Excel)",
+                label="📥 Extrair Relatório (Excel)",
                 data=gerar_excel_formatado(df_rel_mod, "Relatorio_Alteracoes"),
                 file_name=f"Relatorio_Alteracoes_Processadas_{dt_str_export}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="btn_exp_casos_modificados_top",
                 type="primary"
             )
+        with col_rm3:
+            if st.button("❌ Fechar Painel", key="btn_fechar_painel_relatorio"):
+                del st.session_state["relatorio_modificados"]
+                st.rerun()
+
         st.dataframe(df_rel_mod, hide_index=True)
 
     st.markdown("---")
@@ -1399,7 +1409,8 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                 df_master_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_selecionados)
             ]
             
-            cols_desejadas_g = ["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Status_Geral"]
+            # GARANTIA DE EXIBIÇÃO DAS DUAS COLUNAS SOLICITADAS: Área Resp. Operação e Obs. Operação
+            cols_desejadas_g = ["Ponto de venda", "Área Resp. Operação", "Obs. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Status_Geral"]
             cols_exibir_g = [c for c in cols_desejadas_g if c in df_previa.columns]
             
             st.dataframe(df_previa[cols_exibir_g], hide_index=True)
@@ -1540,7 +1551,8 @@ elif aba_atual == "⚠️ Divergência Operação (CIAs/BSP HOT)":
             st.info(f"⚡ **{len(bilhetes_div_sel)} divergência(s) selecionada(s)** para resolução.")
             df_previa_div = df_div_op_filtrado[df_div_op_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_div_sel)]
             
-            cols_desejadas_d = ["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Divergencia", "Status_Geral"]
+            # GARANTIA DE EXIBIÇÃO DAS DUAS COLUNAS SOLICITADAS
+            cols_desejadas_d = ["Ponto de venda", "Área Resp. Operação", "Obs. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Divergencia", "Status_Geral"]
             cols_exibir_d = [c for c in cols_desejadas_d if c in df_previa_div.columns]
             
             st.dataframe(df_previa_div[cols_exibir_d], hide_index=True)
@@ -1721,7 +1733,8 @@ elif aba_atual == "🎧 Suporte Backoffice":
 
             df_previa_bk = df_backoffice_filtrado[df_backoffice_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_back_sel)]
             
-            cols_desejadas_bk = ["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Geral", "Obs. Operação"]
+            # GARANTIA DE EXIBIÇÃO DAS DUAS COLUNAS SOLICITADAS
+            cols_desejadas_bk = ["Ponto de venda", "Área Resp. Operação", "Obs. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Geral"]
             cols_exibir_bk = [c for c in cols_desejadas_bk if c in df_previa_bk.columns]
             
             st.dataframe(df_previa_bk[cols_exibir_bk], hide_index=True)
