@@ -172,7 +172,7 @@ st.markdown(
 
 
 # ==============================================================================
-# 2. FUNÇÕES DE SUPORTE, LIMPEZA VETORIZADA E BUSCA FLEXÍVEL
+# 2. FUNÇÕES DE SUPORTE, LIMPEZA VETORIZADA, REGRAS HOT E BUSCA FLEXÍVEL
 # ==============================================================================
 def clean_str_strict(val):
     if pd.isna(val) or val is None:
@@ -229,6 +229,52 @@ def find_column(df, candidates):
     return None
 
 
+def detect_hot(row):
+    """Identifica se o registro é de origem HOT / HOTEL em qualquer coluna de contexto."""
+    campos_busca = [
+        "CIA", "Origem_Aba", "Ponto de venda", "Tipo_Emissao_Lemon",
+        "Setor", "Sistema", "Produto", "Fornecedor"
+    ]
+    for col in campos_busca:
+        val = str(row.get(col, "")).strip().upper()
+        if "HOT" in val or "HOTEL" in val:
+            return True
+    return False
+
+
+def categorizar_tipo_inconsistencia(row):
+    """Categoriza inconsistências aplicando a regra exclusiva para registros HOT."""
+    origem = str(row.get("Origem_Aba", ""))
+    status_div = str(row.get("Status_Divergencia", "")).strip()
+    status_sis = str(row.get("Status_Sistema", "")).strip()
+    status_geral = str(row.get("Status_Geral", "")).strip()
+
+    is_hot = detect_hot(row)
+
+    if is_hot:
+        # REGRA HOT: Desconsidera divergências de alocação de tarifas/taxas/DU/comissões.
+        # Apenas se houver divergência explícita no valor total é considerado pendente.
+        if any(term in status_div for term in ["Total", "Divergência Total", "Divergência no Total", "Divergência de Total"]):
+            return "🏨 HOT - Divergência no Valor Total"
+        elif status_div in ["Valores Corretos", "Sem_Divergencia", "", "nan"] or "Sem_Divergencia" in origem or "Já Lançado" in status_geral:
+            return "Sem Divergência (Conciliado - HOT)"
+        else:
+            return "Sem Divergência (Conciliado - HOT Alocação OK)"
+
+    if (
+        origem == "99_Geral"
+        or status_sis == "NAO_CONSTA"
+        or "Pendente" in status_geral
+    ):
+        return "Pendente de Lançamento no ERP"
+    elif status_div and status_div not in ["nan", "Valores Corretos", ""]:
+        return status_div
+    elif "Sem_Divergencia" in origem or status_div == "Valores Corretos":
+        return "Sem Divergência (Conciliado)"
+    else:
+        return "Pendente de Lançamento no ERP"
+
+
 def carregar_usuarios():
     if not os.path.exists(ARQUIVO_USUARIOS):
         with open(ARQUIVO_USUARIOS, "w", encoding="utf-8") as f:
@@ -256,6 +302,7 @@ def renderizar_marca():
 
 
 def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
+    """Gera Excel formatado com realce amarelo suave (#FFF2CC) em linhas HOT."""
     buffer = io.BytesIO()
     if df_export is None or df_export.empty:
         df_export = pd.DataFrame(
@@ -269,7 +316,7 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
         if c in df_export.columns
     ]
     df_clean = (
-        df_export.drop(columns=cols_remover) if cols_remover else df_export
+        df_export.drop(columns=cols_remover) if cols_remover else df_export.copy()
     )
 
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
@@ -279,10 +326,14 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
     wb = openpyxl.load_workbook(buffer)
     ws = wb.active
 
-    header_fill = PatternFill(
-        start_color="002060", end_color="002060", fill_type="solid"
-    )
+    header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True, size=11)
+    
+    # Estilo especial para HOT
+    hot_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+    hot_font = Font(color="7F6000", bold=True, size=10)
+    normal_font = Font(size=10)
+
     thin_border = Border(
         left=Side(style="thin", color="D9D9D9"),
         right=Side(style="thin", color="D9D9D9"),
@@ -305,17 +356,22 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
     for cell in ws[1]:
         cell.fill = header_fill
         cell.font = header_font
-        cell.alignment = Alignment(
-            horizontal="center", vertical="center", wrap_text=True
-        )
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = thin_border
 
     max_row = ws.max_row
     max_col = ws.max_column
 
+    col_names = [str(ws.cell(row=1, column=c).value or "") for c in range(1, max_col + 1)]
+    hot_col_idx = None
+    for idx_c, c_n in enumerate(col_names, 1):
+        if c_n in ["É_HOT", "📍 Origem / HOT", "Origem_HOT"]:
+            hot_col_idx = idx_c
+            break
+
     for col_idx in range(1, max_col + 1):
         col_letter = get_column_letter(col_idx)
-        col_name = str(ws.cell(row=1, column=col_idx).value or "")
+        col_name = col_names[col_idx - 1]
 
         len_vals = [
             len(str(ws.cell(row=r, column=col_idx).value or ""))
@@ -327,14 +383,26 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
         for r in range(2, max_row + 1):
             cell = ws.cell(row=r, column=col_idx)
             cell.border = thin_border
+            cell.font = normal_font
+
+            # Aplicar destaque HOT caso aplicável
+            is_hot_row = False
+            if hot_col_idx:
+                val_h = str(ws.cell(row=r, column=hot_col_idx).value or "")
+                if "HOT" in val_h.upper() or val_h in ["True", "1"]:
+                    is_hot_row = True
+
+            if is_hot_row:
+                cell.fill = hot_fill
+                if col_idx == hot_col_idx or col_idx == 1:
+                    cell.font = hot_font
+
             if col_name in currency_cols:
                 try:
                     if cell.value is not None and str(cell.value).strip() not in ["-", ""]:
                         cell.value = float(cell.value)
                         cell.number_format = "R$ #,##0.00"
-                        cell.alignment = Alignment(
-                            horizontal="right", vertical="center"
-                        )
+                        cell.alignment = Alignment(horizontal="right", vertical="center")
                 except:
                     pass
 
@@ -515,25 +583,6 @@ def padronizar_gerentes_e_setores_vector(series):
     return s
 
 
-def categorizar_tipo_inconsistencia(row):
-    origem = str(row.get("Origem_Aba", ""))
-    status_div = str(row.get("Status_Divergencia", "")).strip()
-    status_sis = str(row.get("Status_Sistema", "")).strip()
-
-    if (
-        origem == "99_Geral"
-        or status_sis == "NAO_CONSTA"
-        or "Pendente" in str(row.get("Status_Geral", ""))
-    ):
-        return "Pendente de Lançamento no ERP"
-    elif status_div and status_div not in ["nan", "Valores Corretos", ""]:
-        return status_div
-    elif "Sem_Divergencia" in origem or status_div == "Valores Corretos":
-        return "Sem Divergência (Conciliado)"
-    else:
-        return "Pendente de Lançamento no ERP"
-
-
 def padronizar_e_deduplicar_colunas(df, origem=""):
     if df is None or df.empty:
         return pd.DataFrame()
@@ -621,6 +670,11 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
 
     df_out.loc[mascara_suporte, "Área Resp. Operação"] = "Suporte Backoffice"
     df_out["Origem_Aba"] = origem
+
+    # DETECÇÃO E IDENTIFICAÇÃO DE REGISTROS HOT
+    df_out["É_HOT"] = df_out.apply(detect_hot, axis=1)
+    df_out["📍 Origem / HOT"] = np.where(df_out["É_HOT"], "🏨 HOT (Apenas Total)", "✈️ Regular")
+
     df_out["Tipo_Inconsistencia"] = df_out.apply(categorizar_tipo_inconsistencia, axis=1)
 
     dt_parsed = pd.to_datetime(df_out["Data Emissão"], format="mixed", dayfirst=True, errors="coerce")
@@ -897,7 +951,7 @@ st.sidebar.markdown("---")
 st.sidebar.title("🔍 Filtros Operacionais")
 
 # ==============================================================================
-# 8. FILTROS GLOBAIS COM ORDENAÇÃO CRONOLÓGICA DAS DATAS
+# 8. FILTROS GLOBAIS COM ORDENAÇÃO CRONOLÓGICA E FILTRO HOT
 # ==============================================================================
 df_meses_ord = (
     df_acao_total[df_acao_total["Mes_Ano_Label"].notna()]
@@ -910,6 +964,12 @@ opcoes_meses_ordenadas = [
 ]
 if "Acumulado / Sem Data" in df_acao_total["Mes_Ano_Label"].values:
     opcoes_meses_ordenadas.append("Acumulado / Sem Data")
+
+filtro_hot = st.sidebar.radio(
+    "🏨 Origem / Tipo de Arquivo:",
+    options=["Todos", "🏨 Somente Arquivos HOT (Apenas Total)", "✈️ Somente Bilhetes / CIAs Regular"],
+    index=0,
+)
 
 mes_sel = st.sidebar.multiselect("📅 Mês de Emissão:", options=opcoes_meses_ordenadas, default=[])
 
@@ -955,6 +1015,12 @@ def aplicar_filtros_globais(df):
     if df is None or df.empty:
         return df
     m = pd.Series(True, index=df.index)
+    if "É_HOT" in df.columns:
+        if filtro_hot == "🏨 Somente Arquivos HOT (Apenas Total)":
+            m = m & (df["É_HOT"] == True)
+        elif filtro_hot == "✈️ Somente Bilhetes / CIAs Regular":
+            m = m & (df["É_HOT"] == False)
+
     if "Mes_Ano_Label" in df.columns and len(mes_sel) > 0:
         m = m & df["Mes_Ano_Label"].isin(mes_sel)
     if COL_SETOR in df.columns and len(setor_sel) > 0:
@@ -1093,13 +1159,13 @@ if aba_atual == "📊 Dashboard & KPIs":
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
-# ABA 1: TRATATIVA OPERACIONAL (GERAL) - LOTE + UPLOAD DE RETORNOS
+# ABA 1: TRATATIVA OPERACIONAL (GERAL) - LOTE + UPLOAD DE RETORNOS OTIMIZADO
 elif aba_atual == "🎯 Tratativa Operacional (Geral)":
     st.subheader("📝 Módulo de Resolução Operacional (Atribuição Individual ou em Lote)")
 
-    # UPLOAD E PROCESSAMENTO DE RETORNOS DOS GERENTES (LEITURA DE TODAS AS ABAS E RELATÓRIO LINHA A LINHA)
+    # UPLOAD E PROCESSAMENTO OTIMIZADO DE RETORNOS DOS GERENTES (LEITURA ULTRA-RÁPIDA DE TODAS AS ABAS)
     with st.expander("📥 Carga de Retornos Gerenciais (Upload de Planilhas de Gerentes em Lote)", expanded=False):
-        st.caption("Suba uma ou mais planilhas enviadas pelos gerentes com as tratativas. O sistema lerá TODAS as abas de cada arquivo, atualizará a base master e gerará um relatório detalhado linha a linha.")
+        st.caption("Suba uma ou mais planilhas enviadas pelos gerentes com as tratativas. O sistema lerá TODAS as abas de cada arquivo em lote ultra-rápido, atualizará a base master e gerará um relatório detalhado linha a linha.")
         
         arquivos_retorno = st.file_uploader(
             "Arraste ou selecione os arquivos Excel de retorno dos gerentes:",
@@ -1113,17 +1179,18 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
             novos_logs_retorno = []
             relatorio_modificados = []
 
-            # Indexação flexível de bilhetes nas bases ativas
+            # 1. Indexação HASH O(1) de bilhetes nas bases ativas
             map_index = {}
             for target_name, target_df in [("df_master", df_master), ("df_div_op", df_div_op), ("df_sem_div", df_sem_div)]:
                 if target_df is not None and not target_df.empty and "Bilhetes" in target_df.columns:
-                    for idx, r in target_df.iterrows():
-                        b_val = r["Bilhetes"]
+                    bilhetes_list = target_df["Bilhetes"].tolist()
+                    for idx, b_val in enumerate(bilhetes_list):
                         for k in extract_keys(b_val):
                             if k not in map_index:
                                 map_index[k] = []
                             map_index[k].append((target_name, idx))
 
+            # 2. Varredura ultra-rápida de planilhas/abas via dicionários de registros
             for arq in arquivos_retorno:
                 try:
                     xls_ret = pd.ExcelFile(arq)
@@ -1138,15 +1205,16 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                         if not col_bil:
                             continue
 
-                        for _, r_ret in df_ret.iterrows():
-                            b_ret = r_ret[col_bil]
+                        ret_records = df_ret.to_dict("records")
+                        for r_ret in ret_records:
+                            b_ret = r_ret.get(col_bil, "")
                             keys_ret = extract_keys(b_ret)
                             if not keys_ret:
                                 continue
 
-                            nova_obs = clean_str_strict(r_ret[col_obs]) if col_obs and pd.notna(r_ret[col_obs]) else ""
-                            nova_area = clean_str_strict(r_ret[col_area]) if col_area and pd.notna(r_ret[col_area]) else ""
-                            novo_status_raw = clean_str_strict(r_ret[col_status]) if col_status and pd.notna(r_ret[col_status]) else ""
+                            nova_obs = clean_str_strict(r_ret.get(col_obs, "")) if col_obs else ""
+                            nova_area = clean_str_strict(r_ret.get(col_area, "")) if col_area else ""
+                            novo_status_raw = clean_str_strict(r_ret.get(col_status, "")) if col_status else ""
 
                             if nova_obs.lower() in ["sem tratativa na operação", "nan", "-", "none", "null"]:
                                 nova_obs = ""
@@ -1201,14 +1269,14 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                                 if is_lancado and status_ant != "Já Lançado no ERP":
                                     target_df.loc[idx, "Status_Geral"] = "Já Lançado no ERP"
                                     target_df.loc[idx, "Status_Divergencia"] = "Valores Corretos"
-                                    target_df.loc[idx, "Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
+                                    target_df.loc[idx, "Tipo_Inconsistencia"] = categorizar_tipo_inconsistencia(target_df.loc[idx])
                                     alterou = True
 
                                     if target_name in ["df_master", "df_div_op"]:
                                         row_moved = target_df.loc[[idx]].copy()
                                         row_moved["Status_Geral"] = "Já Lançado no ERP"
                                         row_moved["Status_Divergencia"] = "Valores Corretos"
-                                        row_moved["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
+                                        row_moved["Tipo_Inconsistencia"] = categorizar_tipo_inconsistencia(row_moved.iloc[0])
                                         if nova_area:
                                             row_moved[COL_GERENTE] = area_final
                                         if nova_obs:
@@ -1303,7 +1371,7 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                 df_master_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_selecionados)
             ]
             st.dataframe(
-                df_previa[["Ponto de venda", "Área Resp. Operação", "CIA", "Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Status_Geral"]],
+                df_previa[["Ponto de venda", "Área Resp. Operação", "CIA", "📍 Origem / HOT", "Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Status_Geral"]],
                 hide_index=True,
             )
 
@@ -1389,7 +1457,7 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                             rows_upd[COL_GERENTE] = gerente_final
                             rows_upd["Obs. Operação"] = texto_obs_final
                             rows_upd["Status_Divergencia"] = "Valores Corretos"
-                            rows_upd["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
+                            rows_upd["Tipo_Inconsistencia"] = rows_upd.apply(categorizar_tipo_inconsistencia, axis=1)
 
                             df_master = df_master.drop(idxs_para_atualizar)
                             df_sem_div = pd.concat([df_sem_div, rows_upd], ignore_index=True)
@@ -1427,7 +1495,7 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
 
 # ABA 2: DIVERGÊNCIA OPERAÇÃO - LOTE
 elif aba_atual == "⚠️ Divergência Operação (CIAs/HOT)":
-    st.subheader("⚠️ Base 98 - Divergência de Operação / CIAs Aéreas")
+    st.subheader("⚠️ Base 98 - Divergência de Operação / CIAs Aéreas / HOT")
     if len(df_div_op_filtrado) == 0:
         st.warning("Nenhuma divergência de operação encontrada para os filtros selecionados.")
     else:
@@ -1443,7 +1511,7 @@ elif aba_atual == "⚠️ Divergência Operação (CIAs/HOT)":
             st.info(f"⚡ **{len(bilhetes_div_sel)} divergência(s) selecionada(s)** para resolução.")
             df_previa_div = df_div_op_filtrado[df_div_op_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_div_sel)]
             st.dataframe(
-                df_previa_div[["Ponto de venda", "Área Resp. Operação", "CIA", "Bilhetes", "Rloc_Cia", "Status_Divergencia", "Status_Geral"]],
+                df_previa_div[["Ponto de venda", "Área Resp. Operação", "CIA", "📍 Origem / HOT", "Bilhetes", "Rloc_Cia", "Status_Divergencia", "Status_Geral"]],
                 hide_index=True,
             )
 
@@ -1498,7 +1566,7 @@ elif aba_atual == "⚠️ Divergência Operação (CIAs/HOT)":
                             rows_upd_d["CIA"] = cia_corrigida_d
                         rows_upd_d["Obs. Operação"] = texto_obs_d
                         rows_upd_d["Status_Divergencia"] = "Valores Corretos"
-                        rows_upd_d["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
+                        rows_upd_d["Tipo_Inconsistencia"] = rows_upd_d.apply(categorizar_tipo_inconsistencia, axis=1)
 
                         df_div_op = df_div_op.drop(idxs_d)
                         df_sem_div = pd.concat([df_sem_div, rows_upd_d], ignore_index=True)
@@ -1564,7 +1632,7 @@ elif aba_atual == "✅ Sem Divergência (Conciliação)":
                             rows_para_devolver["Status_Geral"] = "Pendente de Lançamento"
                             rows_para_devolver[COL_GERENTE] = area_final_comp
                             rows_para_devolver["Obs. Operação"] = texto_obs_comp
-                            rows_para_devolver["Tipo_Inconsistencia"] = "Pendente de Lançamento no ERP"
+                            rows_para_devolver["Tipo_Inconsistencia"] = rows_para_devolver.apply(categorizar_tipo_inconsistencia, axis=1)
 
                             df_sem_div = df_sem_div.drop(idx_sd)
                             df_master = pd.concat([df_master, rows_para_devolver], ignore_index=True)
@@ -1623,7 +1691,7 @@ elif aba_atual == "🎧 Suporte Backoffice":
 
             df_previa_bk = df_backoffice_filtrado[df_backoffice_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_back_sel)]
             st.dataframe(
-                df_previa_bk[["Ponto de venda", "Área Resp. Operação", "CIA", "Bilhetes", "Rloc_Cia", "Status_Geral", "Obs. Operação"]],
+                df_previa_bk[["Ponto de venda", "Área Resp. Operação", "CIA", "📍 Origem / HOT", "Bilhetes", "Rloc_Cia", "Status_Geral", "Obs. Operação"]],
                 hide_index=True,
             )
 
@@ -1659,7 +1727,7 @@ elif aba_atual == "🎧 Suporte Backoffice":
                             row_upd_bk["Status_Geral"] = "Já Lançado no ERP"
                             row_upd_bk[COL_GERENTE] = area_devolucao_bk
                             row_upd_bk["Status_Divergencia"] = "Valores Corretos"
-                            row_upd_bk["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
+                            row_upd_bk["Tipo_Inconsistencia"] = categorizar_tipo_inconsistencia(row_upd_bk)
                             texto_obs_bk = f"[Correto pelo Suporte]: {obs_back}"
                             row_upd_bk["Obs. Operação"] = texto_obs_bk
 
