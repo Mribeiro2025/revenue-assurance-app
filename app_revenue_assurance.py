@@ -172,7 +172,7 @@ st.markdown(
 
 
 # ==============================================================================
-# 2. FUNÇÕES DE SUPORTE, LIMPEZA VETORIZADA, REGRAS HOT E BUSCA FLEXÍVEL
+# 2. FUNÇÕES DE SUPORTE, LIMPEZA VETORIZADA, REGRAS BSP HOT E BUSCA FLEXÍVEL
 # ==============================================================================
 def clean_str_strict(val):
     if pd.isna(val) or val is None:
@@ -230,20 +230,20 @@ def find_column(df, candidates):
 
 
 def detect_hot(row):
-    """Identifica se o registro é de origem HOT / HOTEL em qualquer coluna de contexto."""
+    """Identifica se o registro é de arquivo BSP HOT (IATA) através das colunas da base."""
     campos_busca = [
         "CIA", "Origem_Aba", "Ponto de venda", "Tipo_Emissao_Lemon",
-        "Setor", "Sistema", "Produto", "Fornecedor"
+        "Setor", "Sistema", "Produto", "Fornecedor", "Arquivo"
     ]
     for col in campos_busca:
         val = str(row.get(col, "")).strip().upper()
-        if "HOT" in val or "HOTEL" in val:
+        if "HOT" in val or "BSP" in val:
             return True
     return False
 
 
 def categorizar_tipo_inconsistencia(row):
-    """Categoriza inconsistências aplicando a regra exclusiva para registros HOT."""
+    """Categoriza inconsistências aplicando a regra exclusiva do BSP HOT (Hand Off Tape - IATA)."""
     origem = str(row.get("Origem_Aba", ""))
     status_div = str(row.get("Status_Divergencia", "")).strip()
     status_sis = str(row.get("Status_Sistema", "")).strip()
@@ -252,14 +252,14 @@ def categorizar_tipo_inconsistencia(row):
     is_hot = detect_hot(row)
 
     if is_hot:
-        # REGRA HOT: Desconsidera divergências de alocação de tarifas/taxas/DU/comissões.
-        # Apenas se houver divergência explícita no valor total é considerado pendente.
+        # REGRA BSP HOT (Hand Off Tape): Desconsidera divergências pontuais de alocação de tarifas/taxas/DU.
+        # Apenas se houver divergência no Valor Total é considerado pendência.
         if any(term in status_div for term in ["Total", "Divergência Total", "Divergência no Total", "Divergência de Total"]):
-            return "🏨 HOT - Divergência no Valor Total"
+            return "📄 BSP HOT - Divergência no Valor Total"
         elif status_div in ["Valores Corretos", "Sem_Divergencia", "", "nan"] or "Sem_Divergencia" in origem or "Já Lançado" in status_geral:
-            return "Sem Divergência (Conciliado - HOT)"
+            return "Sem Divergência (Conciliado - BSP HOT)"
         else:
-            return "Sem Divergência (Conciliado - HOT Alocação OK)"
+            return "Sem Divergência (Conciliado - BSP HOT Alocação OK)"
 
     if (
         origem == "99_Geral"
@@ -302,7 +302,7 @@ def renderizar_marca():
 
 
 def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
-    """Gera Excel formatado com realce amarelo suave (#FFF2CC) em linhas HOT."""
+    """Gera Excel formatado com realce azul/amarelo em linhas de arquivo BSP HOT."""
     buffer = io.BytesIO()
     if df_export is None or df_export.empty:
         df_export = pd.DataFrame(
@@ -329,9 +329,9 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
     header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True, size=11)
     
-    # Estilo especial para HOT
-    hot_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
-    hot_font = Font(color="7F6000", bold=True, size=10)
+    # Estilo especial para BSP HOT
+    hot_fill = PatternFill(start_color="E6F0FA", end_color="E6F0FA", fill_type="solid")
+    hot_font = Font(color="002060", bold=True, size=10)
     normal_font = Font(size=10)
 
     thin_border = Border(
@@ -365,7 +365,7 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
     col_names = [str(ws.cell(row=1, column=c).value or "") for c in range(1, max_col + 1)]
     hot_col_idx = None
     for idx_c, c_n in enumerate(col_names, 1):
-        if c_n in ["É_HOT", "📍 Origem / HOT", "Origem_HOT"]:
+        if c_n in ["É_HOT", "📄 Origem / Arquivo", "Origem_HOT"]:
             hot_col_idx = idx_c
             break
 
@@ -385,7 +385,6 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
             cell.border = thin_border
             cell.font = normal_font
 
-            # Aplicar destaque HOT caso aplicável
             is_hot_row = False
             if hot_col_idx:
                 val_h = str(ws.cell(row=r, column=hot_col_idx).value or "")
@@ -671,9 +670,9 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     df_out.loc[mascara_suporte, "Área Resp. Operação"] = "Suporte Backoffice"
     df_out["Origem_Aba"] = origem
 
-    # DETECÇÃO E IDENTIFICAÇÃO DE REGISTROS HOT
+    # DETECÇÃO E IDENTIFICAÇÃO DE REGISTROS BSP HOT (IATA)
     df_out["É_HOT"] = df_out.apply(detect_hot, axis=1)
-    df_out["📍 Origem / HOT"] = np.where(df_out["É_HOT"], "🏨 HOT (Apenas Total)", "✈️ Regular")
+    df_out["📄 Origem / Arquivo"] = np.where(df_out["É_HOT"], "📄 BSP HOT (IATA - Apenas Total)", "✈️ Bilhete Regular")
 
     df_out["Tipo_Inconsistencia"] = df_out.apply(categorizar_tipo_inconsistencia, axis=1)
 
@@ -747,7 +746,6 @@ def carregar_bases():
 
 
 def salvar_base_consolidada(df_m, df_d, df_s, df_b, df_l):
-    """Gravação unificada no Excel garantindo atualização total do sistema."""
     try:
         with pd.ExcelWriter(
             ARQUIVO_DASHBOARD, engine="openpyxl", mode="a", if_sheet_exists="replace"
@@ -927,7 +925,7 @@ st.sidebar.markdown("---")
 opcoes_navegacao = [
     "📊 Dashboard & KPIs",
     "🎯 Tratativa Operacional (Geral)",
-    "⚠️ Divergência Operação (CIAs/HOT)",
+    "⚠️ Divergência Operação (CIAs/BSP HOT)",
     "✅ Sem Divergência (Conciliação)",
     "🎧 Suporte Backoffice",
     "⚖️ Réplica da Auditoria",
@@ -951,7 +949,7 @@ st.sidebar.markdown("---")
 st.sidebar.title("🔍 Filtros Operacionais")
 
 # ==============================================================================
-# 8. FILTROS GLOBAIS COM ORDENAÇÃO CRONOLÓGICA E FILTRO HOT
+# 8. FILTROS GLOBAIS COM ORDENAÇÃO CRONOLÓGICA E FILTRO BSP HOT
 # ==============================================================================
 df_meses_ord = (
     df_acao_total[df_acao_total["Mes_Ano_Label"].notna()]
@@ -966,8 +964,8 @@ if "Acumulado / Sem Data" in df_acao_total["Mes_Ano_Label"].values:
     opcoes_meses_ordenadas.append("Acumulado / Sem Data")
 
 filtro_hot = st.sidebar.radio(
-    "🏨 Origem / Tipo de Arquivo:",
-    options=["Todos", "🏨 Somente Arquivos HOT (Apenas Total)", "✈️ Somente Bilhetes / CIAs Regular"],
+    "📄 Origem / Tipo de Arquivo:",
+    options=["Todos", "📄 Somente BSP HOT (IATA - Apenas Total)", "✈️ Somente Bilhetes Regular"],
     index=0,
 )
 
@@ -1016,9 +1014,9 @@ def aplicar_filtros_globais(df):
         return df
     m = pd.Series(True, index=df.index)
     if "É_HOT" in df.columns:
-        if filtro_hot == "🏨 Somente Arquivos HOT (Apenas Total)":
+        if filtro_hot == "📄 Somente BSP HOT (IATA - Apenas Total)":
             m = m & (df["É_HOT"] == True)
-        elif filtro_hot == "✈️ Somente Bilhetes / CIAs Regular":
+        elif filtro_hot == "✈️ Somente Bilhetes Regular":
             m = m & (df["É_HOT"] == False)
 
     if "Mes_Ano_Label" in df.columns and len(mes_sel) > 0:
@@ -1159,13 +1157,13 @@ if aba_atual == "📊 Dashboard & KPIs":
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
-# ABA 1: TRATATIVA OPERACIONAL (GERAL) - LOTE + UPLOAD DE RETORNOS OTIMIZADO
+# ABA 1: TRATATIVA OPERACIONAL (GERAL) - LEITURA OTIMIZADA DE RETORNOS
 elif aba_atual == "🎯 Tratativa Operacional (Geral)":
     st.subheader("📝 Módulo de Resolução Operacional (Atribuição Individual ou em Lote)")
 
-    # UPLOAD E PROCESSAMENTO OTIMIZADO DE RETORNOS DOS GERENTES (LEITURA ULTRA-RÁPIDA DE TODAS AS ABAS)
-    with st.expander("📥 Carga de Retornos Gerenciais (Upload de Planilhas de Gerentes em Lote)", expanded=False):
-        st.caption("Suba uma ou mais planilhas enviadas pelos gerentes com as tratativas. O sistema lerá TODAS as abas de cada arquivo em lote ultra-rápido, atualizará a base master e gerará um relatório detalhado linha a linha.")
+    # UPLOAD ULTRA-RÁPIDO COM FOCO NA ABA 'NÃO ENCONTRADOS' / FILTRAGEM INSTANTÂNEA DE LINHAS VAZIAS
+    with st.expander("📥 Carga de Retornos Gerenciais (Upload Otimizado de Planilhas de Gerentes)", expanded=False):
+        st.caption("Suba as planilhas enviadas pelos gerentes com as tratativas. O leitor otimizado foca prioritariamente nas abas de pendências (ex: **NÃO ENCONTRADOS**, **NÃO CONCILIADOS**) e descarta linhas vazias instantaneamente.")
         
         arquivos_retorno = st.file_uploader(
             "Arraste ou selecione os arquivos Excel de retorno dos gerentes:",
@@ -1179,7 +1177,7 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
             novos_logs_retorno = []
             relatorio_modificados = []
 
-            # 1. Indexação HASH O(1) de bilhetes nas bases ativas
+            # Indexação Hash O(1) de bilhetes nas bases ativas
             map_index = {}
             for target_name, target_df in [("df_master", df_master), ("df_div_op", df_div_op), ("df_sem_div", df_sem_div)]:
                 if target_df is not None and not target_df.empty and "Bilhetes" in target_df.columns:
@@ -1190,20 +1188,32 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                                 map_index[k] = []
                             map_index[k].append((target_name, idx))
 
-            # 2. Varredura ultra-rápida de planilhas/abas via dicionários de registros
             for arq in arquivos_retorno:
                 try:
                     xls_ret = pd.ExcelFile(arq)
-                    for sheet_name in xls_ret.sheet_names:
+                    all_sheets = xls_ret.sheet_names
+                    
+                    # Prioriza a aba 'NÃO ENCONTRADOS' / 'NÃO CONCILIADOS' para ganho imediato de velocidade
+                    target_sheets = [s for s in all_sheets if any(term in s.upper() for term in ["NÃO ENCONTRADOS", "NAO ENCONTRADOS", "NÃO CONCILIADOS", "NAO CONCILIADOS", "PENDENTES", "RETORNO"])]
+                    if not target_sheets:
+                        target_sheets = all_sheets  # Fallback caso a aba tenha nome customizado
+
+                    for sheet_name in target_sheets:
+                        # Leitura otimizada
                         df_ret = pd.read_excel(xls_ret, sheet_name=sheet_name)
                         
                         col_bil = find_column(df_ret, ["bilhetes", "bilhete", "nº bilhete", "bilhete/rloc", "localizador", "loc", "ticket"])
+                        if not col_bil:
+                            continue
+
+                        # OTIMIZAÇÃO: Descarta linhas vazias antes de iterar!
+                        df_ret = df_ret.dropna(subset=[col_bil]).copy()
+                        if df_ret.empty:
+                            continue
+
                         col_obs = find_column(df_ret, ["obs. operação", "obs", "observação", "observacoes", "observacao", "observações", "tratativa", "resolução", "parecer", "justificativa", "obs operação", "detalhes"])
                         col_area = find_column(df_ret, ["área resp. operação", "area resp. operacao", "gerentes", "gerente", "área responsável", "area responsavel", "setor", "área"])
                         col_status = find_column(df_ret, ["status da tratativa", "status_geral", "status geral", "status", "situação", "situacao", "resultado"])
-
-                        if not col_bil:
-                            continue
 
                         ret_records = df_ret.to_dict("records")
                         for r_ret in ret_records:
@@ -1323,15 +1333,14 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
 
                 sucesso_save, err_msg = salvar_base_consolidada(df_master, df_div_op, df_sem_div, df_back_atualizado, df_log_updated)
                 if sucesso_save:
-                    st.session_state["msg_sucesso"] = f"🎉 Sucesso! {total_atualizados} registro(s) foram atualizados a partir de todas as abas lidas."
+                    st.session_state["msg_sucesso"] = f"🎉 Sucesso! {total_atualizados} registro(s) foram atualizados a partir das abas lidas com alta velocidade."
                     st.session_state["relatorio_modificados"] = relatorio_modificados
                     st.rerun()
                 else:
                     st.error(err_msg)
             else:
-                st.warning("⚠️ Nenhuma nova alteração válida foi encontrada nas abas das planilhas enviadas.")
+                st.warning("⚠️ Nenhuma nova alteração válida foi encontrada nas abas processadas.")
 
-        # Exibição do Relatório Detalhado de Casos Modificados no Upload
         if "relatorio_modificados" in st.session_state and st.session_state["relatorio_modificados"]:
             df_rel_mod = pd.DataFrame(st.session_state["relatorio_modificados"])
             st.markdown("---")
@@ -1371,7 +1380,7 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                 df_master_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_selecionados)
             ]
             st.dataframe(
-                df_previa[["Ponto de venda", "Área Resp. Operação", "CIA", "📍 Origem / HOT", "Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Status_Geral"]],
+                df_previa[["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Status_Geral"]],
                 hide_index=True,
             )
 
@@ -1494,8 +1503,8 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
     st.dataframe(df_master_filtrado, hide_index=True)
 
 # ABA 2: DIVERGÊNCIA OPERAÇÃO - LOTE
-elif aba_atual == "⚠️ Divergência Operação (CIAs/HOT)":
-    st.subheader("⚠️ Base 98 - Divergência de Operação / CIAs Aéreas / HOT")
+elif aba_atual == "⚠️ Divergência Operação (CIAs/BSP HOT)":
+    st.subheader("⚠️ Base 98 - Divergência de Operação / CIAs Aéreas / BSP HOT (IATA)")
     if len(df_div_op_filtrado) == 0:
         st.warning("Nenhuma divergência de operação encontrada para os filtros selecionados.")
     else:
@@ -1511,7 +1520,7 @@ elif aba_atual == "⚠️ Divergência Operação (CIAs/HOT)":
             st.info(f"⚡ **{len(bilhetes_div_sel)} divergência(s) selecionada(s)** para resolução.")
             df_previa_div = df_div_op_filtrado[df_div_op_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_div_sel)]
             st.dataframe(
-                df_previa_div[["Ponto de venda", "Área Resp. Operação", "CIA", "📍 Origem / HOT", "Bilhetes", "Rloc_Cia", "Status_Divergencia", "Status_Geral"]],
+                df_previa_div[["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Divergencia", "Status_Geral"]],
                 hide_index=True,
             )
 
@@ -1691,7 +1700,7 @@ elif aba_atual == "🎧 Suporte Backoffice":
 
             df_previa_bk = df_backoffice_filtrado[df_backoffice_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_back_sel)]
             st.dataframe(
-                df_previa_bk[["Ponto de venda", "Área Resp. Operação", "CIA", "📍 Origem / HOT", "Bilhetes", "Rloc_Cia", "Status_Geral", "Obs. Operação"]],
+                df_previa_bk[["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Geral", "Obs. Operação"]],
                 hide_index=True,
             )
 
@@ -1907,7 +1916,6 @@ elif aba_atual == "📋 Visão Geral da Base Total":
             key="btn_exp_total",
         )
     st.dataframe(df_acao_filtrado, hide_index=True)
-
 
     #git add app_revenue_assurance.py
     #git commit -m "Feat: redesenho moderno da navegacao lateral e ordenacao cronologica real das datas"
