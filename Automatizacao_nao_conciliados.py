@@ -126,6 +126,7 @@ def extract_keys(val):
 
 
 def carregar_tratativas_e_logs_anteriores(out_file):
+    """Carrega o histórico garantindo PRIORIDADE ABSOLUTA às abas mestres atualizadas pelo App/Streamlit."""
     if not os.path.exists(out_file):
         return {}, pd.DataFrame()
 
@@ -139,27 +140,40 @@ def carregar_tratativas_e_logs_anteriores(out_file):
             else pd.DataFrame()
         )
 
-        for aba in xls.sheet_names:
-            if aba.startswith("98_") or aba.startswith("99_"):
-                df_temp = pd.read_excel(xls, sheet_name=aba)
-                if "Bilhetes" in df_temp.columns:
-                    for _, r in df_temp.iterrows():
-                        b_key = clean_str_strict(r["Bilhetes"])
-                        if b_key and b_key != "nan":
-                            dict_historico[b_key] = {
-                                "Status_Geral": r.get("Status_Geral"),
-                                "Área Resp. Operação": r.get("Área Resp. Operação"),
-                                "Obs. Operação": r.get("Obs. Operação"),
-                                "Setor": r.get("Setor"),
-                                "Obs_Auditoria_Replica": r.get("Obs_Auditoria_Replica"),
-                                "Ponto de venda": r.get("Ponto de venda"),
-                                "Código Iata": r.get("Código Iata"),
-                            }
+        # 1º Passo: Lê primeiro as abas secundárias/setoriais
+        abas_secundarias = [
+            aba for aba in xls.sheet_names 
+            if (aba.startswith("98_") or aba.startswith("99_")) 
+            and aba not in ["99_Base_Divergencias_Geral", "98_OK_Divergencia_Operacao", "98_OK_Sem_Divergencia_Concil"]
+        ]
+
+        # 2º Passo: Lê as abas MESTRES por último para que elas tenham PRIORIDADE e sobreponham os dados antigos
+        abas_mestres = [
+            aba for aba in ["98_OK_Divergencia_Operacao", "98_OK_Sem_Divergencia_Concil", "99_Base_Divergencias_Geral"]
+            if aba in xls.sheet_names
+        ]
+
+        ordem_leitura = abas_secundarias + abas_mestres
+
+        for aba in ordem_leitura:
+            df_temp = pd.read_excel(xls, sheet_name=aba)
+            if "Bilhetes" in df_temp.columns:
+                for _, r in df_temp.iterrows():
+                    b_key = clean_str_strict(r["Bilhetes"])
+                    if b_key and b_key != "nan":
+                        dict_historico[b_key] = {
+                            "Status_Geral": r.get("Status_Geral"),
+                            "Área Resp. Operação": r.get("Área Resp. Operação"),
+                            "Obs. Operação": r.get("Obs. Operação"),
+                            "Setor": r.get("Setor"),
+                            "Obs_Auditoria_Replica": r.get("Obs_Auditoria_Replica"),
+                            "Ponto de venda": r.get("Ponto de venda"),
+                            "Código Iata": r.get("Código Iata"),
+                        }
         return dict_historico, df_log_antigo
     except Exception as e:
         print(f"⚠️ Aviso ao carregar histórico anterior: {e}")
         return {}, pd.DataFrame()
-
 
 def encontrar_arquivo(nomes_possiveis):
     for nome in nomes_possiveis:

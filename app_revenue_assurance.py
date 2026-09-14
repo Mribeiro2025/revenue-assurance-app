@@ -796,28 +796,54 @@ def carregar_bases():
 
 
 def salvar_base_consolidada(df_m, df_d, df_s, df_b, df_l):
+    """Salva a base consolidada atualizando TODAS as abas do Excel para manter consistência total."""
     try:
-        with pd.ExcelWriter(
-            ARQUIVO_DASHBOARD, engine="openpyxl", mode="a", if_sheet_exists="replace"
-        ) as writer:
-            if df_m is not None:
-                reordenar_colunas_visivel(df_m).to_excel(writer, sheet_name="99_Base_Divergencias_Geral", index=False)
+        with pd.ExcelWriter(ARQUIVO_DASHBOARD, engine="openpyxl") as writer:
+            # 1. Pareto
+            if df_m is not None and not df_m.empty:
+                cols_tarifa = [c for c in ["A vista", "A credito"] if c in df_m.columns]
+                df_m["Tarifa_Total"] = df_m[cols_tarifa].apply(pd.to_numeric, errors="coerce").sum(axis=1) if cols_tarifa else 0
+                cols_rec = [c for c in ["Incentivo", "Comissão", "Taxa DU"] if c in df_m.columns]
+                df_m["Receita_Total"] = df_m[cols_rec].apply(pd.to_numeric, errors="coerce").sum(axis=1) if cols_rec else 0
+                
+                pareto_df = df_m.groupby(["Setor", "Ponto de venda"]).agg(
+                    Qtd_Bilhetes=("Bilhetes", "count"),
+                    Tarifa_Pendente_R_=("Tarifa_Total", "sum"),
+                    Taxa_Pendente_R_=("Taxa", "sum") if "Taxa" in df_m.columns else ("Tarifa_Total", "count"),
+                    Receita_Pendente_R_=("Receita_Total", "sum")
+                ).reset_index().rename(columns={
+                    "Ponto de venda": "Cliente / Ponto de Venda",
+                    "Tarifa_Pendente_R_": "Tarifa_Pendente_R$",
+                    "Taxa_Pendente_R_": "Taxa_Pendente_R$",
+                    "Receita_Pendente_R_": "Receita_Pendente_R$"
+                }).sort_values(by=["Qtd_Bilhetes", "Tarifa_Pendente_R$"], ascending=False)
+                
+                pareto_df.to_excel(writer, sheet_name="01_Pareto_Cliente", index=False)
+
+            # 2. Abas Mestradas
             if df_d is not None:
-                reordenar_colunas_visivel(df_d).to_excel(writer, sheet_name="98_OK_Divergencia_Operacao", index=False)
+                df_d.to_excel(writer, sheet_name="98_OK_Divergencia_Operacao", index=False)
             if df_s is not None:
-                reordenar_colunas_visivel(df_s).to_excel(writer, sheet_name="98_OK_Sem_Divergencia_Concil", index=False)
-            if df_b is not None and not df_b.empty:
-                reordenar_colunas_visivel(df_b).to_excel(writer, sheet_name="99_Suporte backoffice", index=False)
+                df_s.to_excel(writer, sheet_name="98_OK_Sem_Divergencia_Concil", index=False)
+            if df_m is not None:
+                df_m.to_excel(writer, sheet_name="99_Base_Divergencias_Geral", index=False)
+
+            # 3. Abas Setoriais (sincronizadas a partir de df_m)
+            if df_m is not None and not df_m.empty and "Setor" in df_m.columns:
+                df_m[df_m["Setor"] == "Suporte backoffice"].to_excel(writer, sheet_name="99_Suporte backoffice", index=False)
+                df_m[df_m["Setor"] == "Central de Eventos"].to_excel(writer, sheet_name="99_Central de Eventos", index=False)
+                df_m[df_m["Setor"] == "Concierge/Lazer"].to_excel(writer, sheet_name="99_Concierge-Lazer", index=False)
+                df_m[df_m["Setor"] == "Unique"].to_excel(writer, sheet_name="99_Unique", index=False)
+                df_m[df_m["Setor"] == "Private"].to_excel(writer, sheet_name="99_Private", index=False)
+                df_m[df_m["Setor"] == "Operação"].to_excel(writer, sheet_name="99_Operação", index=False)
+
+            # 4. Log de Auditoria
             if df_l is not None:
                 df_l.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
-        
-        # Limpa o cache para forçar a releitura imediata dos dados atualizados no Dashboard
-        st.cache_data.clear()
-        return True, "OK"
-    except PermissionError:
-        return False, "⚠️ O arquivo Excel está aberto por outro programa. Feche a planilha para salvar as alterações."
+                
+        st.success("✅ Dashboard salvo com sucesso em TODAS as abas do Excel!")
     except Exception as e:
-        return False, f"❌ Erro ao salvar dados: {str(e)}"
+        st.error(f"Erro ao salvar base consolidada: {e}")
 
 
 # ==============================================================================
@@ -1945,7 +1971,7 @@ elif aba_atual == "📋 Visão Geral da Base Total":
         )
     st.dataframe(reordenar_colunas_visivel(df_acao_filtrado), hide_index=True)
 
-    
+
     #git add app_revenue_assurance.py
     #git commit -m "Feat: redesenho moderno da navegacao lateral e ordenacao cronologica real das datas"
     #git push origin main
