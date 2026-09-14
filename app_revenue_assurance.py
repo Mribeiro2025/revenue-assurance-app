@@ -796,10 +796,10 @@ def carregar_bases():
 
 
 def salvar_base_consolidada(df_m, df_d, df_s, df_b, df_l):
-    """Salva a base consolidada atualizando TODAS as abas do Excel para manter consistência total."""
+    """Salva a base consolidada atualizando TODAS as abas do Excel e retornando a tupla (status, mensagem)."""
     try:
         with pd.ExcelWriter(ARQUIVO_DASHBOARD, engine="openpyxl") as writer:
-            # 1. Pareto
+            # 1. Pareto de Clientes
             if df_m is not None and not df_m.empty:
                 cols_tarifa = [c for c in ["A vista", "A credito"] if c in df_m.columns]
                 df_m["Tarifa_Total"] = df_m[cols_tarifa].apply(pd.to_numeric, errors="coerce").sum(axis=1) if cols_tarifa else 0
@@ -820,7 +820,7 @@ def salvar_base_consolidada(df_m, df_d, df_s, df_b, df_l):
                 
                 pareto_df.to_excel(writer, sheet_name="01_Pareto_Cliente", index=False)
 
-            # 2. Abas Mestradas
+            # 2. Abas Mestres
             if df_d is not None:
                 df_d.to_excel(writer, sheet_name="98_OK_Divergencia_Operacao", index=False)
             if df_s is not None:
@@ -840,10 +840,10 @@ def salvar_base_consolidada(df_m, df_d, df_s, df_b, df_l):
             # 4. Log de Auditoria
             if df_l is not None:
                 df_l.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
-                
-        st.success("✅ Dashboard salvo com sucesso em TODAS as abas do Excel!")
+
+        return True, "Dashboard salvo com sucesso em TODAS as abas do Excel!"
     except Exception as e:
-        st.error(f"Erro ao salvar base consolidada: {e}")
+        return False, str(e)
 
 
 # ==============================================================================
