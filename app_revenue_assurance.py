@@ -3,6 +3,7 @@ import io
 import json
 import os
 import re
+import unicodedata
 import numpy as np
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -22,8 +23,6 @@ st.set_page_config(
 )
 
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
-ARQUIVO_NAO_CONCILIADOS = "NÃO CONCILIADOS.xlsx"
-ARQUIVO_CONCILIADOS = "CONCILIADOS _ REGULARIZADOS.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
 
 USUARIOS_PADRAO = {
@@ -174,6 +173,15 @@ st.markdown(
 # ==============================================================================
 # 2. FUNÇÕES DE SUPORTE, LIMPEZA VETORIZADA, REGRAS BSP HOT E BUSCA FLEXÍVEL
 # ==============================================================================
+def normalize_str(s):
+    if not s:
+        return ""
+    s_unaccent = "".join(
+        c for c in unicodedata.normalize("NFD", str(s)) if unicodedata.category(c) != "Mn"
+    )
+    return re.sub(r"[^a-z0-9]", "", s_unaccent.lower())
+
+
 def clean_str_strict(val):
     if pd.isna(val) or val is None:
         return ""
@@ -218,19 +226,56 @@ def extract_keys(val):
 
 
 def find_column(df, candidates):
-    if df is None or df.empty:
+    if df is None or df.columns.empty:
         return None
-    for c in df.columns:
-        c_norm = re.sub(r"[^a-zA-Z0-9áéíóúãõâêîôûç]", "", str(c).strip().lower())
-        for cand in candidates:
-            cand_norm = re.sub(r"[^a-zA-Z0-9áéíóúãõâêîôûç]", "", cand.lower())
-            if cand_norm == c_norm or cand_norm in c_norm:
+    cols_norm = {c: normalize_str(c) for c in df.columns}
+
+    # 1º passe: correspondência exata normalizada
+    for cand in candidates:
+        cand_norm = normalize_str(cand)
+        for c, c_norm in cols_norm.items():
+            if cand_norm == c_norm:
+                return c
+
+    # 2º passe: correspondência parcial
+    for cand in candidates:
+        cand_norm = normalize_str(cand)
+        if not cand_norm:
+            continue
+        for c, c_norm in cols_norm.items():
+            if cand_norm in c_norm:
                 return c
     return None
 
 
+def reordenar_colunas_visivel(df):
+    if df is None or df.empty:
+        return df
+
+    cols_prioritarias = [
+        "Ponto de venda",
+        "Área Resp. Operação",
+        "Obs. Operação",
+        "Status_Geral",
+        "Bilhetes",
+        "Localizador_Sistema",
+        "Rloc_Cia",
+        "CIA",
+        "📄 Origem / Arquivo",
+        "Status_Divergencia",
+        "Tipo_Inconsistencia",
+        "Data Emissão",
+        "Setor",
+        "Consultor_Lemon",
+    ]
+
+    existentes = [c for c in cols_prioritarias if c in df.columns]
+    outras = [c for c in df.columns if c not in existentes]
+
+    return df[existentes + outras]
+
+
 def detect_hot(row):
-    """Identifica se o registro é de arquivo BSP HOT (IATA) através das colunas da base."""
     campos_busca = [
         "CIA", "Origem_Aba", "Ponto de venda", "Tipo_Emissao_Lemon",
         "Setor", "Sistema", "Produto", "Fornecedor", "Arquivo"
@@ -243,7 +288,6 @@ def detect_hot(row):
 
 
 def categorizar_tipo_inconsistencia(row):
-    """Categoriza inconsistências aplicando a regra exclusiva do BSP HOT (Hand Off Tape - IATA)."""
     origem = str(row.get("Origem_Aba", ""))
     status_div = str(row.get("Status_Divergencia", "")).strip()
     status_sis = str(row.get("Status_Sistema", "")).strip()
@@ -300,7 +344,6 @@ def renderizar_marca():
 
 
 def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
-    """Gera Excel formatado com realce azul suave em linhas de arquivo BSP HOT."""
     buffer = io.BytesIO()
     if df_export is None or df_export.empty:
         df_export = pd.DataFrame(
@@ -316,6 +359,7 @@ def gerar_excel_formatado(df_export, nome_aba="Relatorio_Filtrado"):
     df_clean = (
         df_export.drop(columns=cols_remover) if cols_remover else df_export.copy()
     )
+    df_clean = reordenar_colunas_visivel(df_clean)
 
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df_clean.to_excel(writer, sheet_name=nome_aba[:30], index=False)
@@ -582,14 +626,22 @@ def padronizar_gerentes_e_setores_vector(series):
 def padronizar_e_deduplicar_colunas(df, origem=""):
     if df is None or df.empty:
         return pd.DataFrame()
+
+    df = df.copy()
     df = df.loc[:, ~df.columns.duplicated()].copy()
 
-    col_pv = "Ponto de venda" if "Ponto de venda" in df.columns else None
-    col_bil = (
-        "Bilhetes"
-        if "Bilhetes" in df.columns
-        else ("Bilhete" if "Bilhete" in df.columns else None)
-    )
+    cols_norm = {c: normalize_str(c) for c in df.columns}
+
+    has_area_resp = any(cn in ["arearespoperacao", "arearesponsavel"] for cn in cols_norm.values())
+    has_gerentes = any(cn in ["gerente", "gerentes"] for cn in cols_norm.values())
+
+    if has_area_resp and has_gerentes:
+        cols_to_drop = [c for c, cn in cols_norm.items() if cn in ["gerente", "gerentes"]]
+        df = df.drop(columns=cols_to_drop, errors="ignore")
+        cols_norm = {c: normalize_str(c) for c in df.columns}
+
+    col_pv = find_column(df, ["ponto de venda", "ponto_venda"])
+    col_bil = find_column(df, ["bilhetes", "bilhete"])
 
     mask_descarte = pd.Series(False, index=df.index)
     if col_pv:
@@ -602,27 +654,28 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
         )
 
     df = df[~mask_descarte].copy()
+    cols_norm = {c: normalize_str(c) for c in df.columns}
+
+    col_area_resp_orig = find_column(df, ["área responsável", "area responsavel", "área resp. operação", "area resp. operacao", "area_resp_operacao"])
 
     renomear = {}
-    col_area_resp = None
     for col in df.columns:
-        c_str = str(col).strip().lower()
-        if c_str in ["área responsável", "area responsavel"]:
-            col_area_resp = col
+        c_norm = cols_norm[col]
+        if c_norm in ["arearespoperacao", "arearesponsavel"]:
             renomear[col] = "Área Resp. Operação"
-        elif c_str in ["gerente", "gerentes", "área resp. operação", "area resp. operacao", "area_resp_operacao"]:
+        elif c_norm in ["gerente", "gerentes"]:
             renomear[col] = "Área Resp. Operação"
-        elif c_str in ["obs", "obs. operação", "observação", "observacao"]:
+        elif c_norm in ["obs", "obsoperacao", "observacao", "observacoes"]:
             renomear[col] = "Obs. Operação"
-        elif c_str == "setor":
+        elif c_norm == "setor":
             renomear[col] = "Setor"
-        elif c_str in ["consultor_lemon", "emissor", "consultor"]:
+        elif c_norm in ["consultorlemon", "emissor", "consultor"]:
             renomear[col] = "Consultor_Lemon"
-        elif c_str in ["bilhete", "bilhetes"]:
+        elif c_norm in ["bilhete", "bilhetes"]:
             renomear[col] = "Bilhetes"
-        elif c_str in ["rloc_cia", "rloc cia", "localizador_cia"]:
+        elif c_norm in ["rloccia", "rloc", "localizadorcia"]:
             renomear[col] = "Rloc_Cia"
-        elif c_str in ["data emissão", "data emissao", "data_emissao"]:
+        elif c_norm in ["dataemissao"]:
             renomear[col] = "Data Emissão"
 
     df_out = df.rename(columns=renomear).copy()
@@ -654,7 +707,7 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
         df_out["Setor"],
     )
 
-    val_area_orig = df[col_area_resp].astype(str).str.lower() if col_area_resp and col_area_resp in df.columns else pd.Series("", index=df.index)
+    val_area_orig = df[col_area_resp_orig].astype(str).str.lower() if col_area_resp_orig and col_area_resp_orig in df.columns else pd.Series("", index=df.index)
     val_ger_orig = df_out["Área Resp. Operação"].astype(str).str.lower()
     val_obs_orig = df_out["Obs. Operação"].fillna("").astype(str).str.lower()
 
@@ -667,7 +720,6 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     df_out.loc[mascara_suporte, "Área Resp. Operação"] = "Suporte Backoffice"
     df_out["Origem_Aba"] = origem
 
-    # DETECÇÃO E IDENTIFICAÇÃO DE REGISTROS BSP HOT (IATA)
     df_out["É_HOT"] = df_out.apply(detect_hot, axis=1)
     df_out["📄 Origem / Arquivo"] = np.where(df_out["É_HOT"], "📄 BSP HOT (IATA - Apenas Total)", "✈️ Bilhete Regular")
 
@@ -692,13 +744,14 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     )
 
     df_out = df_out.sort_values(by="Dt_Parsed", ascending=False, na_position="last")
-    return df_out
+    return reordenar_colunas_visivel(df_out)
 
 
 # ==============================================================================
-# 5. CARREGAMENTO COM CACHE DE MEMÓRIA & PERSISTÊNCIA SEGURA
+# 5. CARREGAMENTO COM CACHE DINÂMICO & PERSISTÊNCIA CENTRALIZADA
 # ==============================================================================
 def _get_file_mtime(filename):
+    """Mapeia a data/hora exata da última modificação para invalidar a memória em tempo real."""
     return os.path.getmtime(filename) if os.path.exists(filename) else 0.0
 
 
@@ -748,70 +801,23 @@ def salvar_base_consolidada(df_m, df_d, df_s, df_b, df_l):
             ARQUIVO_DASHBOARD, engine="openpyxl", mode="a", if_sheet_exists="replace"
         ) as writer:
             if df_m is not None:
-                df_m.to_excel(writer, sheet_name="99_Base_Divergencias_Geral", index=False)
+                reordenar_colunas_visivel(df_m).to_excel(writer, sheet_name="99_Base_Divergencias_Geral", index=False)
             if df_d is not None:
-                df_d.to_excel(writer, sheet_name="98_OK_Divergencia_Operacao", index=False)
+                reordenar_colunas_visivel(df_d).to_excel(writer, sheet_name="98_OK_Divergencia_Operacao", index=False)
             if df_s is not None:
-                df_s.to_excel(writer, sheet_name="98_OK_Sem_Divergencia_Concil", index=False)
+                reordenar_colunas_visivel(df_s).to_excel(writer, sheet_name="98_OK_Sem_Divergencia_Concil", index=False)
             if df_b is not None and not df_b.empty:
-                df_b.to_excel(writer, sheet_name="99_Suporte backoffice", index=False)
+                reordenar_colunas_visivel(df_b).to_excel(writer, sheet_name="99_Suporte backoffice", index=False)
             if df_l is not None:
                 df_l.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
+        
+        # Limpa o cache para forçar a releitura imediata dos dados atualizados no Dashboard
         st.cache_data.clear()
         return True, "OK"
     except PermissionError:
         return False, "⚠️ O arquivo Excel está aberto por outro programa. Feche a planilha para salvar as alterações."
     except Exception as e:
         return False, f"❌ Erro ao salvar dados: {str(e)}"
-
-
-def sincronizar_planilhas_auxiliares(bilhete_str, nova_area_resp, observacao_str):
-    bilhete_target = clean_str_strict(bilhete_str)
-    area_gravar = (
-        "SUPORTE BENNER"
-        if str(nova_area_resp).lower().strip() in ["suporte backoffice", "suporte benner"]
-        else nova_area_resp
-    )
-
-    if os.path.exists(ARQUIVO_NAO_CONCILIADOS):
-        try:
-            df_nc = pd.read_excel(ARQUIVO_NAO_CONCILIADOS, sheet_name="NÃO CONCILIADOS")
-            col_b = "BILHETES" if "BILHETES" in df_nc.columns else ("Bilhete" if "Bilhete" in df_nc.columns else None)
-            if col_b:
-                df_nc[col_b] = df_nc[col_b].apply(clean_str_strict)
-                m_nc = df_nc[col_b] == bilhete_target
-                if m_nc.any():
-                    if "ÁREA RESPONSÁVEL" in df_nc.columns:
-                        df_nc.loc[m_nc, "ÁREA RESPONSÁVEL"] = area_gravar
-                    elif "GERENTES" in df_nc.columns:
-                        df_nc.loc[m_nc, "GERENTES"] = area_gravar
-                    if "OBS" in df_nc.columns:
-                        df_nc.loc[m_nc, "OBS"] = observacao_str
-                    with pd.ExcelWriter(ARQUIVO_NAO_CONCILIADOS, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-                        df_nc.to_excel(writer, sheet_name="NÃO CONCILIADOS", index=False)
-        except Exception:
-            pass
-
-    if os.path.exists(ARQUIVO_CONCILIADOS):
-        try:
-            xls_c = pd.ExcelFile(ARQUIVO_CONCILIADOS)
-            sheet_target = xls_c.sheet_names[0]
-            df_cr = pd.read_excel(xls_c, sheet_name=sheet_target)
-            col_b = "BILHETES" if "BILHETES" in df_cr.columns else ("Bilhete" if "Bilhete" in df_cr.columns else None)
-            if col_b:
-                df_cr[col_b] = df_cr[col_b].apply(clean_str_strict)
-                m_cr = df_cr[col_b] == bilhete_target
-                if m_cr.any():
-                    if "ÁREA RESPONSÁVEL" in df_cr.columns:
-                        df_cr.loc[m_cr, "ÁREA RESPONSÁVEL"] = area_gravar
-                    elif "GERENTES" in df_cr.columns:
-                        df_cr.loc[m_cr, "GERENTES"] = area_gravar
-                    if "OBS" in df_cr.columns:
-                        df_cr.loc[m_cr, "OBS"] = observacao_str
-                    with pd.ExcelWriter(ARQUIVO_CONCILIADOS, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-                        df_cr.to_excel(writer, sheet_name=sheet_target, index=False)
-        except Exception:
-            pass
 
 
 # ==============================================================================
@@ -1180,7 +1186,6 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
             with st.status("⚡ Processando arquivos de retorno em alta velocidade...", expanded=True) as status:
                 st.write("🔍 Indexando base de dados usando os índices reais para busca em milissegundos...")
                 
-                # INDEXAÇÃO DIRETA PELO ÍNDICE REAL DO DATAFRAME
                 map_index = {}
                 for target_name, target_df in [("df_master", df_master), ("df_div_op", df_div_op), ("df_sem_div", df_sem_div)]:
                     if target_df is not None and not target_df.empty:
@@ -1221,7 +1226,7 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                                 continue
 
                             col_obs = find_column(df_ret, ["obs. operação", "obs", "observação", "observacoes", "observacao", "observações", "tratativa", "resolução", "parecer", "justificativa", "obs operação", "detalhes"])
-                            col_area = find_column(df_ret, ["área resp. operação", "area resp. operacao", "gerentes", "gerente", "área responsável", "area responsavel", "setor", "área"])
+                            col_area = find_column(df_ret, ["área resp. operação", "area resp. operacao", "área responsável", "area responsavel", "gerentes", "gerente", "setor", "área"])
                             col_status = find_column(df_ret, ["status da tratativa", "status_geral", "status geral", "status", "situação", "situacao", "resultado"])
 
                             ret_records = df_ret.to_dict("records")
@@ -1310,7 +1315,6 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
 
                                     if alterou:
                                         total_atualizados += 1
-                                        sincronizar_planilhas_auxiliares(b_str_val, area_final, obs_final)
                                         novos_logs_retorno.append({
                                             "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                             "Bilhete": b_str_val,
@@ -1343,10 +1347,9 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                 df_back_atualizado = df_master[mascara_back_upd].copy() if not df_master.empty else pd.DataFrame()
                 df_log_updated = pd.concat([df_log_master, pd.DataFrame(novos_logs_retorno)], ignore_index=True)
 
-                # Persistência garantida na planilha original de Dashboard
                 sucesso_save, err_msg = salvar_base_consolidada(df_master, df_div_op, df_sem_div, df_back_atualizado, df_log_updated)
                 if sucesso_save:
-                    st.session_state["msg_sucesso"] = f"🎉 Processamento Finalizado com Sucesso! {total_atualizados} registro(s) foram atualizados e salvos no arquivo 'Dashboard_Revenue_Assurance_Consolidado.xlsx'."
+                    st.session_state["msg_sucesso"] = f"🎉 Processamento Finalizado com Sucesso! {total_atualizados} registro(s) foram atualizados e salvos diretamente no Dashboard Consolidado."
                     st.session_state["relatorio_modificados"] = relatorio_modificados
                     st.rerun()
                 else:
@@ -1354,7 +1357,6 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
             else:
                 st.warning("⚠️ Nenhuma nova alteração válida foi encontrada nas abas processadas.")
 
-    # EXIBIÇÃO EM DESTAQUE E OPÇÃO DE FECHAR O PAINEL DE RELATÓRIO
     if "relatorio_modificados" in st.session_state and st.session_state["relatorio_modificados"]:
         df_rel_mod = pd.DataFrame(st.session_state["relatorio_modificados"])
         st.markdown(
@@ -1384,7 +1386,7 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                 del st.session_state["relatorio_modificados"]
                 st.rerun()
 
-        st.dataframe(df_rel_mod, hide_index=True)
+        st.dataframe(reordenar_colunas_visivel(df_rel_mod), hide_index=True)
 
     st.markdown("---")
 
@@ -1409,7 +1411,6 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                 df_master_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_selecionados)
             ]
             
-            # GARANTIA DE EXIBIÇÃO DAS DUAS COLUNAS SOLICITADAS: Área Resp. Operação e Obs. Operação
             cols_desejadas_g = ["Ponto de venda", "Área Resp. Operação", "Obs. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Status_Geral"]
             cols_exibir_g = [c for c in cols_desejadas_g if c in df_previa.columns]
             
@@ -1445,7 +1446,7 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                     else:
                         gerentes_reservados = ["Silvana Celani", "Jaime Schnaider", "Fabiano Souza", "Alexandre Souza", "Central de Eventos", "Suporte Backoffice", "Katia Martins"]
                         gerentes_operacao_puros = sorted(list(set([
-                            g for g in gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Ivanete Bertasol", "Rosângela Pallu"]
+                            g for g in gerentes_base_unicos + ["Keli Santi", "Guilherme Silva", "Ivanete Bertasol", "Rosângela Pallu", "Marcelo Pereira"]
                             if g not in gerentes_reservados
                         ])))
                         if "Outro Gerente..." not in gerentes_operacao_puros:
@@ -1487,7 +1488,6 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                                 "Observacao": obs_detalhe,
                                 "Tipo_Interacao": "Tratativa Geral em Lote",
                             })
-                            sincronizar_planilhas_auxiliares(b_item, gerente_final, texto_obs_final)
 
                         novo_log_df = pd.DataFrame(novos_logs_list)
 
@@ -1531,7 +1531,7 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key="btn_exp_geral",
         )
-    st.dataframe(df_master_filtrado, hide_index=True)
+    st.dataframe(reordenar_colunas_visivel(df_master_filtrado), hide_index=True)
 
 # ABA 2: DIVERGÊNCIA OPERAÇÃO - LOTE
 elif aba_atual == "⚠️ Divergência Operação (CIAs/BSP HOT)":
@@ -1551,7 +1551,6 @@ elif aba_atual == "⚠️ Divergência Operação (CIAs/BSP HOT)":
             st.info(f"⚡ **{len(bilhetes_div_sel)} divergência(s) selecionada(s)** para resolução.")
             df_previa_div = df_div_op_filtrado[df_div_op_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_div_sel)]
             
-            # GARANTIA DE EXIBIÇÃO DAS DUAS COLUNAS SOLICITADAS
             cols_desejadas_d = ["Ponto de venda", "Área Resp. Operação", "Obs. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Divergencia", "Status_Geral"]
             cols_exibir_d = [c for c in cols_desejadas_d if c in df_previa_div.columns]
             
@@ -1597,7 +1596,6 @@ elif aba_atual == "⚠️ Divergência Operação (CIAs/BSP HOT)":
                             "Observacao": texto_obs_d,
                             "Tipo_Interacao": "Tratativa Divergência CIA em Lote",
                         })
-                        sincronizar_planilhas_auxiliares(b_div, g_d, texto_obs_d)
 
                     novo_log_d_df = pd.DataFrame(novos_logs_d)
 
@@ -1641,7 +1639,7 @@ elif aba_atual == "⚠️ Divergência Operação (CIAs/BSP HOT)":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key="btn_exp_div",
         )
-    st.dataframe(df_div_op_filtrado, hide_index=True)
+    st.dataframe(reordenar_colunas_visivel(df_div_op_filtrado), hide_index=True)
 
 # ABA 3: SEM DIVERGÊNCIA
 elif aba_atual == "✅ Sem Divergência (Conciliação)":
@@ -1695,7 +1693,6 @@ elif aba_atual == "✅ Sem Divergência (Conciliação)":
 
                             sucesso_save, err_msg = salvar_base_consolidada(df_master, df_div_op, df_sem_div, None, df_log_updated)
                             if sucesso_save:
-                                sincronizar_planilhas_auxiliares(bilhete_devolver_sel, area_final_comp, texto_obs_comp)
                                 st.session_state["msg_sucesso"] = f"🔄 Bilhete {bilhete_devolver_sel} devolvido para {area_final_comp}!"
                                 st.rerun()
                             else:
@@ -1712,7 +1709,7 @@ elif aba_atual == "✅ Sem Divergência (Conciliação)":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key="btn_exp_sem_div",
         )
-    st.dataframe(df_sem_div_filtrado, hide_index=True)
+    st.dataframe(reordenar_colunas_visivel(df_sem_div_filtrado), hide_index=True)
 
 # ABA 4: SUPORTE BACKOFFICE - LOTE
 elif aba_atual == "🎧 Suporte Backoffice":
@@ -1733,7 +1730,6 @@ elif aba_atual == "🎧 Suporte Backoffice":
 
             df_previa_bk = df_backoffice_filtrado[df_backoffice_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_back_sel)]
             
-            # GARANTIA DE EXIBIÇÃO DAS DUAS COLUNAS SOLICITADAS
             cols_desejadas_bk = ["Ponto de venda", "Área Resp. Operação", "Obs. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Geral"]
             cols_exibir_bk = [c for c in cols_desejadas_bk if c in df_previa_bk.columns]
             
@@ -1789,8 +1785,6 @@ elif aba_atual == "🎧 Suporte Backoffice":
 
                             novo_status_log, area_destino_log = f"Devolvido para {area_devolucao_bk}", area_devolucao_bk
 
-                        sincronizar_planilhas_auxiliares(b_bk, area_destino_log, texto_obs_bk)
-
                         novos_logs_bk.append({
                             "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "Bilhete": b_bk,
@@ -1826,7 +1820,7 @@ elif aba_atual == "🎧 Suporte Backoffice":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key="btn_exp_back",
         )
-    st.dataframe(df_backoffice_filtrado, hide_index=True)
+    st.dataframe(reordenar_colunas_visivel(df_backoffice_filtrado), hide_index=True)
 
 # ABA 5: RÉPLICA DA AUDITORIA
 elif aba_atual == "⚖️ Réplica da Auditoria":
@@ -1869,7 +1863,6 @@ elif aba_atual == "⚖️ Réplica da Auditoria":
 
                 sucesso_save, err_msg = salvar_base_consolidada(df_master, df_div_op, df_sem_div, None, df_log_updated)
                 if sucesso_save:
-                    sincronizar_planilhas_auxiliares(bilhete_rep, area_rep_final, texto_obs_rep)
                     st.session_state["msg_sucesso"] = f"✅ Contestação registrada por {usuario_log_formatado}!"
                     st.rerun()
                 else:
@@ -1877,7 +1870,7 @@ elif aba_atual == "⚖️ Réplica da Auditoria":
 
     st.markdown("---")
     st.markdown(f"### 📊 Lista Completa dos Casos em Réplica ({len(bilhetes_com_tratativa)} registros)")
-    st.dataframe(bilhetes_com_tratativa, hide_index=True)
+    st.dataframe(reordenar_colunas_visivel(bilhetes_com_tratativa), hide_index=True)
 
 # ABA 6: TRILHA DE AUDITORIA (COMPLIANCE)
 elif aba_atual == "📜 Trilha de Auditoria" and st.session_state["perfil_atual"] == "Compliance":
@@ -1950,8 +1943,9 @@ elif aba_atual == "📋 Visão Geral da Base Total":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key="btn_exp_total",
         )
-    st.dataframe(df_acao_filtrado, hide_index=True)
+    st.dataframe(reordenar_colunas_visivel(df_acao_filtrado), hide_index=True)
 
+    
     #git add app_revenue_assurance.py
     #git commit -m "Feat: redesenho moderno da navegacao lateral e ordenacao cronologica real das datas"
     #git push origin main
