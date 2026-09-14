@@ -172,7 +172,7 @@ st.markdown(
 
 
 # ==============================================================================
-# 2. FUNÇÕES DE SUPORTE, LIMPEZA VETORIZADA E USUÁRIOS
+# 2. FUNÇÕES DE SUPORTE, LIMPEZA VETORIZADA E BUSCA FLEXÍVEL
 # ==============================================================================
 def clean_str_strict(val):
     if pd.isna(val) or val is None:
@@ -182,6 +182,51 @@ def clean_str_strict(val):
     if s.lower() in ["nan", "none", "null", "<na>"]:
         return ""
     return s
+
+
+def extract_keys(val):
+    if pd.isna(val) or val is None:
+        return []
+    s = clean_str_strict(val).upper()
+    s = s.replace("[", "").replace("]", "").replace("R$", "").strip()
+    if not s or s in ("NAN", "NONE", "NULL", "0", "-"):
+        return []
+
+    keys = set()
+    clean_str = re.sub(r"[^A-Z0-9]", "", s)
+    if clean_str:
+        keys.add(clean_str)
+        clean_no_zeros = clean_str.lstrip("0")
+        if clean_no_zeros:
+            keys.add(clean_no_zeros)
+        if len(clean_str) == 13 and clean_str.isdigit():
+            keys.add(clean_str[3:])
+        if len(clean_str) >= 10 and clean_str.isdigit():
+            keys.add(clean_str[-10:])
+
+    tokens = re.split(r"[\s/\\,-]+", s)
+    for tok in tokens:
+        t_clean = re.sub(r"[^A-Z0-9]", "", tok)
+        if t_clean:
+            keys.add(t_clean)
+            if t_clean.isdigit():
+                keys.add(t_clean.lstrip("0"))
+                if len(t_clean) >= 10:
+                    keys.add(t_clean[-10:])
+
+    return list(keys)
+
+
+def find_column(df, candidates):
+    if df is None or df.empty:
+        return None
+    for c in df.columns:
+        c_norm = re.sub(r"[^a-zA-Z0-9áéíóúãõâêîôûç]", "", str(c).strip().lower())
+        for cand in candidates:
+            cand_norm = re.sub(r"[^a-zA-Z0-9áéíóúãõâêîôûç]", "", cand.lower())
+            if cand_norm == c_norm or cand_norm in c_norm:
+                return c
+    return None
 
 
 def carregar_usuarios():
@@ -930,16 +975,16 @@ df_div_op_filtrado = aplicar_filtros_globais(df_div_op)
 df_sem_div_filtrado = aplicar_filtros_globais(df_sem_div)
 df_acao_filtrado = aplicar_filtros_globais(df_acao_total)
 
-mascara_back_m = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte backoffice|suporte benner|katia martins", na=False)
-mascara_back_d = df_div_op[COL_GERENTE].astype(str).str.lower().str.contains("suporte backoffice|suporte benner|katia martins", na=False)
+mascara_back_m = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte backoffice|suporte benner|katia martins", na=False) if not df_master.empty else pd.Series(False)
+mascara_back_d = df_div_op[COL_GERENTE].astype(str).str.lower().str.contains("suporte backoffice|suporte benner|katia martins", na=False) if not df_div_op.empty else pd.Series(False)
 
 df_b_copy = df_backoffice.copy()
-df_m_copy = df_master[mascara_back_m].copy()
-df_d_copy = df_div_op[mascara_back_d].copy()
+df_m_copy = df_master[mascara_back_m].copy() if not df_master.empty else pd.DataFrame()
+df_d_copy = df_div_op[mascara_back_d].copy() if not df_div_op.empty else pd.DataFrame()
 
 df_backoffice_dinamico = (
     pd.concat([df_b_copy, df_m_copy, df_d_copy], ignore_index=True).drop_duplicates(subset=["Bilhetes"], keep="last")
-    if "Bilhetes" in df_master.columns
+    if "Bilhetes" in df_master.columns and not df_master.empty
     else df_backoffice
 )
 
@@ -948,7 +993,7 @@ df_backoffice_filtrado = aplicar_filtros_globais(df_backoffice_dinamico)
 gerentes_base_unicos = sorted([
     g for g in df_acao_total[COL_GERENTE].dropna().astype(str).unique()
     if str(g).lower() not in ["suporte backoffice", "suporte benner", "não atribuído", "-", "katia martins"]
-])
+]) if not df_acao_total.empty and COL_GERENTE in df_acao_total.columns else []
 
 dt_str_export = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
@@ -1052,11 +1097,9 @@ if aba_atual == "📊 Dashboard & KPIs":
 elif aba_atual == "🎯 Tratativa Operacional (Geral)":
     st.subheader("📝 Módulo de Resolução Operacional (Atribuição Individual ou em Lote)")
 
-    # ==========================================================================
-    # NOVO MÓDULO: UPLOAD E PROCESSAMENTO DE RETORNOS DOS GERENTES (EXCEL)
-    # ==========================================================================
+    # UPLOAD E PROCESSAMENTO DE RETORNOS DOS GERENTES (LEITURA DE TODAS AS ABAS E RELATÓRIO LINHA A LINHA)
     with st.expander("📥 Carga de Retornos Gerenciais (Upload de Planilhas de Gerentes em Lote)", expanded=False):
-        st.caption("Suba uma ou mais planilhas enviadas pelos gerentes com as tratativas. O sistema cruzará os bilhetes e atualizará a base master e o Dashboard automaticamente.")
+        st.caption("Suba uma ou mais planilhas enviadas pelos gerentes com as tratativas. O sistema lerá TODAS as abas de cada arquivo, atualizará a base master e gerará um relatório detalhado linha a linha.")
         
         arquivos_retorno = st.file_uploader(
             "Arraste ou selecione os arquivos Excel de retorno dos gerentes:",
@@ -1068,89 +1111,174 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
         if arquivos_retorno and st.button("🚀 Processar Retornos e Atualizar Dashboard"):
             total_atualizados = 0
             novos_logs_retorno = []
+            relatorio_modificados = []
 
-            # Mapeamento rápido de chaves em cada base
-            for df_target_name, df_target in [("df_master", df_master), ("df_div_op", df_div_op), ("df_sem_div", df_sem_div)]:
-                if df_target is not None and not df_target.empty and "Bilhetes" in df_target.columns:
-                    df_target["Bilhete_Key"] = df_target["Bilhetes"].apply(clean_str_strict)
+            # Indexação flexível de bilhetes nas bases ativas
+            map_index = {}
+            for target_name, target_df in [("df_master", df_master), ("df_div_op", df_div_op), ("df_sem_div", df_sem_div)]:
+                if target_df is not None and not target_df.empty and "Bilhetes" in target_df.columns:
+                    for idx, r in target_df.iterrows():
+                        b_val = r["Bilhetes"]
+                        for k in extract_keys(b_val):
+                            if k not in map_index:
+                                map_index[k] = []
+                            map_index[k].append((target_name, idx))
 
             for arq in arquivos_retorno:
                 try:
-                    df_ret = pd.read_excel(arq)
-                    if "Bilhetes" not in df_ret.columns and "Bilhete" in df_ret.columns:
-                        df_ret.rename(columns={"Bilhete": "Bilhetes"}, inplace=True)
-
-                    if "Bilhetes" in df_ret.columns:
-                        df_ret["Bilhete_Key"] = df_ret["Bilhetes"].apply(clean_str_strict)
+                    xls_ret = pd.ExcelFile(arq)
+                    for sheet_name in xls_ret.sheet_names:
+                        df_ret = pd.read_excel(xls_ret, sheet_name=sheet_name)
                         
-                        col_obs_ret = "Obs. Operação" if "Obs. Operação" in df_ret.columns else ("OBS" if "OBS" in df_ret.columns else None)
-                        col_area_ret = "Área Resp. Operação" if "Área Resp. Operação" in df_ret.columns else ("GERENTES" if "GERENTES" in df_ret.columns else None)
+                        col_bil = find_column(df_ret, ["bilhetes", "bilhete", "nº bilhete", "bilhete/rloc", "localizador", "loc", "ticket"])
+                        col_obs = find_column(df_ret, ["obs. operação", "obs", "observação", "observacoes", "observacao", "observações", "tratativa", "resolução", "parecer", "justificativa", "obs operação", "detalhes"])
+                        col_area = find_column(df_ret, ["área resp. operação", "area resp. operacao", "gerentes", "gerente", "área responsável", "area responsavel", "setor", "área"])
+                        col_status = find_column(df_ret, ["status da tratativa", "status_geral", "status geral", "status", "situação", "situacao", "resultado"])
 
-                        if col_obs_ret:
-                            # Filtra apenas linhas com observações válidas
-                            df_validos = df_ret[
-                                df_ret[col_obs_ret].notna() &
-                                (df_ret[col_obs_ret].astype(str).str.strip() != "") &
-                                (~df_ret[col_obs_ret].astype(str).str.strip().str.lower().isin(["sem tratativa na operação", "nan", "-", "none"]))
-                            ]
+                        if not col_bil:
+                            continue
 
-                            for _, r_ret in df_validos.iterrows():
-                                b_key = r_ret["Bilhete_Key"]
-                                nova_obs = str(r_ret[col_obs_ret]).strip()
-                                nova_area = str(r_ret[col_area_ret]).strip() if col_area_ret and pd.notna(r_ret[col_area_ret]) else ""
+                        for _, r_ret in df_ret.iterrows():
+                            b_ret = r_ret[col_bil]
+                            keys_ret = extract_keys(b_ret)
+                            if not keys_ret:
+                                continue
 
-                                # Busca o bilhete nas bases
-                                atualizado = False
-                                for df_target in [df_master, df_div_op, df_sem_div]:
-                                    if df_target is not None and "Bilhete_Key" in df_target.columns:
-                                        mask = df_target["Bilhete_Key"] == b_key
-                                        if mask.any():
-                                            idxs = df_target[mask].index
-                                            for idx in idxs:
-                                                obs_ant = str(df_target.loc[idx, "Obs. Operação"]).strip()
-                                                area_ant = str(df_target.loc[idx, COL_GERENTE]).strip()
+                            nova_obs = clean_str_strict(r_ret[col_obs]) if col_obs and pd.notna(r_ret[col_obs]) else ""
+                            nova_area = clean_str_strict(r_ret[col_area]) if col_area and pd.notna(r_ret[col_area]) else ""
+                            novo_status_raw = clean_str_strict(r_ret[col_status]) if col_status and pd.notna(r_ret[col_status]) else ""
 
-                                                if nova_obs != obs_ant or (nova_area and nova_area not in ["nan", "Não Atribuído", ""] and nova_area != area_ant):
-                                                    df_target.loc[idx, "Obs. Operação"] = nova_obs
-                                                    if nova_area and nova_area not in ["nan", "Não Atribuído", ""]:
-                                                        df_target.loc[idx, COL_GERENTE] = padronizar_gerentes_e_setores_vector(pd.Series([nova_area])).iloc[0]
+                            if nova_obs.lower() in ["sem tratativa na operação", "nan", "-", "none", "null"]:
+                                nova_obs = ""
+                            if nova_area.lower() in ["nan", "não atribuído", "-", "none", "null"]:
+                                nova_area = ""
 
-                                                    total_atualizados += 1
-                                                    atualizado = True
-                                                    sincronizar_planilhas_auxiliares(b_key, nova_area or area_ant, nova_obs)
+                            is_lancado = False
+                            if any(w in novo_status_raw.lower() for w in ["já lançado", "lançado", "conciliado", "ok", "lançado no erp"]):
+                                is_lancado = True
+                            elif any(w in nova_obs.lower() for w in ["lançado no benner", "lançado erp", "já lançado", "cadastrado no benner", "regularizado"]):
+                                is_lancado = True
 
-                                                    novos_logs_retorno.append({
-                                                        "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                                        "Bilhete": b_key,
-                                                        "Usuario_Acao": usuario_log_formatado,
-                                                        "Status_Anterior": df_target.loc[idx, "Status_Geral"],
-                                                        "Novo_Status": df_target.loc[idx, "Status_Geral"],
-                                                        "Area_Anterior": area_ant,
-                                                        "Nova_Area": df_target.loc[idx, COL_GERENTE],
-                                                        "Observacao": f"[Retorno Planilha]: {nova_obs}",
-                                                        "Tipo_Interacao": "Carga de Retorno Gerencial",
-                                                    })
+                            if not nova_obs and not nova_area and not is_lancado and not novo_status_raw:
+                                continue
+
+                            matched_targets = set()
+                            for k in keys_ret:
+                                if k in map_index:
+                                    for item in map_index[k]:
+                                        matched_targets.add(item)
+
+                            for target_name, idx in matched_targets:
+                                if target_name == "df_master" and idx in df_master.index:
+                                    target_df = df_master
+                                elif target_name == "df_div_op" and idx in df_div_op.index:
+                                    target_df = df_div_op
+                                elif target_name == "df_sem_div" and idx in df_sem_div.index:
+                                    target_df = df_sem_div
+                                else:
+                                    continue
+
+                                obs_ant = clean_str_strict(target_df.loc[idx, "Obs. Operação"]) if "Obs. Operação" in target_df.columns else ""
+                                area_ant = clean_str_strict(target_df.loc[idx, COL_GERENTE]) if COL_GERENTE in target_df.columns else ""
+                                status_ant = clean_str_strict(target_df.loc[idx, "Status_Geral"]) if "Status_Geral" in target_df.columns else ""
+
+                                alterou = False
+                                area_final = area_ant
+                                if nova_area and nova_area != area_ant:
+                                    area_final = padronizar_gerentes_e_setores_vector(pd.Series([nova_area])).iloc[0]
+                                    target_df.loc[idx, COL_GERENTE] = area_final
+                                    alterou = True
+
+                                obs_final = obs_ant
+                                if nova_obs and nova_obs != obs_ant:
+                                    obs_final = nova_obs
+                                    target_df.loc[idx, "Obs. Operação"] = obs_final
+                                    alterou = True
+
+                                b_str_val = clean_str_strict(target_df.loc[idx, "Bilhetes"])
+                                novo_status_final = "Já Lançado no ERP" if is_lancado else status_ant
+
+                                if is_lancado and status_ant != "Já Lançado no ERP":
+                                    target_df.loc[idx, "Status_Geral"] = "Já Lançado no ERP"
+                                    target_df.loc[idx, "Status_Divergencia"] = "Valores Corretos"
+                                    target_df.loc[idx, "Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
+                                    alterou = True
+
+                                    if target_name in ["df_master", "df_div_op"]:
+                                        row_moved = target_df.loc[[idx]].copy()
+                                        row_moved["Status_Geral"] = "Já Lançado no ERP"
+                                        row_moved["Status_Divergencia"] = "Valores Corretos"
+                                        row_moved["Tipo_Inconsistencia"] = "Sem Divergência (Conciliado)"
+                                        if nova_area:
+                                            row_moved[COL_GERENTE] = area_final
+                                        if nova_obs:
+                                            row_moved["Obs. Operação"] = obs_final
+
+                                        if target_name == "df_master":
+                                            df_master = df_master.drop(idx)
+                                        elif target_name == "df_div_op":
+                                            df_div_op = df_div_op.drop(idx)
+
+                                        df_sem_div = pd.concat([df_sem_div, row_moved], ignore_index=True)
+
+                                if alterou:
+                                    total_atualizados += 1
+                                    sincronizar_planilhas_auxiliares(b_str_val, area_final, obs_final)
+                                    novos_logs_retorno.append({
+                                        "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                        "Bilhete": b_str_val,
+                                        "Usuario_Acao": usuario_log_formatado,
+                                        "Status_Anterior": status_ant,
+                                        "Novo_Status": novo_status_final,
+                                        "Area_Anterior": area_ant,
+                                        "Nova_Area": area_final,
+                                        "Observacao": f"[Retorno Aba: {sheet_name}]: {obs_final}",
+                                        "Tipo_Interacao": "Carga de Retorno Gerencial",
+                                    })
+                                    relatorio_modificados.append({
+                                        "Aba de Origem": sheet_name,
+                                        "Nº Bilhete / LOC": b_str_val,
+                                        "Área Anterior": area_ant,
+                                        "Nova Área / Gerente": area_final,
+                                        "Status Anterior": status_ant,
+                                        "Novo Status": novo_status_final,
+                                        "Observação Aplicada": obs_final,
+                                        "Ação Executada": "Conciliado (Lançado ERP)" if is_lancado else "Tratativa Atualizada"
+                                    })
                 except Exception as e:
                     st.error(f"Erro ao processar o arquivo '{arq.name}': {str(e)}")
 
-            # Remove colunas auxiliares de chave
-            for df_target in [df_master, df_div_op, df_sem_div]:
-                if df_target is not None and "Bilhete_Key" in df_target.columns:
-                    df_target.drop(columns=["Bilhete_Key"], inplace=True)
-
             if total_atualizados > 0:
-                mascara_back_upd = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte backoffice|suporte benner|katia martins", na=False)
-                df_back_atualizado = df_master[mascara_back_upd].copy()
+                mascara_back_upd = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte backoffice|suporte benner|katia martins", na=False) if not df_master.empty else pd.Series(False)
+                df_back_atualizado = df_master[mascara_back_upd].copy() if not df_master.empty else pd.DataFrame()
                 df_log_updated = pd.concat([df_log_master, pd.DataFrame(novos_logs_retorno)], ignore_index=True)
 
                 sucesso_save, err_msg = salvar_base_consolidada(df_master, df_div_op, df_sem_div, df_back_atualizado, df_log_updated)
                 if sucesso_save:
-                    st.session_state["msg_sucesso"] = f"🎉 Sucesso! {total_atualizados} registro(s) foram atualizados a partir das planilhas importadas e refletidos no Dashboard."
+                    st.session_state["msg_sucesso"] = f"🎉 Sucesso! {total_atualizados} registro(s) foram atualizados a partir de todas as abas lidas."
+                    st.session_state["relatorio_modificados"] = relatorio_modificados
                     st.rerun()
                 else:
                     st.error(err_msg)
             else:
-                st.warning("⚠️ Nenhuma nova alteração válida foi encontrada nas planilhas de retorno enviadas.")
+                st.warning("⚠️ Nenhuma nova alteração válida foi encontrada nas abas das planilhas enviadas.")
+
+        # Exibição do Relatório Detalhado de Casos Modificados no Upload
+        if "relatorio_modificados" in st.session_state and st.session_state["relatorio_modificados"]:
+            df_rel_mod = pd.DataFrame(st.session_state["relatorio_modificados"])
+            st.markdown("---")
+            col_rm1, col_rm2 = st.columns([3, 1])
+            with col_rm1:
+                st.markdown(f"#### 📄 Relatório Detalhado de Casos Atualizados ({len(df_rel_mod)} registros)")
+            with col_rm2:
+                st.download_button(
+                    label="📥 Exportar Casos Modificados (Excel)",
+                    data=gerar_excel_formatado(df_rel_mod, "Casos_Modificados"),
+                    file_name=f"Relatorio_Casos_Modificados_{dt_str_export}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="btn_exp_casos_modificados"
+                )
+            st.dataframe(df_rel_mod, hide_index=True)
 
     st.markdown("---")
 
@@ -1711,3 +1839,8 @@ elif aba_atual == "📋 Visão Geral da Base Total":
             key="btn_exp_total",
         )
     st.dataframe(df_acao_filtrado, hide_index=True)
+
+
+    #git add app_revenue_assurance.py
+    #git commit -m "Feat: redesenho moderno da navegacao lateral e ordenacao cronologica real das datas"
+    #git push origin main
