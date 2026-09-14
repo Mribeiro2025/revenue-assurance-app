@@ -57,14 +57,11 @@ USUARIOS_PADRAO = {
     },
 }
 
-# Injeção de CSS customizado para UI/UX moderna do Menu de Navegação e Componentes
 st.markdown(
     """
     <style>
-        /* Fundo geral limpo */
         .stApp { background-color: #f8f9fa; }
 
-        /* Botões Padrão Corporativos */
         div.stButton > button[kind="primary"], div.stButton > button {
             background-color: #002060 !important;
             color: #ffffff !important;
@@ -80,7 +77,6 @@ st.markdown(
             box-shadow: 0 4px 10px rgba(0, 32, 96, 0.25) !important;
         }
 
-        /* Top Banner Header */
         .header-box {
             background: linear-gradient(135deg, #002060 0%, #003366 100%);
             padding: 18px 25px;
@@ -95,7 +91,6 @@ st.markdown(
         .header-box h1 { color: #ffffff !important; margin: 0; font-size: 24px; font-weight: 700; }
         .header-box p { color: #d0e0ff !important; margin-top: 4px; font-size: 13px; margin-bottom: 0; }
 
-        /* Modernização do Sidebar & Menu de Navegação (Radio Buttons como Cards) */
         [data-testid="stSidebar"] {
             background-color: #ffffff !important;
             border-right: 1px solid #e9ecef;
@@ -110,7 +105,6 @@ st.markdown(
             box-shadow: 0 2px 5px rgba(0,0,0,0.03);
         }
 
-        /* Estilização dos Radio Buttons do Menu Lateral */
         div[data-testid="stSidebar"] div[role="radiogroup"] {
             gap: 6px;
         }
@@ -129,7 +123,6 @@ st.markdown(
             border-color: #cbd5e1;
             transform: translateX(3px);
         }
-        /* Item selecionado no Radio Menu */
         div[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
             background: linear-gradient(135deg, #002060 0%, #003366 100%) !important;
             color: #ffffff !important;
@@ -141,7 +134,6 @@ st.markdown(
             color: #ffffff !important;
         }
 
-        /* Cards do Login e Métricas */
         .login-card {
             background-color: #ffffff;
             padding: 30px 35px;
@@ -158,7 +150,6 @@ st.markdown(
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         }
 
-        /* Tags de Seleção Multiselect */
         [data-baseweb="tag"], span[data-baseweb="tag"], div[data-baseweb="tag"] {
             background-color: #002060 !important;
             color: #ffffff !important;
@@ -562,7 +553,6 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     if "Rloc_Cia" not in df_out.columns:
         df_out["Rloc_Cia"] = df_out["Localizador_Sistema"]
 
-    # Limpeza estrita de bilhetes
     df_out["Bilhetes"] = df_out["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
     df_out["Localizador_Sistema"] = df_out["Localizador_Sistema"].astype(str).str.strip()
     df_out["Rloc_Cia"] = df_out["Rloc_Cia"].astype(str).str.strip()
@@ -588,11 +578,9 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
     df_out["Origem_Aba"] = origem
     df_out["Tipo_Inconsistencia"] = df_out.apply(categorizar_tipo_inconsistencia, axis=1)
 
-    # PROCESSAMENTO VETORIZADO DAS DATAS & RÓTULOS CRONOLÓGICOS (Jan, Fev, Mar...)
     dt_parsed = pd.to_datetime(df_out["Data Emissão"], format="mixed", dayfirst=True, errors="coerce")
     df_out["Dt_Parsed"] = dt_parsed
 
-    # Mes_Ano_Sort no formato YYYY-MM para ordenação cronológica estrita
     df_out["Mes_Ano_Sort"] = np.where(
         dt_parsed.notna(),
         dt_parsed.dt.strftime("%Y-%m"),
@@ -613,7 +601,7 @@ def padronizar_e_deduplicar_colunas(df, origem=""):
 
 
 # ==============================================================================
-# 5. CARREGAMENTO COM CACHE DE MEMÓRIA & PERSISTÊNCIA SECURA
+# 5. CARREGAMENTO COM CACHE DE MEMÓRIA & PERSISTÊNCIA SEGURA
 # ==============================================================================
 def _get_file_mtime(filename):
     return os.path.getmtime(filename) if os.path.exists(filename) else 0.0
@@ -660,7 +648,7 @@ def carregar_bases():
 
 
 def salvar_base_consolidada(df_m, df_d, df_s, df_b, df_l):
-    """Gravação unificada e segura no Excel para evitar lockings de permissão."""
+    """Gravação unificada no Excel garantindo atualização total do sistema."""
     try:
         with pd.ExcelWriter(
             ARQUIVO_DASHBOARD, engine="openpyxl", mode="a", if_sheet_exists="replace"
@@ -760,7 +748,7 @@ if "Bilhetes" in df_acao_total.columns:
 
 usuario_log_formatado = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
 
-# Header principal da aplicação
+# Header principal
 col_hdr1, col_hdr2 = st.columns([3, 1])
 with col_hdr1:
     st.markdown(
@@ -787,7 +775,7 @@ if "msg_sucesso" in st.session_state:
 renderizar_marca()
 
 # ==============================================================================
-# 7. SIDEBAR & MENU DE NAVEGAÇÃO MODERNO
+# 7. SIDEBAR & MENU DE NAVEGAÇÃO
 # ==============================================================================
 st.sidebar.markdown(
     f"""
@@ -864,7 +852,7 @@ st.sidebar.markdown("---")
 st.sidebar.title("🔍 Filtros Operacionais")
 
 # ==============================================================================
-# 8. FILTROS GLOBAIS COM ORDENAÇÃO CRONOLÓGICA DAS DATAS (Jan, Fev, Mar...)
+# 8. FILTROS GLOBAIS COM ORDENAÇÃO CRONOLÓGICA DAS DATAS
 # ==============================================================================
 df_meses_ord = (
     df_acao_total[df_acao_total["Mes_Ano_Label"].notna()]
@@ -878,9 +866,7 @@ opcoes_meses_ordenadas = [
 if "Acumulado / Sem Data" in df_acao_total["Mes_Ano_Label"].values:
     opcoes_meses_ordenadas.append("Acumulado / Sem Data")
 
-mes_sel = st.sidebar.multiselect(
-    "📅 Mês de Emissão:", options=opcoes_meses_ordenadas, default=[]
-)
+mes_sel = st.sidebar.multiselect("📅 Mês de Emissão:", options=opcoes_meses_ordenadas, default=[])
 
 df_f_mes = (
     df_acao_total[df_acao_total["Mes_Ano_Label"].isin(mes_sel)]
@@ -1056,16 +1042,118 @@ if aba_atual == "📊 Dashboard & KPIs":
             height=350, xaxis_title="Mês da Emissão", yaxis_title="Volume de Bilhetes",
             legend_title="Setor", margin=dict(l=10, r=10, t=20, b=20),
         )
-        # Garantia de ordenação cronológica estrita do eixo X no gráfico
         fig_line.update_xaxes(
             categoryorder="array",
             categoryarray=opcoes_meses_ordenadas
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
-# ABA 1: TRATATIVA OPERACIONAL (GERAL) - LOTE
+# ABA 1: TRATATIVA OPERACIONAL (GERAL) - LOTE + UPLOAD DE RETORNOS
 elif aba_atual == "🎯 Tratativa Operacional (Geral)":
     st.subheader("📝 Módulo de Resolução Operacional (Atribuição Individual ou em Lote)")
+
+    # ==========================================================================
+    # NOVO MÓDULO: UPLOAD E PROCESSAMENTO DE RETORNOS DOS GERENTES (EXCEL)
+    # ==========================================================================
+    with st.expander("📥 Carga de Retornos Gerenciais (Upload de Planilhas de Gerentes em Lote)", expanded=False):
+        st.caption("Suba uma ou mais planilhas enviadas pelos gerentes com as tratativas. O sistema cruzará os bilhetes e atualizará a base master e o Dashboard automaticamente.")
+        
+        arquivos_retorno = st.file_uploader(
+            "Arraste ou selecione os arquivos Excel de retorno dos gerentes:",
+            type=["xlsx", "xls"],
+            accept_multiple_files=True,
+            key="uploader_retornos_gerenciais"
+        )
+
+        if arquivos_retorno and st.button("🚀 Processar Retornos e Atualizar Dashboard"):
+            total_atualizados = 0
+            novos_logs_retorno = []
+
+            # Mapeamento rápido de chaves em cada base
+            for df_target_name, df_target in [("df_master", df_master), ("df_div_op", df_div_op), ("df_sem_div", df_sem_div)]:
+                if df_target is not None and not df_target.empty and "Bilhetes" in df_target.columns:
+                    df_target["Bilhete_Key"] = df_target["Bilhetes"].apply(clean_str_strict)
+
+            for arq in arquivos_retorno:
+                try:
+                    df_ret = pd.read_excel(arq)
+                    if "Bilhetes" not in df_ret.columns and "Bilhete" in df_ret.columns:
+                        df_ret.rename(columns={"Bilhete": "Bilhetes"}, inplace=True)
+
+                    if "Bilhetes" in df_ret.columns:
+                        df_ret["Bilhete_Key"] = df_ret["Bilhetes"].apply(clean_str_strict)
+                        
+                        col_obs_ret = "Obs. Operação" if "Obs. Operação" in df_ret.columns else ("OBS" if "OBS" in df_ret.columns else None)
+                        col_area_ret = "Área Resp. Operação" if "Área Resp. Operação" in df_ret.columns else ("GERENTES" if "GERENTES" in df_ret.columns else None)
+
+                        if col_obs_ret:
+                            # Filtra apenas linhas com observações válidas
+                            df_validos = df_ret[
+                                df_ret[col_obs_ret].notna() &
+                                (df_ret[col_obs_ret].astype(str).str.strip() != "") &
+                                (~df_ret[col_obs_ret].astype(str).str.strip().str.lower().isin(["sem tratativa na operação", "nan", "-", "none"]))
+                            ]
+
+                            for _, r_ret in df_validos.iterrows():
+                                b_key = r_ret["Bilhete_Key"]
+                                nova_obs = str(r_ret[col_obs_ret]).strip()
+                                nova_area = str(r_ret[col_area_ret]).strip() if col_area_ret and pd.notna(r_ret[col_area_ret]) else ""
+
+                                # Busca o bilhete nas bases
+                                atualizado = False
+                                for df_target in [df_master, df_div_op, df_sem_div]:
+                                    if df_target is not None and "Bilhete_Key" in df_target.columns:
+                                        mask = df_target["Bilhete_Key"] == b_key
+                                        if mask.any():
+                                            idxs = df_target[mask].index
+                                            for idx in idxs:
+                                                obs_ant = str(df_target.loc[idx, "Obs. Operação"]).strip()
+                                                area_ant = str(df_target.loc[idx, COL_GERENTE]).strip()
+
+                                                if nova_obs != obs_ant or (nova_area and nova_area not in ["nan", "Não Atribuído", ""] and nova_area != area_ant):
+                                                    df_target.loc[idx, "Obs. Operação"] = nova_obs
+                                                    if nova_area and nova_area not in ["nan", "Não Atribuído", ""]:
+                                                        df_target.loc[idx, COL_GERENTE] = padronizar_gerentes_e_setores_vector(pd.Series([nova_area])).iloc[0]
+
+                                                    total_atualizados += 1
+                                                    atualizado = True
+                                                    sincronizar_planilhas_auxiliares(b_key, nova_area or area_ant, nova_obs)
+
+                                                    novos_logs_retorno.append({
+                                                        "Data_Hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                                        "Bilhete": b_key,
+                                                        "Usuario_Acao": usuario_log_formatado,
+                                                        "Status_Anterior": df_target.loc[idx, "Status_Geral"],
+                                                        "Novo_Status": df_target.loc[idx, "Status_Geral"],
+                                                        "Area_Anterior": area_ant,
+                                                        "Nova_Area": df_target.loc[idx, COL_GERENTE],
+                                                        "Observacao": f"[Retorno Planilha]: {nova_obs}",
+                                                        "Tipo_Interacao": "Carga de Retorno Gerencial",
+                                                    })
+                except Exception as e:
+                    st.error(f"Erro ao processar o arquivo '{arq.name}': {str(e)}")
+
+            # Remove colunas auxiliares de chave
+            for df_target in [df_master, df_div_op, df_sem_div]:
+                if df_target is not None and "Bilhete_Key" in df_target.columns:
+                    df_target.drop(columns=["Bilhete_Key"], inplace=True)
+
+            if total_atualizados > 0:
+                mascara_back_upd = df_master[COL_GERENTE].astype(str).str.lower().str.contains("suporte backoffice|suporte benner|katia martins", na=False)
+                df_back_atualizado = df_master[mascara_back_upd].copy()
+                df_log_updated = pd.concat([df_log_master, pd.DataFrame(novos_logs_retorno)], ignore_index=True)
+
+                sucesso_save, err_msg = salvar_base_consolidada(df_master, df_div_op, df_sem_div, df_back_atualizado, df_log_updated)
+                if sucesso_save:
+                    st.session_state["msg_sucesso"] = f"🎉 Sucesso! {total_atualizados} registro(s) foram atualizados a partir das planilhas importadas e refletidos no Dashboard."
+                    st.rerun()
+                else:
+                    st.error(err_msg)
+            else:
+                st.warning("⚠️ Nenhuma nova alteração válida foi encontrada nas planilhas de retorno enviadas.")
+
+    st.markdown("---")
+
     if len(df_master_filtrado) == 0:
         st.warning("Nenhum bilhete encontrado na base geral para os filtros selecionados.")
     else:
