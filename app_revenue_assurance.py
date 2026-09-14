@@ -1158,7 +1158,7 @@ if aba_atual == "📊 Dashboard & KPIs":
 elif aba_atual == "🎯 Tratativa Operacional (Geral)":
     st.subheader("📝 Módulo de Resolução Operacional (Atribuição Individual ou em Lote)")
 
-    # UPLOAD ULTRA-RÁPIDO COM PROTEÇÃO CONTRA TRAVAMENTO
+    # UPLOAD COM BARRA DE PROGRESSO & RELATÓRIO DE ALTERAÇÕES
     with st.expander("📥 Carga de Retornos Gerenciais (Upload Otimizado de Planilhas de Gerentes)", expanded=False):
         st.caption("Suba as planilhas enviadas pelos gerentes com as tratativas. O leitor ultra-leve foca nas abas de pendências sem travar a interface.")
         
@@ -1174,6 +1174,9 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
             novos_logs_retorno = []
             relatorio_modificados = []
 
+            tot_arqs = len(arquivos_retorno)
+            bar_progresso = st.progress(0, text="⚡ Iniciando leitura e indexação dos arquivos...")
+
             with st.status("⚡ Processando arquivos de retorno em alta velocidade...", expanded=True) as status:
                 st.write("🔍 Indexando base de dados para busca em milissegundos...")
                 
@@ -1188,7 +1191,9 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                                 map_index[k].append((target_name, idx))
 
                 for num_arq, arq in enumerate(arquivos_retorno, 1):
-                    st.write(f"📄 Lendo arquivo {num_arq}/{len(arquivos_retorno)}: **{arq.name}**...")
+                    prog_pct = int((num_arq / tot_arqs) * 100)
+                    bar_progresso.progress(num_arq / tot_arqs, text=f"📂 Processando arquivo {num_arq} de {tot_arqs} ({prog_pct}%)...")
+                    st.write(f"📄 Lendo arquivo {num_arq}/{tot_arqs}: **{arq.name}**...")
                     try:
                         wb_check = openpyxl.load_workbook(arq, read_only=True, data_only=True)
                         all_sheets = wb_check.sheetnames
@@ -1325,6 +1330,7 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                     except Exception as e:
                         st.error(f"Erro ao processar o arquivo '{arq.name}': {str(e)}")
 
+                bar_progresso.progress(1.0, text="✅ Processamento e sincronização concluídos (100%)!")
                 status.update(label="✅ Processamento concluído com sucesso!", state="complete")
 
             if total_atualizados > 0:
@@ -1332,9 +1338,10 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                 df_back_atualizado = df_master[mascara_back_upd].copy() if not df_master.empty else pd.DataFrame()
                 df_log_updated = pd.concat([df_log_master, pd.DataFrame(novos_logs_retorno)], ignore_index=True)
 
+                # Persistência garantida na planilha original de Dashboard
                 sucesso_save, err_msg = salvar_base_consolidada(df_master, df_div_op, df_sem_div, df_back_atualizado, df_log_updated)
                 if sucesso_save:
-                    st.session_state["msg_sucesso"] = f"🎉 Sucesso! {total_atualizados} registro(s) foram atualizados sem travamentos."
+                    st.session_state["msg_sucesso"] = f"🎉 Processamento Finalizado com Sucesso! {total_atualizados} registro(s) foram atualizados e salvos no arquivo 'Dashboard_Revenue_Assurance_Consolidado.xlsx'."
                     st.session_state["relatorio_modificados"] = relatorio_modificados
                     st.rerun()
                 else:
@@ -1342,21 +1349,32 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
             else:
                 st.warning("⚠️ Nenhuma nova alteração válida foi encontrada nas abas processadas.")
 
-        if "relatorio_modificados" in st.session_state and st.session_state["relatorio_modificados"]:
-            df_rel_mod = pd.DataFrame(st.session_state["relatorio_modificados"])
-            st.markdown("---")
-            col_rm1, col_rm2 = st.columns([3, 1])
-            with col_rm1:
-                st.markdown(f"#### 📄 Relatório Detalhado de Casos Atualizados ({len(df_rel_mod)} registros)")
-            with col_rm2:
-                st.download_button(
-                    label="📥 Exportar Casos Modificados (Excel)",
-                    data=gerar_excel_formatado(df_rel_mod, "Casos_Modificados"),
-                    file_name=f"Relatorio_Casos_Modificados_{dt_str_export}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="btn_exp_casos_modificados"
-                )
-            st.dataframe(df_rel_mod, hide_index=True)
+    # EXIBIÇÃO EM DESTAQUE E DOWNLOAD DO RELATÓRIO DE ALTERAÇÕES
+    if "relatorio_modificados" in st.session_state and st.session_state["relatorio_modificados"]:
+        df_rel_mod = pd.DataFrame(st.session_state["relatorio_modificados"])
+        st.markdown(
+            f"""
+            <div style="background-color: #e6f4ea; border-left: 5px solid #2b9348; padding: 15px; border-radius: 8px; margin-top: 15px; margin-bottom: 15px;">
+                <h4 style="color: #1e4620; margin: 0;">✅ Retornos Processados e Salvos na Planilha Oficial!</h4>
+                <p style="color: #2b9348; margin-top: 4px; margin-bottom: 0;">Foram realizadas <b>{len(df_rel_mod)} alteração(ões)</b>. Baixe o relatório detalhado das modificações abaixo:</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        
+        col_rm1, col_rm2 = st.columns([3, 1])
+        with col_rm1:
+            st.markdown(f"##### 📄 Relação Detalhada das Alterações Realizadas ({len(df_rel_mod)} registros)")
+        with col_rm2:
+            st.download_button(
+                label="📥 Extrair Relatório de Alterações (Excel)",
+                data=gerar_excel_formatado(df_rel_mod, "Relatorio_Alteracoes"),
+                file_name=f"Relatorio_Alteracoes_Processadas_{dt_str_export}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_exp_casos_modificados_top",
+                type="primary"
+            )
+        st.dataframe(df_rel_mod, hide_index=True)
 
     st.markdown("---")
 
@@ -1381,7 +1399,6 @@ elif aba_atual == "🎯 Tratativa Operacional (Geral)":
                 df_master_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_selecionados)
             ]
             
-            # FILTRAGEM DINÂMICA SEGURA CONTRA KEYERROR
             cols_desejadas_g = ["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Status_Geral"]
             cols_exibir_g = [c for c in cols_desejadas_g if c in df_previa.columns]
             
@@ -1523,7 +1540,6 @@ elif aba_atual == "⚠️ Divergência Operação (CIAs/BSP HOT)":
             st.info(f"⚡ **{len(bilhetes_div_sel)} divergência(s) selecionada(s)** para resolução.")
             df_previa_div = df_div_op_filtrado[df_div_op_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_div_sel)]
             
-            # FILTRAGEM DINÂMICA SEGURA CONTRA KEYERROR
             cols_desejadas_d = ["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Divergencia", "Status_Geral"]
             cols_exibir_d = [c for c in cols_desejadas_d if c in df_previa_div.columns]
             
@@ -1705,7 +1721,6 @@ elif aba_atual == "🎧 Suporte Backoffice":
 
             df_previa_bk = df_backoffice_filtrado[df_backoffice_filtrado["Bilhetes"].apply(clean_str_strict).isin(bilhetes_back_sel)]
             
-            # FILTRAGEM DINÂMICA SEGURA CONTRA KEYERROR
             cols_desejadas_bk = ["Ponto de venda", "Área Resp. Operação", "CIA", "📄 Origem / Arquivo", "Bilhetes", "Rloc_Cia", "Status_Geral", "Obs. Operação"]
             cols_exibir_bk = [c for c in cols_desejadas_bk if c in df_previa_bk.columns]
             
