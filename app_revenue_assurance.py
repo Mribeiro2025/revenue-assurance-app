@@ -23,6 +23,7 @@ st.set_page_config(
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
 ARQUIVO_MEMORIA = "Historico_Tratativas.csv"
+PASTA_ENVIO = "Envio"
 
 USUARIOS_PADRAO = {
     "mribeiro": {
@@ -247,6 +248,35 @@ def sincronizar_memoria_csv(df_m, df_d, df_s, df_b):
     except Exception as e:
         st.warning(f"Aviso de sincronização da memória CSV: {e}")
 
+def salvar_copia_retorno_automatica(novos_logs_list, pasta_destino=PASTA_ENVIO):
+    """Salva automaticamente uma cópia do relatório de alterações no disco sem intervenção do usuário."""
+    if not novos_logs_list:
+        return
+    try:
+        if not os.path.exists(pasta_destino):
+            os.makedirs(pasta_destino)
+            
+        agora = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        nome_arquivo = os.path.join(pasta_destino, f"Relatorio_Alteracoes_{agora}.xlsx")
+        
+        df_alteracoes = pd.DataFrame(novos_logs_list)
+        df_alteracoes.rename(columns={
+            "Bilhete": "Nº Bilhete / LOC",
+            "Status_Anterior": "Status Anterior",
+            "Novo_Status": "Novo Status",
+            "Area_Anterior": "Área Anterior",
+            "Nova_Area": "Nova Área / Gerente",
+            "Observacao": "Observação Aplicada",
+            "Tipo_Interacao": "Ação Executada"
+        }, inplace=True)
+        
+        with pd.ExcelWriter(nome_arquivo, engine="openpyxl") as writer:
+            df_alteracoes.to_excel(writer, sheet_name="Relatorio_Alteracoes", index=False)
+            
+        print(f"📁 Cópia do relatório salva automaticamente em: {nome_arquivo}")
+    except Exception as e:
+        print(f"⚠️ Aviso ao salvar cópia automática do relatório: {e}")
+
 def salvar_bases(df_m, df_d, df_s, df_b, df_l):
     """Salva a planilha mantendo a estrutura enxuta e sincroniza a memória protegida em CSV."""
     try:
@@ -272,28 +302,91 @@ def salvar_bases(df_m, df_d, df_s, df_b, df_l):
         st.error(f"Erro ao salvar arquivo consolidado: {e}")
         return False
 
-def ingestar_lote_semanal(arquivos_novos, df_master_atual, df_sem_div_atual):
-    novos_registros = []
+def ingestar_lote_semanal(arquivos_novos, df_m, df_d, df_s, df_b, df_log_atual):
+    """Lê e processa tanto relatórios de retorno quanto novos arquivos brutos de emissão."""
+    novos_registros_brutos = []
+    novos_logs = []
+    qtd_alteracoes_relatorio = 0
+    agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    usr_str = f"{st.session_state.get('usuario_atual', 'Sistema')} ({st.session_state.get('login_user_id', 'master')})"
+
     for arq in arquivos_novos:
         xls = pd.ExcelFile(arq, engine="openpyxl")
         for sheet in xls.sheet_names:
             df_temp = pd.read_excel(xls, sheet_name=sheet)
-            col_bilhete = [c for c in df_temp.columns if "bilhete" in str(c).lower() or "ticket" in str(c).lower()]
-            if col_bilhete:
-                df_temp = df_temp.rename(columns={col_bilhete[0]: "Bilhetes"})
-                df_temp["Bilhetes"] = df_temp["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
-                novos_registros.append(df_temp)
+            cols_clean = [str(c).strip() for c in df_temp.columns]
 
-    if novos_registros:
-        df_lote = pd.concat(novos_registros, ignore_index=True)
-        bilhetes_conciliados = set(df_sem_div_atual["Bilhetes"].astype(str)) if "Bilhetes" in df_sem_div_atual.columns else set()
+            # MODO 1: Identifica se é um Relatório de Alterações / Retorno
+            if "Nº Bilhete / LOC" in cols_clean or "Novo Status" in cols_clean:
+                col_b = next((c for c in df_temp.columns if "bilhete" in str(c).lower() or "loc" in str(c).lower()), None)
+                col_sn = next((c for c in df_temp.columns if "novo status" in str(c).lower()), None)
+                col_sa = next((c for c in df_temp.columns if "status anterior" in str(c).lower()), None)
+                col_an = next((c for c in df_temp.columns if "nova área" in str(c).lower() or "gerente" in str(c).lower()), None)
+                col_aa = next((c for c in df_temp.columns if "área anterior" in str(c).lower()), None)
+                col_obs = next((c for c in df_temp.columns if "observação" in str(c).lower() or "obs" in str(c).lower()), None)
+                col_act = next((c for c in df_temp.columns if "ação" in str(c).lower()), None)
+
+                all_target_dfs = [df_m, df_d, df_s, df_b]
+                for _, r in df_temp.iterrows():
+                    b_val = str(r[col_b]).strip().replace(".0", "") if col_b and pd.notna(r[col_b]) else ""
+                    if not b_val or b_val.lower() in ["nan", "none", ""]: 
+                        continue
+
+                    st_novo = str(r[col_sn]).strip() if col_sn and pd.notna(r[col_sn]) else ""
+                    st_ant = str(r[col_sa]).strip() if col_sa and pd.notna(r[col_sa]) else "-"
+                    ar_nova = str(r[col_an]).strip() if col_an and pd.notna(r[col_an]) else ""
+                    ar_ant = str(r[col_aa]).strip() if col_aa and pd.notna(r[col_aa]) else "-"
+                    obs_val = str(r[col_obs]).strip() if col_obs and pd.notna(r[col_obs]) else ""
+                    act_val = str(r[col_act]).strip() if col_act and pd.notna(r[col_act]) else "Ingestão via Relatório de Retorno"
+
+                    atualizado = False
+                    for df_t in all_target_dfs:
+                        if df_t is not None and not df_t.empty and "Bilhetes" in df_t.columns:
+                            mask = df_t["Bilhetes"].astype(str).str.strip() == b_val
+                            if mask.any():
+                                if st_novo and st_novo != "-": df_t.loc[mask, "Status_Geral"] = st_novo
+                                if ar_nova and ar_nova != "-": df_t.loc[mask, "Área Resp. Operação"] = ar_nova
+                                if obs_val and obs_val != "-": df_t.loc[mask, "Obs. Operação"] = obs_val
+                                if "Data_Modificacao" in df_t.columns: df_t.loc[mask, "Data_Modificacao"] = agora_str
+                                if "Usuario_Modificacao" in df_t.columns: df_t.loc[mask, "Usuario_Modificacao"] = usr_str
+                                atualizado = True
+
+                    if atualizado or st_novo:
+                        qtd_alteracoes_relatorio += 1
+                        novos_logs.append({
+                            "Data_Hora": agora_str,
+                            "Bilhete": b_val,
+                            "Usuario_Acao": usr_str,
+                            "Status_Anterior": st_ant,
+                            "Novo_Status": st_novo,
+                            "Area_Anterior": ar_ant,
+                            "Nova_Area": ar_nova,
+                            "Observacao": obs_val,
+                            "Tipo_Interacao": act_val
+                        })
+
+            # MODO 2: Identifica se é um arquivo bruto de emissão de Cia Aérea / OBT
+            else:
+                col_bilhete = [c for c in df_temp.columns if "bilhete" in str(c).lower() or "ticket" in str(c).lower()]
+                if col_bilhete:
+                    df_temp = df_temp.rename(columns={col_bilhete[0]: "Bilhetes"})
+                    df_temp["Bilhetes"] = df_temp["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+                    novos_registros_brutos.append(df_temp)
+
+    # Consolida logs atualizados
+    df_log_consolidado = pd.concat([df_log_atual, pd.DataFrame(novos_logs)], ignore_index=True) if novos_logs else df_log_atual
+
+    # Processa novos registros brutos de emissão se houver
+    if novos_registros_brutos:
+        df_lote = pd.concat(novos_registros_brutos, ignore_index=True)
+        bilhetes_conciliados = set(df_s["Bilhetes"].astype(str)) if df_s is not None and "Bilhetes" in df_s.columns else set()
         df_lote_filtrado = df_lote[~df_lote["Bilhetes"].isin(bilhetes_conciliados)].copy()
         
-        df_master_atualizado = pd.concat([df_master_atual, df_lote_filtrado], ignore_index=True)
+        df_master_atualizado = pd.concat([df_m, df_lote_filtrado], ignore_index=True)
         df_master_atualizado = df_master_atualizado.drop_duplicates(subset=["Bilhetes"], keep="first")
-        return padronizar_df(df_master_atualizado), len(df_lote_filtrado)
-        
-    return df_master_atual, 0
+        return padronizar_df(df_master_atualizado), df_log_consolidado, len(df_lote_filtrado) + qtd_alteracoes_relatorio
+
+    return df_m, df_log_consolidado, qtd_alteracoes_relatorio
 
 def gerar_excel_estilizado(df_export, nome_aba="Relatorio_Filtrado"):
     buffer = io.BytesIO()
@@ -590,6 +683,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix, df_global_re
                             "Usuario_Acao": usr_str,
                             "Status_Anterior": df_sel.get("Status_Geral", "-"),
                             "Novo_Status": n_status,
+                            "Area_Anterior": df_sel.get("Área Resp. Operação", "-"),
                             "Nova_Area": n_area,
                             "Observacao": n_obs,
                             "Tipo_Interacao": f"Tratativa ({nome_base})"
@@ -618,7 +712,8 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix, df_global_re
                         df_backoffice = pd.concat([df_backoffice, movidos], ignore_index=True)
                     
                     if salvar_bases(df_master, df_div_op, df_sem_div, df_backoffice, df_log):
-                        st.success("✅ Tratativas salvas e registradas com sucesso no histórico!")
+                        salvar_copia_retorno_automatica(novos_logs, pasta_destino=PASTA_ENVIO)
+                        st.success("✅ Tratativas salvas, registradas e cópia gerada automaticamente na pasta!")
                         st.rerun()
 
     st.markdown("---")
@@ -698,10 +793,12 @@ if e_master():
             key="uploader_master_semanal"
         )
         if arqs_semanais and st.button("🚀 Ingestar e Atualizar Lote Semanal", type="primary"):
-            df_m_novo, qtd_adicionados = ingestar_lote_semanal(arqs_semanais, df_master, df_sem_div)
+            df_m_novo, df_log_novo, qtd_adicionados = ingestar_lote_semanal(
+                arqs_semanais, df_master, df_div_op, df_sem_div, df_backoffice, df_log
+            )
             if qtd_adicionados > 0:
-                if salvar_bases(df_m_novo, df_div_op, df_sem_div, df_backoffice, df_log):
-                    st.success(f"🎉 Processamento concluído! {qtd_adicionados} novos registros adicionados sem duplicar conciliados.")
+                if salvar_bases(df_m_novo, df_div_op, df_sem_div, df_backoffice, df_log_novo):
+                    st.success(f"🎉 Processamento concluído! {qtd_adicionados} registros e logs atualizados com sucesso.")
                     st.rerun()
             else:
-                st.info("Nenhum novo bilhete pendente identificado.")
+                st.info("Nenhum novo registro ou alteração identificada.")

@@ -136,51 +136,91 @@ def extract_keys(val):
     return list(keys)
 
 
+import glob
+import os
+import pandas as pd
+
+
 def carregar_tratativas_e_logs_anteriores(out_file):
     dict_historico = {}
     df_log_antigo = pd.DataFrame()
 
     def indexar_memoria(b_raw, dados):
+        """Indexa os dados do bilhete aplicando chaves flexíveis e ignorando nulos."""
+        if not b_raw or str(b_raw).strip().lower() in ["nan", "none", "", "-"]:
+            return
+
         for k in extract_keys(b_raw):
             if k not in dict_historico:
                 dict_historico[k] = {}
             for col, val in dados.items():
-                if pd.notna(val) and str(val).strip() and str(val).strip() not in ["-", "nan", "Sem tratativa na operação"]:
+                val_str = str(val).strip() if pd.notna(val) else ""
+                if val_str and val_str not in ["-", "nan", "none", "Sem tratativa na operação"]:
                     dict_historico[k][col] = val
 
+    # 1º Passo: Carrega do Excel consolidado anterior
     if os.path.exists(out_file):
         try:
             xls = pd.ExcelFile(out_file, engine="openpyxl")
             if "00_Log_Auditoria" in xls.sheet_names:
                 df_log_antigo = pd.read_excel(xls, sheet_name="00_Log_Auditoria")
 
-            for aba in xls.sheet_names:
-                if aba.startswith("98_") or aba.startswith("99_"):
-                    df_temp = pd.read_excel(xls, sheet_name=aba)
-                    if "Bilhetes" in df_temp.columns:
-                        for _, r in df_temp.iterrows():
-                            b_key = clean_str_strict(r["Bilhetes"])
-                            if b_key:
-                                indexar_memoria(b_key, {
-                                    "Status_Geral": r.get("Status_Geral"),
-                                    "Área Resp. Operação": r.get("Área Resp. Operação"),
-                                    "Obs. Operação": r.get("Obs. Operação"),
-                                    "Setor": r.get("Setor"),
-                                    "Obs_Auditoria_Replica": r.get("Obs_Auditoria_Replica"),
-                                    "Ponto de venda": r.get("Ponto de venda"),
-                                    "Código Iata": r.get("Código Iata"),
-                                    "Data_Modificacao": r.get("Data_Modificacao"),
-                                    "Usuario_Modificacao": r.get("Usuario_Modificacao"),
-                                    "Ultima_Alteracao": r.get("Ultima_Alteracao"),
-                                })
+            # Prioriza abas resolvidas (98_) sobre abas pendentes (99_)
+            abas_ordenadas = sorted(
+                [a for a in xls.sheet_names if a.startswith("98_") or a.startswith("99_")],
+                reverse=True
+            )
+
+            for aba in abas_ordenadas:
+                df_temp = pd.read_excel(xls, sheet_name=aba)
+                if "Bilhetes" in df_temp.columns:
+                    for r in df_temp.to_dict("records"):
+                        b_key = clean_str_strict(r.get("Bilhetes"))
+                        if b_key:
+                            indexar_memoria(b_key, {
+                                "Status_Geral": r.get("Status_Geral"),
+                                "Área Resp. Operação": r.get("Área Resp. Operação"),
+                                "Obs. Operação": r.get("Obs. Operação"),
+                                "Setor": r.get("Setor"),
+                                "Obs_Auditoria_Replica": r.get("Obs_Auditoria_Replica"),
+                                "Ponto de venda": r.get("Ponto de venda"),
+                                "Código Iata": r.get("Código Iata"),
+                                "Data_Modificacao": r.get("Data_Modificacao"),
+                                "Usuario_Modificacao": r.get("Usuario_Modificacao"),
+                                "Ultima_Alteracao": r.get("Ultima_Alteracao"),
+                            })
         except Exception as e:
             print(f"⚠️ Aviso ao carregar histórico do Excel: {e}")
 
+    # 2º Passo: Varre e resgata Relatórios de Alterações avulsos salvos na pasta (se houver)
+    arqs_relatorios = glob.glob("Relatorio_Alteracoes_*.xlsx")
+    for arq_rel in arqs_relatorios:
+        try:
+            df_rel = pd.read_excel(arq_rel)
+            col_b = next((c for c in df_rel.columns if "bilhete" in str(c).lower() or "loc" in str(c).lower()), None)
+            col_st = next((c for c in df_rel.columns if "novo status" in str(c).lower()), None)
+            col_ar = next((c for c in df_rel.columns if "nova área" in str(c).lower() or "gerente" in str(c).lower()), None)
+            col_obs = next((c for c in df_rel.columns if "observação" in str(c).lower() or "obs" in str(c).lower()), None)
+
+            if col_b:
+                for r in df_rel.to_dict("records"):
+                    b_key = clean_str_strict(r.get(col_b))
+                    if b_key:
+                        indexar_memoria(b_key, {
+                            "Status_Geral": r.get(col_st) if col_st else None,
+                            "Área Resp. Operação": r.get(col_ar) if col_ar else None,
+                            "Obs. Operação": r.get(col_obs) if col_obs else None,
+                        })
+                print(f"📥 Resgatado histórico do relatório avulso: '{arq_rel}'")
+        except Exception as e:
+            print(f"⚠️ Aviso ao ler relatório avulso {arq_rel}: {e}")
+
+    # 3º Passo: Aplica com prioridade MÁXIMA a memória protegida em CSV (Historico_Tratativas.csv)
     file_memoria = "Historico_Tratativas.csv"
     if os.path.exists(file_memoria) and os.path.getsize(file_memoria) > 0:
         try:
             df_mem = pd.read_csv(file_memoria, dtype=str)
-            for _, r in df_mem.iterrows():
+            for r in df_mem.to_dict("records"):
                 b_key = clean_str_strict(r.get("Bilhetes", ""))
                 if b_key:
                     indexar_memoria(b_key, {
@@ -188,6 +228,7 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                         "Área Resp. Operação": r.get("Área Resp. Operação"),
                         "Obs. Operação": r.get("Obs. Operação"),
                         "Setor": r.get("Setor"),
+                        "Obs_Auditoria_Replica": r.get("Obs_Auditoria_Replica"),
                         "Ponto de venda": r.get("Ponto de venda"),
                         "Código Iata": r.get("Código Iata"),
                         "Data_Modificacao": r.get("Data_Modificacao"),
