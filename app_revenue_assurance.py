@@ -193,7 +193,6 @@ def padronizar_df(df):
     for c in ["Data_Modificacao", "Usuario_Modificacao", "Ultima_Alteracao"]:
         if c not in df_out.columns: df_out[c] = "-"
 
-    # Parsing de data para filtro em formato brasileiro (DD/MM/YYYY)
     df_out["Dt_Parsed"] = pd.to_datetime(df_out["Data Emissão"], format="mixed", dayfirst=True, errors="coerce")
     
     cols_prioritarias = [
@@ -228,7 +227,6 @@ def carregar_bases():
         return vazio, vazio, vazio, vazio, pd.DataFrame()
 
 def sincronizar_memoria_csv(df_m, df_d, df_s, df_b):
-    """Sincroniza a memória de tratativas via gravação atômica protegida do OneDrive."""
     try:
         df_todos = pd.concat([df_m, df_d, df_s, df_b], ignore_index=True)
         cols_mem = [
@@ -249,7 +247,6 @@ def sincronizar_memoria_csv(df_m, df_d, df_s, df_b):
         st.warning(f"Aviso de sincronização da memória CSV: {e}")
 
 def salvar_copia_retorno_automatica(novos_logs_list, pasta_destino=PASTA_ENVIO):
-    """Salva automaticamente uma cópia do relatório de alterações no disco sem intervenção do usuário."""
     if not novos_logs_list:
         return
     try:
@@ -278,7 +275,6 @@ def salvar_copia_retorno_automatica(novos_logs_list, pasta_destino=PASTA_ENVIO):
         print(f"⚠️ Aviso ao salvar cópia automática do relatório: {e}")
 
 def salvar_bases(df_m, df_d, df_s, df_b, df_l):
-    """Salva a planilha mantendo a estrutura enxuta e sincroniza a memória protegida em CSV."""
     try:
         cols_drop = ["Dt_Parsed"]
         def clean_df(df_in):
@@ -303,20 +299,25 @@ def salvar_bases(df_m, df_d, df_s, df_b, df_l):
         return False
 
 def ingestar_lote_semanal(arquivos_novos, df_m, df_d, df_s, df_b, df_log_atual):
-    """Lê e processa tanto relatórios de retorno quanto novos arquivos brutos de emissão."""
+    """Lê e processa relatórios com barra de progresso em tempo real."""
     novos_registros_brutos = []
     novos_logs = []
     qtd_alteracoes_relatorio = 0
     agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     usr_str = f"{st.session_state.get('usuario_atual', 'Sistema')} ({st.session_state.get('login_user_id', 'master')})"
 
-    for arq in arquivos_novos:
+    total_arquivos = len(arquivos_novos)
+    barra_progresso = st.progress(0, text="Iniciando leitura dos arquivos...")
+
+    for idx_arq, arq in enumerate(arquivos_novos):
+        percentual = int(((idx_arq + 1) / total_arquivos) * 100)
+        barra_progresso.progress(percentual, text=f"⏳ Lendo arquivo {idx_arq + 1} de {total_arquivos}: {arq.name}")
+
         xls = pd.ExcelFile(arq, engine="openpyxl")
         for sheet in xls.sheet_names:
             df_temp = pd.read_excel(xls, sheet_name=sheet)
             cols_clean = [str(c).strip() for c in df_temp.columns]
 
-            # MODO 1: Identifica se é um Relatório de Alterações / Retorno
             if "Nº Bilhete / LOC" in cols_clean or "Novo Status" in cols_clean:
                 col_b = next((c for c in df_temp.columns if "bilhete" in str(c).lower() or "loc" in str(c).lower()), None)
                 col_sn = next((c for c in df_temp.columns if "novo status" in str(c).lower()), None)
@@ -364,8 +365,6 @@ def ingestar_lote_semanal(arquivos_novos, df_m, df_d, df_s, df_b, df_log_atual):
                             "Observacao": obs_val,
                             "Tipo_Interacao": act_val
                         })
-
-            # MODO 2: Identifica se é um arquivo bruto de emissão de Cia Aérea / OBT
             else:
                 col_bilhete = [c for c in df_temp.columns if "bilhete" in str(c).lower() or "ticket" in str(c).lower()]
                 if col_bilhete:
@@ -373,10 +372,10 @@ def ingestar_lote_semanal(arquivos_novos, df_m, df_d, df_s, df_b, df_log_atual):
                     df_temp["Bilhetes"] = df_temp["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
                     novos_registros_brutos.append(df_temp)
 
-    # Consolida logs atualizados
+    barra_progresso.progress(100, text="✅ Processamento do lote concluído!")
+
     df_log_consolidado = pd.concat([df_log_atual, pd.DataFrame(novos_logs)], ignore_index=True) if novos_logs else df_log_atual
 
-    # Processa novos registros brutos de emissão se houver
     if novos_registros_brutos:
         df_lote = pd.concat(novos_registros_brutos, ignore_index=True)
         bilhetes_conciliados = set(df_s["Bilhetes"].astype(str)) if df_s is not None and "Bilhetes" in df_s.columns else set()
@@ -485,7 +484,8 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio_Filtrado"):
     output_buffer.seek(0)
     return output_buffer.getvalue()
 
-df_master, df_div_op, df_sem_div, df_backoffice, df_log = carregar_bases()
+with st.spinner("🔄 Carregando bases de dados do painel..."):
+    df_master, df_div_op, df_sem_div, df_backoffice, df_log = carregar_bases()
 
 # ==============================================================================
 # 4. SIDEBAR E FILTROS BRASILEIROS POR DATA
@@ -652,69 +652,70 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix, df_global_re
                 n_obs = st.text_area("Observação / Justificativa Detalhada:", value=str(df_sel.get("Obs. Operação", "")), key=f"obs_{key_prefix}")
                 
                 if st.form_submit_button("💾 Salvar e Atualizar Bilhetes"):
-                    global df_master, df_div_op, df_sem_div, df_backoffice, df_log
-                    
-                    agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
-                    
-                    if df_global_ref_name == "df_master":
-                        target_df = df_master
-                    elif df_global_ref_name == "df_div_op":
-                        target_df = df_div_op
-                    elif df_global_ref_name == "df_backoffice":
-                        target_df = df_backoffice
-                    else:
-                        target_df = df_sem_div
-
-                    mask_global = target_df["Bilhetes"].isin(bilhet_sel)
-                    
-                    target_df.loc[mask_global, "Status_Geral"] = n_status
-                    target_df.loc[mask_global, "Área Resp. Operação"] = n_area
-                    target_df.loc[mask_global, "Obs. Operação"] = n_obs
-                    target_df.loc[mask_global, "Data_Modificacao"] = agora_str
-                    target_df.loc[mask_global, "Usuario_Modificacao"] = usr_str
-                    target_df.loc[mask_global, "Ultima_Alteracao"] = f"Status: '{n_status}' | Obs: {n_obs}"
-
-                    novos_logs = []
-                    for b_sel in bilhet_sel:
-                        novos_logs.append({
-                            "Data_Hora": agora_str,
-                            "Bilhete": b_sel,
-                            "Usuario_Acao": usr_str,
-                            "Status_Anterior": df_sel.get("Status_Geral", "-"),
-                            "Novo_Status": n_status,
-                            "Area_Anterior": df_sel.get("Área Resp. Operação", "-"),
-                            "Nova_Area": n_area,
-                            "Observacao": n_obs,
-                            "Tipo_Interacao": f"Tratativa ({nome_base})"
-                        })
-                    df_log = pd.concat([df_log, pd.DataFrame(novos_logs)], ignore_index=True)
-
-                    if n_status in ["Já Lançado no ERP", "Sem Divergência (OK)"]:
-                        movidos = target_df[mask_global].copy()
+                    with st.spinner("⚡ Atualizando registros e gravando histórico..."):
+                        global df_master, df_div_op, df_sem_div, df_backoffice, df_log
+                        
+                        agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
+                        
                         if df_global_ref_name == "df_master":
-                            df_master = df_master[~mask_global].reset_index(drop=True)
+                            target_df = df_master
                         elif df_global_ref_name == "df_div_op":
-                            df_div_op = df_div_op[~mask_global].reset_index(drop=True)
+                            target_df = df_div_op
                         elif df_global_ref_name == "df_backoffice":
-                            df_backoffice = df_backoffice[~mask_global].reset_index(drop=True)
+                            target_df = df_backoffice
+                        else:
+                            target_df = df_sem_div
+
+                        mask_global = target_df["Bilhetes"].isin(bilhet_sel)
                         
-                        df_sem_div = pd.concat([df_sem_div, movidos], ignore_index=True)
-                    elif n_status == "Encaminhado para Suporte Backoffice" and df_global_ref_name != "df_backoffice":
-                        movidos = target_df[mask_global].copy()
-                        if df_global_ref_name == "df_master":
-                            df_master = df_master[~mask_global].reset_index(drop=True)
-                        elif df_global_ref_name == "df_div_op":
-                            df_div_op = df_div_op[~mask_global].reset_index(drop=True)
-                        elif df_global_ref_name == "df_sem_div":
-                            df_sem_div = df_sem_div[~mask_global].reset_index(drop=True)
+                        target_df.loc[mask_global, "Status_Geral"] = n_status
+                        target_df.loc[mask_global, "Área Resp. Operação"] = n_area
+                        target_df.loc[mask_global, "Obs. Operação"] = n_obs
+                        target_df.loc[mask_global, "Data_Modificacao"] = agora_str
+                        target_df.loc[mask_global, "Usuario_Modificacao"] = usr_str
+                        target_df.loc[mask_global, "Ultima_Alteracao"] = f"Status: '{n_status}' | Obs: {n_obs}"
+
+                        novos_logs = []
+                        for b_sel in bilhet_sel:
+                            novos_logs.append({
+                                "Data_Hora": agora_str,
+                                "Bilhete": b_sel,
+                                "Usuario_Acao": usr_str,
+                                "Status_Anterior": df_sel.get("Status_Geral", "-"),
+                                "Novo_Status": n_status,
+                                "Area_Anterior": df_sel.get("Área Resp. Operação", "-"),
+                                "Nova_Area": n_area,
+                                "Observacao": n_obs,
+                                "Tipo_Interacao": f"Tratativa ({nome_base})"
+                            })
+                        df_log = pd.concat([df_log, pd.DataFrame(novos_logs)], ignore_index=True)
+
+                        if n_status in ["Já Lançado no ERP", "Sem Divergência (OK)"]:
+                            movidos = target_df[mask_global].copy()
+                            if df_global_ref_name == "df_master":
+                                df_master = df_master[~mask_global].reset_index(drop=True)
+                            elif df_global_ref_name == "df_div_op":
+                                df_div_op = df_div_op[~mask_global].reset_index(drop=True)
+                            elif df_global_ref_name == "df_backoffice":
+                                df_backoffice = df_backoffice[~mask_global].reset_index(drop=True)
+                            
+                            df_sem_div = pd.concat([df_sem_div, movidos], ignore_index=True)
+                        elif n_status == "Encaminhado para Suporte Backoffice" and df_global_ref_name != "df_backoffice":
+                            movidos = target_df[mask_global].copy()
+                            if df_global_ref_name == "df_master":
+                                df_master = df_master[~mask_global].reset_index(drop=True)
+                            elif df_global_ref_name == "df_div_op":
+                                df_div_op = df_div_op[~mask_global].reset_index(drop=True)
+                            elif df_global_ref_name == "df_sem_div":
+                                df_sem_div = df_sem_div[~mask_global].reset_index(drop=True)
+                            
+                            df_backoffice = pd.concat([df_backoffice, movidos], ignore_index=True)
                         
-                        df_backoffice = pd.concat([df_backoffice, movidos], ignore_index=True)
-                    
-                    if salvar_bases(df_master, df_div_op, df_sem_div, df_backoffice, df_log):
-                        salvar_copia_retorno_automatica(novos_logs, pasta_destino=PASTA_ENVIO)
-                        st.success("✅ Tratativas salvas, registradas e cópia gerada automaticamente na pasta!")
-                        st.rerun()
+                        if salvar_bases(df_master, df_div_op, df_sem_div, df_backoffice, df_log):
+                            salvar_copia_retorno_automatica(novos_logs, pasta_destino=PASTA_ENVIO)
+                            st.success("✅ Tratativas salvas, registradas e cópia gerada automaticamente na pasta!")
+                            st.rerun()
 
     st.markdown("---")
     st.markdown(f"##### 📄 Lista Completa dos Bilhetes - {nome_base} ({len(df_filtrado)} registros)")
@@ -797,8 +798,9 @@ if e_master():
                 arqs_semanais, df_master, df_div_op, df_sem_div, df_backoffice, df_log
             )
             if qtd_adicionados > 0:
-                if salvar_bases(df_m_novo, df_div_op, df_sem_div, df_backoffice, df_log_novo):
-                    st.success(f"🎉 Processamento concluído! {qtd_adicionados} registros e logs atualizados com sucesso.")
-                    st.rerun()
+                with st.spinner("💾 Consolidadando e salvando bases do painel..."):
+                    if salvar_bases(df_m_novo, df_div_op, df_sem_div, df_backoffice, df_log_novo):
+                        st.success(f"🎉 Processamento concluído! {qtd_adicionados} registros e logs atualizados com sucesso.")
+                        st.rerun()
             else:
                 st.info("Nenhum novo registro ou alteração identificada.")
