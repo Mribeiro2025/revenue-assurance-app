@@ -24,6 +24,7 @@ ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
 ARQUIVO_MEMORIA = "Historico_Tratativas.csv"
 PASTA_ENVIO = "Envio"
+PASTA_INPUTS_LOCAL = r"C:\Users\mribeiro1\MARINGA TURISMO\Maringá Turismo - PLANEJAMENTO ESTRATEGICO (1)\01-Planejamento Estratégico\Auditoria de Bilhetes\inputs"
 
 USUARIOS_PADRAO = {
     "mribeiro": {
@@ -164,8 +165,39 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# 3. TRATAMENTO DE DADOS E CARGA (COM ENGINE EXPLÍCITO OPENPYXL)
+# 3. TRATAMENTO DE DADOS, ARMAZENAMENTO E CARGA
 # ==============================================================================
+def salvar_arquivo_em_disco(conteudo, nome_arquivo):
+    """
+    Salva arquivos fisicamente na pasta de inputs especificada pelo usuário,
+    com fallback automático para pastas locais caso o caminho de rede não exista.
+    """
+    pastas_destino = [
+        PASTA_INPUTS_LOCAL,
+        os.path.join(os.getcwd(), "inputs"),
+        PASTA_ENVIO
+    ]
+    caminhos_salvos = []
+    for pasta in pastas_destino:
+        try:
+            os.makedirs(pasta, exist_ok=True)
+            caminho_completo = os.path.join(pasta, nome_arquivo)
+            if isinstance(conteudo, pd.DataFrame):
+                with pd.ExcelWriter(caminho_completo, engine="openpyxl") as writer:
+                    conteudo.to_excel(writer, sheet_name="Relatorio_Auditoria", index=False)
+            elif isinstance(conteudo, bytes):
+                with open(caminho_completo, "wb") as f:
+                    f.write(conteudo)
+            elif hasattr(conteudo, "read") and hasattr(conteudo, "seek"):
+                conteudo.seek(0)
+                with open(caminho_completo, "wb") as f:
+                    f.write(conteudo.read())
+                conteudo.seek(0)
+            caminhos_salvos.append(caminho_completo)
+        except Exception:
+            pass
+    return caminhos_salvos
+
 def clean_str(val):
     if pd.isna(val) or val is None: return ""
     s = str(val).strip()
@@ -246,16 +278,11 @@ def sincronizar_memoria_csv(df_m, df_d, df_s, df_b):
     except Exception as e:
         st.warning(f"Aviso de sincronização da memória CSV: {e}")
 
-def salvar_copia_retorno_automatica(novos_logs_list, pasta_destino=PASTA_ENVIO):
+def salvar_copia_retorno_automatica(novos_logs_list):
     if not novos_logs_list:
         return
     try:
-        if not os.path.exists(pasta_destino):
-            os.makedirs(pasta_destino)
-            
         agora = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        nome_arquivo = os.path.join(pasta_destino, f"Relatorio_Alteracoes_{agora}.xlsx")
-        
         df_alteracoes = pd.DataFrame(novos_logs_list)
         df_alteracoes.rename(columns={
             "Bilhete": "Nº Bilhete / LOC",
@@ -267,10 +294,8 @@ def salvar_copia_retorno_automatica(novos_logs_list, pasta_destino=PASTA_ENVIO):
             "Tipo_Interacao": "Ação Executada"
         }, inplace=True)
         
-        with pd.ExcelWriter(nome_arquivo, engine="openpyxl") as writer:
-            df_alteracoes.to_excel(writer, sheet_name="Relatorio_Alteracoes", index=False)
-            
-        print(f"📁 Cópia do relatório salva automaticamente em: {nome_arquivo}")
+        nome_arq = f"Relatorio_Alteracoes_{agora}.xlsx"
+        salvar_arquivo_em_disco(df_alteracoes, nome_arq)
     except Exception as e:
         print(f"⚠️ Aviso ao salvar cópia automática do relatório: {e}")
 
@@ -300,7 +325,9 @@ def salvar_bases(df_m, df_d, df_s, df_b, df_l):
 
 def ingestar_lote_semanal(arquivos_novos, df_m, df_d, df_s, df_b, df_log_atual):
     """
-    Ingestão com container de status em tempo real, progresso detalhado e retorno do relatório de auditoria do lote.
+    Ingestão avançada com salvamento em disco no diretório local de inputs,
+    detecção inteligente de colunas (relatórios de retorno e relatórios exportados)
+    e geração imediata do relatório de auditoria para conferência das alterações.
     """
     novos_registros_brutos = []
     novos_logs = []
@@ -319,26 +346,28 @@ def ingestar_lote_semanal(arquivos_novos, df_m, df_d, df_s, df_b, df_log_atual):
             pct = int(((idx_arq + 1) / total_arquivos) * 100)
             barra_progresso.progress(pct, text=f"📂 Lendo arquivo {idx_arq + 1} de {total_arquivos}: '{arq.name}' ({pct}%)")
 
+            # Armazena cópia física do arquivo enviado na pasta de inputs
+            salvar_arquivo_em_disco(arq, arq.name)
+
             xls = pd.ExcelFile(arq, engine="openpyxl")
             for sheet in xls.sheet_names:
                 df_temp = pd.read_excel(xls, sheet_name=sheet)
                 total_linhas_lidas += len(df_temp)
-                cols_clean = [str(c).strip() for c in df_temp.columns]
+                cols_raw = df_temp.columns.tolist()
 
-                place_info.markdown(
-                    f"🔹 **Arquivo Atual:** `{arq.name}` | **Aba:** `{sheet}` | **Linhas:** `{len(df_temp):,}`\n\n"
-                    f"📈 **Total Acumulado:** `{total_linhas_lidas:,}` linhas analisadas | `{qtd_alteracoes_relatorio:,}` alterações mapeadas."
-                )
+                # Identificação flexível das colunas do arquivo enviado
+                col_b = next((c for c in cols_raw if any(x in str(c).lower() for x in ["bilhete", "loc", "ticket"])), None)
+                col_sn = next((c for c in cols_raw if any(x in str(c).lower() for x in ["novo status", "novo_status", "status_geral", "status geral"])), None)
+                col_an = next((c for c in cols_raw if any(x in str(c).lower() for x in ["nova área", "nova area", "nova_area", "gerente", "área resp", "area resp"])), None)
+                col_obs = next((c for c in cols_raw if any(x in str(c).lower() for x in ["observação", "observacao", "obs"])), None)
+                
+                col_sa = next((c for c in cols_raw if "status anterior" in str(c).lower() or "status_anterior" in str(c).lower()), None)
+                col_aa = next((c for c in cols_raw if "área anterior" in str(c).lower() or "area_anterior" in str(c).lower()), None)
+                col_act = next((c for c in cols_raw if "ação" in str(c).lower() or "acao" in str(c).lower() or "interação" in str(c).lower()), None)
 
-                if "Nº Bilhete / LOC" in cols_clean or "Novo Status" in cols_clean:
-                    col_b = next((c for c in df_temp.columns if "bilhete" in str(c).lower() or "loc" in str(c).lower()), None)
-                    col_sn = next((c for c in df_temp.columns if "novo status" in str(c).lower()), None)
-                    col_sa = next((c for c in df_temp.columns if "status anterior" in str(c).lower()), None)
-                    col_an = next((c for c in df_temp.columns if "nova área" in str(c).lower() or "gerente" in str(c).lower()), None)
-                    col_aa = next((c for c in df_temp.columns if "área anterior" in str(c).lower()), None)
-                    col_obs = next((c for c in df_temp.columns if "observação" in str(c).lower() or "obs" in str(c).lower()), None)
-                    col_act = next((c for c in df_temp.columns if "ação" in str(c).lower()), None)
+                is_update_file = bool(col_b and (col_sn or col_an or col_obs))
 
+                if is_update_file:
                     all_target_dfs = [df_m, df_d, df_s, df_b]
                     for _, r in df_temp.iterrows():
                         b_val = str(r[col_b]).strip().replace(".0", "") if col_b and pd.notna(r[col_b]) else ""
@@ -346,17 +375,23 @@ def ingestar_lote_semanal(arquivos_novos, df_m, df_d, df_s, df_b, df_log_atual):
                             continue
 
                         st_novo = str(r[col_sn]).strip() if col_sn and pd.notna(r[col_sn]) else ""
-                        st_ant = str(r[col_sa]).strip() if col_sa and pd.notna(r[col_sa]) else "-"
+                        st_ant_file = str(r[col_sa]).strip() if col_sa and pd.notna(r[col_sa]) else "-"
                         ar_nova = str(r[col_an]).strip() if col_an and pd.notna(r[col_an]) else ""
-                        ar_ant = str(r[col_aa]).strip() if col_aa and pd.notna(r[col_aa]) else "-"
+                        ar_ant_file = str(r[col_aa]).strip() if col_aa and pd.notna(r[col_aa]) else "-"
                         obs_val = str(r[col_obs]).strip() if col_obs and pd.notna(r[col_obs]) else ""
-                        act_val = str(r[col_act]).strip() if col_act and pd.notna(r[col_act]) else "Ingestão via Relatório de Retorno"
+                        act_val = str(r[col_act]).strip() if col_act and pd.notna(r[col_act]) else "Ingestão via Relatório de Retorno/Base"
 
+                        real_st_ant = "-"
+                        real_ar_ant = "-"
                         atualizado = False
+
                         for df_t in all_target_dfs:
                             if df_t is not None and not df_t.empty and "Bilhetes" in df_t.columns:
                                 mask = df_t["Bilhetes"].astype(str).str.strip() == b_val
                                 if mask.any():
+                                    real_st_ant = str(df_t.loc[mask, "Status_Geral"].values[0])
+                                    real_ar_ant = str(df_t.loc[mask, "Área Resp. Operação"].values[0])
+
                                     if st_novo and st_novo != "-": df_t.loc[mask, "Status_Geral"] = st_novo
                                     if ar_nova and ar_nova != "-": df_t.loc[mask, "Área Resp. Operação"] = ar_nova
                                     if obs_val and obs_val != "-": df_t.loc[mask, "Obs. Operação"] = obs_val
@@ -364,21 +399,28 @@ def ingestar_lote_semanal(arquivos_novos, df_m, df_d, df_s, df_b, df_log_atual):
                                     if "Usuario_Modificacao" in df_t.columns: df_t.loc[mask, "Usuario_Modificacao"] = usr_str
                                     atualizado = True
 
-                        if atualizado or st_novo:
+                        if atualizado or (st_novo and st_novo != "-"):
                             qtd_alteracoes_relatorio += 1
                             novos_logs.append({
                                 "Data_Hora": agora_str,
                                 "Bilhete": b_val,
                                 "Usuario_Acao": usr_str,
-                                "Status_Anterior": st_ant,
-                                "Novo_Status": st_novo,
-                                "Area_Anterior": ar_ant,
-                                "Nova_Area": ar_nova,
+                                "Status_Anterior": real_st_ant if real_st_ant != "-" else st_ant_file,
+                                "Novo_Status": st_novo if st_novo else real_st_ant,
+                                "Area_Anterior": real_ar_ant if real_ar_ant != "-" else ar_ant_file,
+                                "Nova_Area": ar_nova if ar_nova else real_ar_ant,
                                 "Observacao": obs_val,
                                 "Tipo_Interacao": act_val
                             })
+
+                        # Atualiza dinamicamente as métricas no topo do container de status
+                        place_info.markdown(
+                            f"🔹 **Arquivo Atual:** `{arq.name}` | **Aba:** `{sheet}` | **Linhas Lidas:** `{len(df_temp):,}`\n\n"
+                            f"📈 **Total Acumulado:** `{total_linhas_lidas:,}` linhas analisadas | `{qtd_alteracoes_relatorio:,}` alterações mapeadas com sucesso."
+                        )
+
                 else:
-                    col_bilhete = [c for c in df_temp.columns if "bilhete" in str(c).lower() or "ticket" in str(c).lower()]
+                    col_bilhete = [c for c in cols_raw if "bilhete" in str(c).lower() or "ticket" in str(c).lower()]
                     if col_bilhete:
                         df_temp = df_temp.rename(columns={col_bilhete[0]: "Bilhetes"})
                         df_temp["Bilhetes"] = df_temp["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
@@ -728,7 +770,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix, df_global_re
                             df_backoffice = pd.concat([df_backoffice, movidos], ignore_index=True)
                         
                         if salvar_bases(df_master, df_div_op, df_sem_div, df_backoffice, df_log):
-                            salvar_copia_retorno_automatica(novos_logs, pasta_destino=PASTA_ENVIO)
+                            salvar_copia_retorno_automatica(novos_logs)
                             st.success("✅ Tratativas salvas, registradas e cópia gerada automaticamente na pasta!")
                             st.rerun()
 
@@ -815,6 +857,8 @@ if e_master():
     # ABA 7: CARGA DE RELATÓRIOS (AO LADO DA AUDITORIA)
     with aba_sel[7]:
         st.subheader("📥 Carga de Relatórios Semanais em Lote (Acesso Restrito ao Master)")
+        st.info(f"📁 Os arquivos enviados e os relatórios de auditoria gerados são armazenados automaticamente em:\n`{PASTA_INPUTS_LOCAL}`")
+        
         arqs_semanais = st.file_uploader(
             "Arraste ou selecione os arquivos Excel de retorno (.xlsx):",
             type=["xlsx", "xls"],
@@ -825,31 +869,39 @@ if e_master():
             df_m_novo, df_log_novo, df_novos_logs, total_lidos, qtd_adicionados = ingestar_lote_semanal(
                 arqs_semanais, df_master, df_div_op, df_sem_div, df_backoffice, df_log
             )
-            if qtd_adicionados > 0 or not df_novos_logs.empty:
-                with st.spinner("💾 Consolidando e salvando bases do painel..."):
-                    if salvar_bases(df_m_novo, df_div_op, df_sem_div, df_backoffice, df_log_novo):
-                        st.session_state["ultimo_relatorio_auditoria"] = df_novos_logs
-                        st.session_state["qtd_ultimos_alterados"] = qtd_adicionados
-                        st.session_state["total_ultimos_lidos"] = total_lidos
-                        st.success(f"🎉 Ingestão finalizada! {qtd_adicionados:,} registros/tratativas atualizados de {total_lidos:,} linhas lidas.")
+            
+            with st.spinner("💾 Consolidando e salvando bases do painel..."):
+                salvar_bases(df_m_novo, df_div_op, df_sem_div, df_backoffice, df_log_novo)
+                
+                st.session_state["ultimo_relatorio_auditoria"] = df_novos_logs
+                st.session_state["qtd_ultimos_alterados"] = qtd_adicionados
+                st.session_state["total_ultimos_lidos"] = total_lidos
+                
+                if not df_novos_logs.empty:
+                    nome_rel_audit = f"Relatorio_Auditoria_Carga_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                    salvar_arquivo_em_disco(df_novos_logs, nome_rel_audit)
+                
+                st.success(f"🎉 Ingestão finalizada com sucesso! {qtd_adicionados:,} registros/tratativas atualizados de {total_lidos:,} linhas analisadas.")
 
-        # Exibe o Relatório de Auditoria da Carga Atual (se houver carga recente na sessão)
-        if "ultimo_relatorio_auditoria" in st.session_state and not st.session_state["ultimo_relatorio_auditoria"].empty:
+        # Exibe SEMPRE o Relatório de Auditoria da Carga se houver registros na sessão
+        if "ultimo_relatorio_auditoria" in st.session_state and isinstance(st.session_state["ultimo_relatorio_auditoria"], pd.DataFrame):
             df_audit_carga = st.session_state["ultimo_relatorio_auditoria"]
             st.markdown("---")
-            st.markdown("### 📋 Relatório de Auditoria das Alterações Processadas na Carga")
+            st.markdown("### 📋 Relatório de Auditoria de Extração para Conferência de Alterações")
             
             cm1, cm2, cm3 = st.columns(3)
             cm1.metric("Total de Linhas Analisadas", f"{st.session_state.get('total_ultimos_lidos', 0):,}")
-            cm2.metric("Alterações Aplicadas nesta Carga", f"{st.session_state.get('qtd_ultimos_alterados', 0):,}")
+            cm2.metric("Alterações / Tratativas Processadas", f"{st.session_state.get('qtd_ultimos_alterados', 0):,}")
             cm3.metric("Data/Hora da Operação", datetime.datetime.now().strftime("%d/%m/%Y %H:%M"))
 
-            st.download_button(
-                "📥 Baixar Relatório de Auditoria desta Carga (Excel)",
-                data=gerar_excel_estilizado(df_audit_carga, "Relatorio_Auditoria_Carga"),
-                file_name=f"Relatorio_Auditoria_Carga_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                key="btn_dl_audit_carga_atual",
-                type="primary"
-            )
-
-            st.dataframe(df_audit_carga, width="stretch", hide_index=True)
+            if not df_audit_carga.empty:
+                st.download_button(
+                    "📥 Baixar Relatório de Auditoria Desta Carga (.xlsx)",
+                    data=gerar_excel_estilizado(df_audit_carga, "Relatorio_Auditoria_Carga"),
+                    file_name=f"Relatorio_Auditoria_Carga_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                    key="btn_dl_audit_carga_atual",
+                    type="primary"
+                )
+                st.dataframe(df_audit_carga, width="stretch", hide_index=True)
+            else:
+                st.warning("Nenhuma divergência de status/área foi alterada na carga selecionada.")

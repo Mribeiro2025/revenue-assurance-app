@@ -1,5 +1,6 @@
 import csv
 import datetime
+import glob
 import os
 import re
 import shutil
@@ -20,6 +21,9 @@ os.chdir(DIR_ATUAL)
 print("=" * 75)
 print(" MOTOR DE AUDITORIA FP&A ADVANCED - REVENUE ASSURANCE ".center(75, "="))
 print("=" * 75)
+
+PASTA_ENVIO = "Envio"
+PASTA_INPUTS_LOCAL = r"C:\Users\mribeiro1\MARINGA TURISMO\Maringá Turismo - PLANEJAMENTO ESTRATEGICO (1)\01-Planejamento Estratégico\Auditoria de Bilhetes\inputs"
 
 MAPA_CIAS = {
     "JJ": "LATAM", "LA": "LATAM", "PZ": "LATAM", "4C": "LATAM", "XL": "LATAM", "4M": "LATAM",
@@ -136,12 +140,12 @@ def extract_keys(val):
     return list(keys)
 
 
-import glob
-import os
-import pandas as pd
-
-
 def carregar_tratativas_e_logs_anteriores(out_file):
+    """
+    Varre e lê de forma inteligente a base consolidada, os arquivos salvos
+    na pasta de inputs e a memória protegida em CSV para carregar todas as
+    tratativas e informações alteradas antes de rodar o motor.
+    """
     dict_historico = {}
     df_log_antigo = pd.DataFrame()
 
@@ -192,28 +196,47 @@ def carregar_tratativas_e_logs_anteriores(out_file):
         except Exception as e:
             print(f"⚠️ Aviso ao carregar histórico do Excel: {e}")
 
-    # 2º Passo: Varre e resgata Relatórios de Alterações avulsos salvos na pasta (se houver)
-    arqs_relatorios = glob.glob("Relatorio_Alteracoes_*.xlsx")
-    for arq_rel in arqs_relatorios:
-        try:
-            df_rel = pd.read_excel(arq_rel)
-            col_b = next((c for c in df_rel.columns if "bilhete" in str(c).lower() or "loc" in str(c).lower()), None)
-            col_st = next((c for c in df_rel.columns if "novo status" in str(c).lower()), None)
-            col_ar = next((c for c in df_rel.columns if "nova área" in str(c).lower() or "gerente" in str(c).lower()), None)
-            col_obs = next((c for c in df_rel.columns if "observação" in str(c).lower() or "obs" in str(c).lower()), None)
+    # 2º Passo: Varre e lê de forma INTELIGENTE todos os arquivos salvos nas pastas de inputs
+    pastas_busca = [
+        PASTA_INPUTS_LOCAL,
+        os.path.join(os.getcwd(), "inputs"),
+        PASTA_ENVIO,
+        os.getcwd()
+    ]
 
-            if col_b:
-                for r in df_rel.to_dict("records"):
-                    b_key = clean_str_strict(r.get(col_b))
-                    if b_key:
-                        indexar_memoria(b_key, {
-                            "Status_Geral": r.get(col_st) if col_st else None,
-                            "Área Resp. Operação": r.get(col_ar) if col_ar else None,
-                            "Obs. Operação": r.get(col_obs) if col_obs else None,
-                        })
-                print(f"📥 Resgatado histórico do relatório avulso: '{arq_rel}'")
+    arqs_encontrados = set()
+    for pasta in pastas_busca:
+        if os.path.exists(pasta):
+            for ext in ["*.xlsx", "*.xls"]:
+                arqs_encontrados.update(glob.glob(os.path.join(pasta, ext)))
+
+    for arq_rel in sorted(arqs_encontrados):
+        # Ignora o próprio Dashboard Consolidado para não haver sobreposição
+        if os.path.basename(arq_rel) == os.path.basename(out_file):
+            continue
+        try:
+            xls = pd.ExcelFile(arq_rel, engine="openpyxl")
+            for sheet in xls.sheet_names:
+                df_rel = pd.read_excel(xls, sheet_name=sheet)
+                cols_raw = df_rel.columns.tolist()
+
+                col_b = next((c for c in cols_raw if any(x in str(c).lower() for x in ["bilhete", "loc", "ticket"])), None)
+                col_st = next((c for c in cols_raw if any(x in str(c).lower() for x in ["novo status", "novo_status", "status_geral", "status geral"])), None)
+                col_ar = next((c for c in cols_raw if any(x in str(c).lower() for x in ["nova área", "nova area", "gerente", "área resp", "area resp"])), None)
+                col_obs = next((c for c in cols_raw if any(x in str(c).lower() for x in ["observação", "observacao", "obs"])), None)
+
+                if col_b and (col_st or col_ar or col_obs):
+                    for r in df_rel.to_dict("records"):
+                        b_key = clean_str_strict(r.get(col_b))
+                        if b_key:
+                            indexar_memoria(b_key, {
+                                "Status_Geral": r.get(col_st) if col_st else None,
+                                "Área Resp. Operação": r.get(col_ar) if col_ar else None,
+                                "Obs. Operação": r.get(col_obs) if col_obs else None,
+                            })
+                    print(f"📥 Resgatado histórico do arquivo salvo em inputs: '{os.path.basename(arq_rel)}' (Aba: {sheet})")
         except Exception as e:
-            print(f"⚠️ Aviso ao ler relatório avulso {arq_rel}: {e}")
+            pass
 
     # 3º Passo: Aplica com prioridade MÁXIMA a memória protegida em CSV (Historico_Tratativas.csv)
     file_memoria = "Historico_Tratativas.csv"
@@ -784,8 +807,10 @@ def executar_auditoria():
 
     wb.save(out_file_model)
 
-    # Sincronização e gravação atômica da memória em CSV
-    salvar_csv_atomico(df_master[["Bilhetes", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Ponto de venda", "Código Iata"]].drop_duplicates(subset=["Bilhetes"]), "Historico_Tratativas.csv")
+    salvar_csv_atomico(
+        df_master[["Bilhetes", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Ponto de venda", "Código Iata"]].drop_duplicates(subset=["Bilhetes"]),
+        "Historico_Tratativas.csv"
+    )
 
     conn = sqlite3.connect("revenue_assurance.db")
     try:
