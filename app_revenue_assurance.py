@@ -190,9 +190,10 @@ def salvar_arquivo_em_disco(conteudo, nome_arquivo):
                     f.write(conteudo)
             elif hasattr(conteudo, "read") and hasattr(conteudo, "seek"):
                 conteudo.seek(0)
-                with open(caminho_completo, "wb") as f:
-                    f.write(conteudo.read())
+                bytes_data = conteudo.read()
                 conteudo.seek(0)
+                with open(caminho_completo, "wb") as f:
+                    f.write(bytes_data)
             caminhos_salvos.append(caminho_completo)
         except Exception:
             pass
@@ -235,6 +236,71 @@ def padronizar_df(df):
     outras = [c for c in df_out.columns if c not in existentes]
     return df_out[existentes + outras]
 
+def rotear_bases_backoffice(df_m, df_d, df_s, df_b):
+    """
+    Analisa e roteia dinamicamente registros entre as bases (Master, Divergências, OK e Backoffice)
+    para garantir que bilhetes direcionados ao Suporte Backoffice sejam exibidos na aba correspondente.
+    """
+    df_m = padronizar_df(df_m)
+    df_d = padronizar_df(df_d)
+    df_s = padronizar_df(df_s)
+    df_b = padronizar_df(df_b)
+
+    def e_backoffice_row(r):
+        st_val = str(r.get("Status_Geral", "")).strip()
+        ar_val = str(r.get("Área Resp. Operação", "")).strip().upper()
+        se_val = str(r.get("Setor", "")).strip().lower()
+        obs_val = str(r.get("Obs. Operação", "")).strip().lower()
+
+        if st_val == "Encaminhado para Suporte Backoffice":
+            return True
+        if any(k in ar_val for k in ["SUPORTE BACKOFFICE", "SUPORTE BENNER", "KATIA MARTINS", "BACKOFFICE", "SUPORTE"]):
+            return True
+        if se_val in ["suporte backoffice", "suporte"]:
+            return True
+        if any(p in obs_val for p in ["ticket 375", "chamado no backoffice", "chamado backoffice", "erro de integração", "erro integração", "aguardando suporte", "suporte backoffice", "suporte benner", "encaminhado suporte"]):
+            return True
+        return False
+
+    def e_resolvido_row(r):
+        st_val = str(r.get("Status_Geral", "")).strip().lower()
+        return any(term in st_val for term in ["já lançado", "conciliado", "regularizado", "sem divergência", "ok"])
+
+    df_all = pd.concat([df_m, df_d, df_b], ignore_index=True)
+    if df_all.empty or "Bilhetes" not in df_all.columns:
+        return df_m, df_d, df_s, df_b
+
+    df_all = df_all.drop_duplicates(subset=["Bilhetes"], keep="last")
+
+    mask_bo = df_all.apply(e_backoffice_row, axis=1)
+    mask_ok = df_all.apply(e_resolvido_row, axis=1)
+
+    # 1. Suporte Backoffice
+    df_b_novo = df_all[mask_bo & ~mask_ok].copy()
+    if not df_b_novo.empty:
+        df_b_novo["Setor"] = "Suporte backoffice"
+        df_b_novo["Área Resp. Operação"] = df_b_novo["Área Resp. Operação"].apply(
+            lambda x: "Suporte Backoffice" if str(x).strip() in ["-", "", "Não Mapeado", "nan", "None"] else x
+        )
+
+    # 2. Resolvidos -> Conciliados
+    df_s_novos = df_all[mask_ok].copy()
+    if not df_s_novos.empty:
+        df_s = pd.concat([df_s, df_s_novos], ignore_index=True).drop_duplicates(subset=["Bilhetes"], keep="last")
+
+    # 3. Restante
+    df_resto = df_all[~mask_bo & ~mask_ok].copy()
+    
+    if "Status_Divergencia" in df_resto.columns:
+        mask_div = df_resto["Status_Divergencia"].astype(str).str.contains("Divergência", case=False, na=False)
+        df_d_novo = df_resto[mask_div].copy()
+        df_m_novo = df_resto[~mask_div].copy()
+    else:
+        df_m_novo = df_resto
+        df_d_novo = pd.DataFrame()
+
+    return padronizar_df(df_m_novo), padronizar_df(df_d_novo), padronizar_df(df_s), padronizar_df(df_b_novo)
+
 @st.cache_data(ttl=300)
 def carregar_bases():
     vazio = padronizar_df(None)
@@ -253,7 +319,9 @@ def carregar_bases():
         s = pd.read_excel(xls, "98_OK_Sem_Divergencia_Concil") if "98_OK_Sem_Divergencia_Concil" in xls.sheet_names else None
         b = pd.read_excel(xls, "99_Suporte backoffice") if "99_Suporte backoffice" in xls.sheet_names else None
         l = pd.read_excel(xls, "00_Log_Auditoria") if "00_Log_Auditoria" in xls.sheet_names else pd.DataFrame()
-        return padronizar_df(m), padronizar_df(d), padronizar_df(s), padronizar_df(b), l
+
+        m_p, d_p, s_p, b_p = rotear_bases_backoffice(m, d, s, b)
+        return m_p, d_p, s_p, b_p, l
     except Exception as e:
         st.error(f"⚠️ O arquivo de dados está temporariamente indisponível ou corrompido. Execute o script de auditoria para restaurá-lo. ({e})")
         return vazio, vazio, vazio, vazio, pd.DataFrame()
@@ -301,6 +369,8 @@ def salvar_copia_retorno_automatica(novos_logs_list):
 
 def salvar_bases(df_m, df_d, df_s, df_b, df_l):
     try:
+        df_m, df_d, df_s, df_b = rotear_bases_backoffice(df_m, df_d, df_s, df_b)
+
         cols_drop = ["Dt_Parsed"]
         def clean_df(df_in):
             if df_in is None: return pd.DataFrame()
@@ -438,9 +508,11 @@ def ingestar_lote_semanal(arquivos_novos, df_m, df_d, df_s, df_b, df_log_atual):
         
         df_master_atualizado = pd.concat([df_m, df_lote_filtrado], ignore_index=True)
         df_master_atualizado = df_master_atualizado.drop_duplicates(subset=["Bilhetes"], keep="first")
-        return padronizar_df(df_master_atualizado), df_log_consolidado, df_novos_logs, total_linhas_lidas, len(df_lote_filtrado) + qtd_alteracoes_relatorio
+        df_m_rot, df_d_rot, df_s_rot, df_b_rot = rotear_bases_backoffice(df_master_atualizado, df_d, df_s, df_b)
+        return df_m_rot, df_d_rot, df_s_rot, df_b_rot, df_log_consolidado, df_novos_logs, total_linhas_lidas, len(df_lote_filtrado) + qtd_alteracoes_relatorio
 
-    return df_m, df_log_consolidado, df_novos_logs, total_linhas_lidas, qtd_alteracoes_relatorio
+    df_m_rot, df_d_rot, df_s_rot, df_b_rot = rotear_bases_backoffice(df_m, df_d, df_s, df_b)
+    return df_m_rot, df_d_rot, df_s_rot, df_b_rot, df_log_consolidado, df_novos_logs, total_linhas_lidas, qtd_alteracoes_relatorio
 
 def gerar_excel_estilizado(df_export, nome_aba="Relatorio_Filtrado"):
     buffer = io.BytesIO()
@@ -572,7 +644,7 @@ st.sidebar.markdown("**📅 Período da Emissão:**")
 d_inicio = st.sidebar.date_input("Data Inicial:", value=datetime.date(2025, 1, 1), format="DD/MM/YYYY")
 d_fim = st.sidebar.date_input("Data Final:", value=datetime.date(2026, 12, 31), format="DD/MM/YYYY")
 
-df_todos = pd.concat([df_master, df_div_op, df_sem_div], ignore_index=True)
+df_todos = pd.concat([df_master, df_div_op, df_sem_div, df_backoffice], ignore_index=True)
 
 filtro_gerente = st.sidebar.multiselect("Gerente / Área Resp.:", options=sorted(df_todos["Área Resp. Operação"].dropna().unique()))
 filtro_setor = st.sidebar.multiselect("Setor:", options=sorted(df_todos["Setor"].dropna().unique()))
@@ -748,26 +820,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix, df_global_re
                             })
                         df_log = pd.concat([df_log, pd.DataFrame(novos_logs)], ignore_index=True)
 
-                        if n_status in ["Já Lançado no ERP", "Sem Divergência (OK)"]:
-                            movidos = target_df[mask_global].copy()
-                            if df_global_ref_name == "df_master":
-                                df_master = df_master[~mask_global].reset_index(drop=True)
-                            elif df_global_ref_name == "df_div_op":
-                                df_div_op = df_div_op[~mask_global].reset_index(drop=True)
-                            elif df_global_ref_name == "df_backoffice":
-                                df_backoffice = df_backoffice[~mask_global].reset_index(drop=True)
-                            
-                            df_sem_div = pd.concat([df_sem_div, movidos], ignore_index=True)
-                        elif n_status == "Encaminhado para Suporte Backoffice" and df_global_ref_name != "df_backoffice":
-                            movidos = target_df[mask_global].copy()
-                            if df_global_ref_name == "df_master":
-                                df_master = df_master[~mask_global].reset_index(drop=True)
-                            elif df_global_ref_name == "df_div_op":
-                                df_div_op = df_div_op[~mask_global].reset_index(drop=True)
-                            elif df_global_ref_name == "df_sem_div":
-                                df_sem_div = df_sem_div[~mask_global].reset_index(drop=True)
-                            
-                            df_backoffice = pd.concat([df_backoffice, movidos], ignore_index=True)
+                        df_master, df_div_op, df_sem_div, df_backoffice = rotear_bases_backoffice(df_master, df_div_op, df_sem_div, df_backoffice)
                         
                         if salvar_bases(df_master, df_div_op, df_sem_div, df_backoffice, df_log):
                             salvar_copia_retorno_automatica(novos_logs)
@@ -866,22 +919,23 @@ if e_master():
             key="uploader_master_semanal"
         )
         if arqs_semanais and st.button("🚀 Ingestar e Atualizar Lote Semanal", type="primary"):
-            df_m_novo, df_log_novo, df_novos_logs, total_lidos, qtd_adicionados = ingestar_lote_semanal(
+            df_m_novo, df_d_novo, df_s_novo, df_b_novo, df_log_novo, df_novos_logs, total_lidos, qtd_adicionados = ingestar_lote_semanal(
                 arqs_semanais, df_master, df_div_op, df_sem_div, df_backoffice, df_log
             )
             
             with st.spinner("💾 Consolidando e salvando bases do painel..."):
-                salvar_bases(df_m_novo, df_div_op, df_sem_div, df_backoffice, df_log_novo)
+                salvar_bases(df_m_novo, df_d_novo, df_s_novo, df_b_novo, df_log_novo)
                 
                 st.session_state["ultimo_relatorio_auditoria"] = df_novos_logs
                 st.session_state["qtd_ultimos_alterados"] = qtd_adicionados
                 st.session_state["total_ultimos_lidos"] = total_lidos
                 
-                if not df_novos_logs.empty:
-                    nome_rel_audit = f"Relatorio_Auditoria_Carga_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-                    salvar_arquivo_em_disco(df_novos_logs, nome_rel_audit)
+                # Gravando o relatório de auditoria automaticamente na pasta de inputs
+                nome_rel_audit = f"Relatorio_Auditoria_Carga_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                salvar_arquivo_em_disco(df_novos_logs, nome_rel_audit)
                 
                 st.success(f"🎉 Ingestão finalizada com sucesso! {qtd_adicionados:,} registros/tratativas atualizados de {total_lidos:,} linhas analisadas.")
+                st.rerun()
 
         # Exibe SEMPRE o Relatório de Auditoria da Carga se houver registros na sessão
         if "ultimo_relatorio_auditoria" in st.session_state and isinstance(st.session_state["ultimo_relatorio_auditoria"], pd.DataFrame):
