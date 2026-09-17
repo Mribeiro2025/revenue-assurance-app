@@ -23,7 +23,6 @@ print(" MOTOR DE AUDITORIA FP&A ADVANCED - REVENUE ASSURANCE ".center(75, "="))
 print("=" * 75)
 
 PASTA_ENVIO = "Envio"
-PASTA_INPUTS_LOCAL = r"C:\Users\mribeiro1\MARINGA TURISMO\Maringá Turismo - PLANEJAMENTO ESTRATEGICO (1)\01-Planejamento Estratégico\Auditoria de Bilhetes\inputs"
 
 MAPA_CIAS = {
     "JJ": "LATAM", "LA": "LATAM", "PZ": "LATAM", "4C": "LATAM", "XL": "LATAM", "4M": "LATAM",
@@ -44,7 +43,6 @@ def obter_engine_supabase():
     try:
         from sqlalchemy import create_engine
         
-        # Suporte para Python < 3.11 e >= 3.11
         try:
             import tomllib
         except ImportError:
@@ -60,7 +58,7 @@ def obter_engine_supabase():
                 db_url = secrets.get("postgres", {}).get("url")
                 if db_url:
                     return create_engine(db_url, pool_pre_ping=True)
-    except Exception as e:
+    except Exception:
         pass
     return None
 
@@ -192,7 +190,7 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                 if val_str and val_str not in ["-", "nan", "none", "Sem tratativa na operação"]:
                     dict_historico[k][col] = val
 
-    # 1º Passo: Carrega do Excel consolidado anterior (apenas o Dashboard principal)
+    # 1º Passo: Carrega do Excel consolidado anterior
     if os.path.exists(out_file):
         try:
             xls = pd.ExcelFile(out_file, engine="openpyxl")
@@ -210,10 +208,11 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                     for r in df_temp.to_dict("records"):
                         b_key = clean_str_strict(r.get("Bilhetes"))
                         if b_key:
+                            obs_limpa = str(r.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
                             indexar_memoria(b_key, {
                                 "Status_Geral": r.get("Status_Geral"),
                                 "Área Resp. Operação": r.get("Área Resp. Operação"),
-                                "Obs. Operação": r.get("Obs. Operação"),
+                                "Obs. Operação": obs_limpa,
                                 "Setor": r.get("Setor"),
                                 "Obs_Auditoria_Replica": r.get("Obs_Auditoria_Replica"),
                                 "Ponto de venda": r.get("Ponto de venda"),
@@ -233,10 +232,11 @@ def carregar_tratativas_e_logs_anteriores(out_file):
             for r in df_mem.to_dict("records"):
                 b_key = clean_str_strict(r.get("Bilhetes", ""))
                 if b_key:
+                    obs_limpa = str(r.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
                     indexar_memoria(b_key, {
                         "Status_Geral": r.get("Status_Geral"),
                         "Área Resp. Operação": r.get("Área Resp. Operação"),
-                        "Obs. Operação": r.get("Obs. Operação"),
+                        "Obs. Operação": obs_limpa,
                         "Setor": r.get("Setor"),
                         "Obs_Auditoria_Replica": r.get("Obs_Auditoria_Replica"),
                         "Ponto de venda": r.get("Ponto de venda"),
@@ -258,10 +258,11 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                 for r in df_sb.to_dict("records"):
                     b_key = clean_str_strict(r.get("bilhete"))
                     if b_key:
+                        obs_limpa = str(r.get("obs_operacao", "")).replace("Sem tratativa na operação", "").strip()
                         indexar_memoria(b_key, {
                             "Status_Geral": r.get("status_geral"),
                             "Área Resp. Operação": r.get("area_resp"),
-                            "Obs. Operação": r.get("obs_operacao"),
+                            "Obs. Operação": obs_limpa,
                         })
                 print(f"☁️ Supabase conectado! {len(df_sb)} tratativas resgatadas da nuvem com sucesso.")
         except Exception as e:
@@ -315,16 +316,16 @@ def sincronizar_supabase_fim(df_master):
                 data_modificacao = NOW();
         """)
 
-        # Monta a lista completa para inserção otimizada em lote único
         dados_lote = []
         for _, r in df_trat.iterrows():
             b_val = clean_str_strict(r["Bilhetes"])
             if b_val:
+                obs_limpa = str(r.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
                 dados_lote.append({
                     "bilhete": b_val,
                     "status_geral": str(r.get("Status_Geral", "")),
                     "area_resp": str(r.get("Área Resp. Operação", "")),
-                    "obs_operacao": str(r.get("Obs. Operação", ""))
+                    "obs_operacao": obs_limpa
                 })
 
         if dados_lote:
@@ -364,6 +365,7 @@ def executar_auditoria():
                     "Gerente_Responsavel": clean_str_strict(r.get("Gerentes")),
                 }
 
+    # Item 7: Indexação Expandida do Extrato Lemontech
     print("\n[2/5] Indexando Extrato OBT Lemontech...")
     caminho_lemon = encontrar_arquivo(["Extrato_Bilhetes_lemontech.xlsx", "Extrato_Bilhetes_lemontech.XLSX"])
     lemon_index = {}
@@ -381,8 +383,12 @@ def executar_auditoria():
                 "Lemon_Forma_Pagto": clean_str_strict(r.get("Forma de Pagamento")) or "-",
                 "Lemon_Autorizacao_Cartao": clean_str_strict(r.get("Autorização do Cartão")) or "-",
                 "Lemon_OnOff": clean_str_strict(r.get("On|Off")) or "-",
+                "Lemon_Modalidade": clean_str_strict(r.get("Modalidade")) or "-",
+                "Lemon_Emissao_Online": clean_str_strict(r.get("Emissão Online")) or "-",
                 "Lemon_Source": clean_str_strict(r.get("Source")) or "-",
+                "Lemon_Ponto_Venda": clean_str_strict(r.get("Ponto de Venda")) or "-",
             }
+            # Mapeia por Bilhete, Nº Pedido e Solicitação
             for col_k in ["Bilhete", "Nº Pedido", "Solicitação"]:
                 for k in extract_keys(r.get(col_k)):
                     if k not in lemon_index:
@@ -522,20 +528,19 @@ def executar_auditoria():
                 m_iata = iata_dict.get(iata_clean, {})
 
                 gerente_resp = hist_data.get("Área Resp. Operação") or m_iata.get("Gerente_Responsavel", "Não Mapeado")
-                obs_op = hist_data.get("Obs. Operação") or "Sem tratativa na operação"
+                
+                # Item 6: Limpeza do campo de observação
+                obs_op = str(hist_data.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
                 obs_replica = hist_data.get("Obs_Auditoria_Replica") or "-"
 
                 st_lower = str(hist_data.get("Status_Geral") or "").strip().lower()
                 area_lower = str(gerente_resp).strip().lower()
                 obs_lower = str(obs_op).strip().lower()
-                setor_hist_lower = str(hist_data.get("Setor") or "").strip().lower()
 
-                e_suporte_backoffice = (
-                    "backoffice" in st_lower or "suporte" in st_lower or "encaminhado" in st_lower
-                    or any(k in area_lower for k in ["backoffice", "suporte", "benner", "katia", "ti"])
-                    or any(k in setor_hist_lower for k in ["backoffice", "suporte"])
-                    or any(p in obs_lower for p in ["ticket", "chamado", "backoffice", "suporte", "benner", "erro de integração", "erro integração", "aguardando suporte"])
-                )
+                # Item 4: Regra Estrita de Filtragem do Backoffice
+                tem_katia_ou_bo = any(k in area_lower for k in ["katia", "kátia", "suporte backoffice", "backoffice"])
+                tem_ticket_chamado = any(p in obs_lower or p in st_lower for p in ["ticket", "chamado"])
+                e_suporte_backoffice = tem_katia_ou_bo or tem_ticket_chamado
 
                 if hist_data.get("Setor"):
                     setor_final = hist_data["Setor"]
@@ -684,12 +689,17 @@ def executar_auditoria():
                     "Cliente": cliente_sistema,
                     "Setor": setor_final,
                     "Aba_Destino": aba_destino,
+                    # Item 7: Composição dos Campos Lemontech
                     "Tipo_Emissao_Lemon": l_match["Lemon_OnOff"] if l_match else "-",
                     "Consultor_Lemon": l_match["Lemon_Consultor"] if l_match else "-",
                     "Emissor_Reserva_Lemon": l_match["Lemon_Emissor_Reserva"] if l_match else "-",
                     "Centro_Custo_Lemon": l_match["Lemon_Centro_Custo"] if l_match else "-",
                     "Forma_Pagto_Lemon": l_match["Lemon_Forma_Pagto"] if l_match else "-",
                     "Autorizacao_Cartao_Lemon": l_match["Lemon_Autorizacao_Cartao"] if l_match else "-",
+                    "Modalidade_Lemon": l_match["Lemon_Modalidade"] if l_match else "-",
+                    "Emissao_Online_Lemon": l_match["Lemon_Emissao_Online"] if l_match else "-",
+                    "Source_Lemon": l_match["Lemon_Source"] if l_match else "-",
+                    "Ponto_Venda_Lemon": l_match["Lemon_Ponto_Venda"] if l_match else "-",
                 }
                 registros_conciliados.append(rec)
 
@@ -740,6 +750,7 @@ def executar_auditoria():
         "Status_Divergencia", "Consultor", "Status_Geral", "Área Resp. Operação", "Obs. Operação",
         "Data_Modificacao", "Usuario_Modificacao", "Ultima_Alteracao",
         "Emissor", "Sistema Reserva", "Cliente", "Setor",
+        "Modalidade_Lemon", "Emissao_Online_Lemon", "Source_Lemon", "Ponto_Venda_Lemon"
     ]
 
     cols_30_furo = [
@@ -748,19 +759,23 @@ def executar_auditoria():
         "Comissão", "Taxa DU", "Desc.", "Incentivo", "VL. Líquido", "Status_Geral",
         "Área Resp. Operação", "Obs. Operação", "Data_Modificacao", "Usuario_Modificacao", "Ultima_Alteracao",
         "Tipo_Emissao_Lemon", "Consultor_Lemon", "Emissor_Reserva_Lemon", "Centro_Custo_Lemon",
-        "Forma_Pagto_Lemon", "Autorizacao_Cartao_Lemon", "Sistema Reserva", "Cliente", "Setor",
+        "Forma_Pagto_Lemon", "Autorizacao_Cartao_Lemon", "Modalidade_Lemon", "Emissao_Online_Lemon", "Source_Lemon", "Ponto_Venda_Lemon", "Sistema Reserva", "Cliente", "Setor",
     ]
 
-    df_98_div = df_master[df_master["Aba_Destino"] == "98_OK_Divergencia_Operacao"][cols_35] if len(df_master[df_master["Aba_Destino"] == "98_OK_Divergencia_Operacao"]) > 0 else pd.DataFrame(columns=cols_35)
-    df_98_ok = df_master[df_master["Aba_Destino"] == "98_OK_Sem_Divergencia_Concil"][cols_35] if len(df_master[df_master["Aba_Destino"] == "98_OK_Sem_Divergencia_Concil"]) > 0 else pd.DataFrame(columns=cols_35)
-    df_99_gen = df_master[df_master["Aba_Destino"] == "99_Base_Divergencias_Geral"][cols_30_furo] if len(df_master[df_master["Aba_Destino"] == "99_Base_Divergencias_Geral"]) > 0 else pd.DataFrame(columns=cols_30_furo)
+    # Checagem dinâmica de colunas para prevenir KeyError
+    cols_35_existentes = [c for c in cols_35 if c in df_master.columns]
+    cols_30_existentes = [c for c in cols_30_furo if c in df_master.columns]
 
-    df_99_suporte = df_99_gen[df_99_gen["Setor"] == "Suporte backoffice"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_furo)
-    df_99_eventos = df_99_gen[df_99_gen["Setor"] == "Central de Eventos"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_furo)
-    df_99_lazer = df_99_gen[df_99_gen["Setor"] == "Concierge/Lazer"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_furo)
-    df_99_unique = df_99_gen[df_99_gen["Setor"] == "Unique"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_furo)
-    df_99_private = df_99_gen[df_99_gen["Setor"] == "Private"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_furo)
-    df_99_operacao = df_99_gen[df_99_gen["Setor"] == "Operação"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_furo)
+    df_98_div = df_master[df_master["Aba_Destino"] == "98_OK_Divergencia_Operacao"][cols_35_existentes] if len(df_master[df_master["Aba_Destino"] == "98_OK_Divergencia_Operacao"]) > 0 else pd.DataFrame(columns=cols_35_existentes)
+    df_98_ok = df_master[df_master["Aba_Destino"] == "98_OK_Sem_Divergencia_Concil"][cols_35_existentes] if len(df_master[df_master["Aba_Destino"] == "98_OK_Sem_Divergencia_Concil"]) > 0 else pd.DataFrame(columns=cols_35_existentes)
+    df_99_gen = df_master[df_master["Aba_Destino"] == "99_Base_Divergencias_Geral"][cols_30_existentes] if len(df_master[df_master["Aba_Destino"] == "99_Base_Divergencias_Geral"]) > 0 else pd.DataFrame(columns=cols_30_existentes)
+
+    df_99_suporte = df_99_gen[df_99_gen["Setor"] == "Suporte backoffice"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_existentes)
+    df_99_eventos = df_99_gen[df_99_gen["Setor"] == "Central de Eventos"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_existentes)
+    df_99_lazer = df_99_gen[df_99_gen["Setor"] == "Concierge/Lazer"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_existentes)
+    df_99_unique = df_99_gen[df_99_gen["Setor"] == "Unique"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_existentes)
+    df_99_private = df_99_gen[df_99_gen["Setor"] == "Private"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_existentes)
+    df_99_operacao = df_99_gen[df_99_gen["Setor"] == "Operação"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_existentes)
 
     print("\n[6/6] Exportando Dashboard Formatado em Excel...")
 
