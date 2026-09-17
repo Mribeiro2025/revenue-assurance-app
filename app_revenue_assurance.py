@@ -804,7 +804,7 @@ if e_master():
                 else:
                     df_up = pd.read_excel(arq_upload, dtype=str)
 
-                st.markdown("**Pré-visualização dos Dados Recebidos:**")
+                st.markdown(f"**Pré-visualização dos Dados Recebidos (Exibindo 10 de {len(df_up)} registros):**")
                 st.dataframe(df_up.head(10), width="stretch")
 
                 col_b = next((c for c in df_up.columns if any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
