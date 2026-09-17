@@ -247,18 +247,18 @@ def rotear_bases_backoffice(df_m, df_d, df_s, df_b):
     df_b = padronizar_df(df_b)
 
     def e_backoffice_row(r):
-        st_val = str(r.get("Status_Geral", "")).strip()
-        ar_val = str(r.get("Área Resp. Operação", "")).strip().upper()
+        st_val = str(r.get("Status_Geral", "")).strip().lower()
+        ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
         se_val = str(r.get("Setor", "")).strip().lower()
         obs_val = str(r.get("Obs. Operação", "")).strip().lower()
 
-        if st_val == "Encaminhado para Suporte Backoffice":
+        if "backoffice" in st_val or "suporte" in st_val or "encaminhado" in st_val:
             return True
-        if any(k in ar_val for k in ["SUPORTE BACKOFFICE", "SUPORTE BENNER", "KATIA MARTINS", "BACKOFFICE", "SUPORTE"]):
+        if any(k in ar_val for k in ["backoffice", "suporte", "benner", "katia", "ti"]):
             return True
-        if se_val in ["suporte backoffice", "suporte"]:
+        if any(k in se_val for k in ["backoffice", "suporte"]):
             return True
-        if any(p in obs_val for p in ["ticket 375", "chamado no backoffice", "chamado backoffice", "erro de integração", "erro integração", "aguardando suporte", "suporte backoffice", "suporte benner", "encaminhado suporte"]):
+        if any(p in obs_val for p in ["ticket", "chamado", "backoffice", "suporte", "benner", "erro de integração", "erro integração", "aguardando suporte"]):
             return True
         return False
 
@@ -850,6 +850,52 @@ with aba_sel[2]:
 # ------------------------------------------------------------------------------
 with aba_sel[3]:
     st.subheader("🎧 3. Chamados em Análise no Suporte Backoffice")
+    
+    # Seletor dinâmico para encaminhar bilhetes diretamente ao Suporte Backoffice
+    df_todos_pendentes = pd.concat([f_master, f_div_op], ignore_index=True)
+    if not df_todos_pendentes.empty and "Bilhetes" in df_todos_pendentes.columns:
+        lista_pendentes_encaminhar = sorted(df_todos_pendentes["Bilhetes"].dropna().unique())
+        with st.expander("➕ Encaminhar Novos Bilhetes para o Suporte Backoffice", expanded=df_backoffice.empty):
+            with st.form("form_encaminhar_backoffice"):
+                st.markdown("Selecione um ou mais bilhetes da base geral para transferir diretamente para a fila do Suporte Backoffice:")
+                bilhetes_para_bo = st.multiselect("Bilhetes para Transferência:", options=lista_pendentes_encaminhar)
+                obs_bo = st.text_input("Número do Chamado / Observação para o Backoffice:", value="Encaminhado para atendimento do Suporte Backoffice")
+                
+                if st.form_submit_button("🚀 Transferir para Suporte Backoffice", type="primary"):
+                    if bilhetes_para_bo:
+                        agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
+                        
+                        novos_logs = []
+                        for df_ref in [df_master, df_div_op]:
+                            mask_b = df_ref["Bilhetes"].isin(bilhetes_para_bo)
+                            if mask_b.any():
+                                df_ref.loc[mask_b, "Status_Geral"] = "Encaminhado para Suporte Backoffice"
+                                df_ref.loc[mask_b, "Área Resp. Operação"] = "Suporte Backoffice"
+                                df_ref.loc[mask_b, "Setor"] = "Suporte backoffice"
+                                df_ref.loc[mask_b, "Obs. Operação"] = obs_bo
+                                df_ref.loc[mask_b, "Data_Modificacao"] = agora_str
+                                df_ref.loc[mask_b, "Usuario_Modificacao"] = usr_str
+                                
+                                for b_item in df_ref.loc[mask_b, "Bilhetes"]:
+                                    novos_logs.append({
+                                        "Data_Hora": agora_str,
+                                        "Bilhete": b_item,
+                                        "Usuario_Acao": usr_str,
+                                        "Status_Anterior": "Pendente",
+                                        "Novo_Status": "Encaminhado para Suporte Backoffice",
+                                        "Area_Anterior": "-",
+                                        "Nova_Area": "Suporte Backoffice",
+                                        "Observacao": obs_bo,
+                                        "Tipo_Interacao": "Transferência Direta Backoffice"
+                                    })
+                        
+                        df_log = pd.concat([df_log, pd.DataFrame(novos_logs)], ignore_index=True)
+                        df_master, df_div_op, df_sem_div, df_backoffice = rotear_bases_backoffice(df_master, df_div_op, df_sem_div, df_backoffice)
+                        salvar_bases(df_master, df_div_op, df_sem_div, df_backoffice, df_log)
+                        st.success(f"✅ {len(bilhetes_para_bo)} bilhete(s) transferidos com sucesso para a fila de Suporte Backoffice!")
+                        st.rerun()
+
     renderizar_modulo_tratativa(f_backoffice, "Suporte_Backoffice", "sb", "df_backoffice")
 
 # ------------------------------------------------------------------------------
