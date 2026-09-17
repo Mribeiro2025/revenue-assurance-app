@@ -36,6 +36,35 @@ MAPA_CIAS = {
 }
 
 
+# ==============================================================================
+# CONEXÃO E AUXILIARES DO SUPABASE / BANCO DE DADOS NUVEM
+# ==============================================================================
+def obter_engine_supabase():
+    """Obtém a conexão com o Supabase com suporte multiplataforma a versões do Python."""
+    try:
+        from sqlalchemy import create_engine
+        
+        # Suporte para Python < 3.11 e >= 3.11
+        try:
+            import tomllib
+        except ImportError:
+            try:
+                import tomli as tomllib
+            except ImportError:
+                import toml as tomllib
+
+        secrets_path = os.path.join(DIR_ATUAL, ".streamlit", "secrets.toml")
+        if os.path.exists(secrets_path):
+            with open(secrets_path, "rb") as f:
+                secrets = tomllib.load(f)
+                db_url = secrets.get("postgres", {}).get("url")
+                if db_url:
+                    return create_engine(db_url, pool_pre_ping=True)
+    except Exception as e:
+        pass
+    return None
+
+
 def auto_converter_benner_parquet():
     """Garante conversão e atualização automática do Acumulado.xlsx -> Parquet."""
     arq_xlsx = "Acumulado.xlsx"
@@ -142,9 +171,10 @@ def extract_keys(val):
 
 def carregar_tratativas_e_logs_anteriores(out_file):
     """
-    Varre e lê de forma inteligente a base consolidada, os arquivos salvos
-    na pasta de inputs e a memória protegida em CSV para carregar todas as
-    tratativas e informações alteradas antes de rodar o motor.
+    Busca o histórico de tratativas com a seguinte hierarquia:
+    1. Supabase (PostgreSQL NUVEM) - Fonte Única da Verdade.
+    2. Memória CSV local (Historico_Tratativas.csv) - Fallback offline.
+    3. Consolidado Excel anterior (Dashboard_Revenue_Assurance_Consolidado.xlsx).
     """
     dict_historico = {}
     df_log_antigo = pd.DataFrame()
@@ -162,14 +192,13 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                 if val_str and val_str not in ["-", "nan", "none", "Sem tratativa na operação"]:
                     dict_historico[k][col] = val
 
-    # 1º Passo: Carrega do Excel consolidado anterior
+    # 1º Passo: Carrega do Excel consolidado anterior (apenas o Dashboard principal)
     if os.path.exists(out_file):
         try:
             xls = pd.ExcelFile(out_file, engine="openpyxl")
             if "00_Log_Auditoria" in xls.sheet_names:
                 df_log_antigo = pd.read_excel(xls, sheet_name="00_Log_Auditoria")
 
-            # Prioriza abas resolvidas (98_) sobre abas pendentes (99_)
             abas_ordenadas = sorted(
                 [a for a in xls.sheet_names if a.startswith("98_") or a.startswith("99_")],
                 reverse=True
@@ -196,49 +225,7 @@ def carregar_tratativas_e_logs_anteriores(out_file):
         except Exception as e:
             print(f"⚠️ Aviso ao carregar histórico do Excel: {e}")
 
-    # 2º Passo: Varre e lê de forma INTELIGENTE todos os arquivos salvos nas pastas de inputs
-    pastas_busca = [
-        PASTA_INPUTS_LOCAL,
-        os.path.join(os.getcwd(), "inputs"),
-        PASTA_ENVIO,
-        os.getcwd()
-    ]
-
-    arqs_encontrados = set()
-    for pasta in pastas_busca:
-        if os.path.exists(pasta):
-            for ext in ["*.xlsx", "*.xls"]:
-                arqs_encontrados.update(glob.glob(os.path.join(pasta, ext)))
-
-    for arq_rel in sorted(arqs_encontrados):
-        # Ignora o próprio Dashboard Consolidado para não haver sobreposição
-        if os.path.basename(arq_rel) == os.path.basename(out_file):
-            continue
-        try:
-            xls = pd.ExcelFile(arq_rel, engine="openpyxl")
-            for sheet in xls.sheet_names:
-                df_rel = pd.read_excel(xls, sheet_name=sheet)
-                cols_raw = df_rel.columns.tolist()
-
-                col_b = next((c for c in cols_raw if any(x in str(c).lower() for x in ["bilhete", "loc", "ticket"])), None)
-                col_st = next((c for c in cols_raw if any(x in str(c).lower() for x in ["novo status", "novo_status", "status_geral", "status geral"])), None)
-                col_ar = next((c for c in cols_raw if any(x in str(c).lower() for x in ["nova área", "nova area", "gerente", "área resp", "area resp"])), None)
-                col_obs = next((c for c in cols_raw if any(x in str(c).lower() for x in ["observação", "observacao", "obs"])), None)
-
-                if col_b and (col_st or col_ar or col_obs):
-                    for r in df_rel.to_dict("records"):
-                        b_key = clean_str_strict(r.get(col_b))
-                        if b_key:
-                            indexar_memoria(b_key, {
-                                "Status_Geral": r.get(col_st) if col_st else None,
-                                "Área Resp. Operação": r.get(col_ar) if col_ar else None,
-                                "Obs. Operação": r.get(col_obs) if col_obs else None,
-                            })
-                    print(f"📥 Resgatado histórico do arquivo salvo em inputs: '{os.path.basename(arq_rel)}' (Aba: {sheet})")
-        except Exception as e:
-            pass
-
-    # 3º Passo: Aplica com prioridade MÁXIMA a memória protegida em CSV (Historico_Tratativas.csv)
+    # 2º Passo: Aplica a memória protegida em CSV local
     file_memoria = "Historico_Tratativas.csv"
     if os.path.exists(file_memoria) and os.path.getsize(file_memoria) > 0:
         try:
@@ -261,6 +248,26 @@ def carregar_tratativas_e_logs_anteriores(out_file):
             print(f"🛡️ Memória protegida '{file_memoria}' sincronizada com sucesso.")
         except Exception as e:
             print(f"⚠️ Erro ao ler memória CSV: {e}")
+
+    # 3º Passo: RESGATE DO SUPABASE (PRIORIDADE MÁXIMA PARA TRATATIVAS WEB)
+    engine_sb = obter_engine_supabase()
+    if engine_sb:
+        try:
+            df_sb = pd.read_sql("SELECT bilhete, status_geral, area_resp, obs_operacao FROM tratativas", engine_sb)
+            if not df_sb.empty:
+                for r in df_sb.to_dict("records"):
+                    b_key = clean_str_strict(r.get("bilhete"))
+                    if b_key:
+                        indexar_memoria(b_key, {
+                            "Status_Geral": r.get("status_geral"),
+                            "Área Resp. Operação": r.get("area_resp"),
+                            "Obs. Operação": r.get("obs_operacao"),
+                        })
+                print(f"☁️ Supabase conectado! {len(df_sb)} tratativas resgatadas da nuvem com sucesso.")
+        except Exception as e:
+            print(f"⚠️ Aviso ao conectar/carregar dados do Supabase: {e}")
+    else:
+        print("⚠️ Conexão com Supabase não estabelecida. Verifique se a pasta '.streamlit/secrets.toml' existe.")
 
     return dict_historico, df_log_antigo
 
@@ -286,6 +293,46 @@ def salvar_csv_atomico(df, caminho_csv):
     if os.path.exists(caminho_csv):
         os.remove(caminho_csv)
     os.rename(tmp_path, caminho_csv)
+
+
+def sincronizar_supabase_fim(df_master):
+    """Envia tratativas e histórico de auditoria em LOTE (Batch Executemany) para o Supabase."""
+    engine_sb = obter_engine_supabase()
+    if not engine_sb or df_master.empty:
+        return
+
+    try:
+        from sqlalchemy import text
+        df_trat = df_master[["Bilhetes", "Status_Geral", "Área Resp. Operação", "Obs. Operação"]].dropna(subset=["Bilhetes"]).drop_duplicates(subset=["Bilhetes"])
+
+        upsert_sql = text("""
+            INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, usuario_modificacao, data_modificacao)
+            VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, 'Motor_VSCode', NOW())
+            ON CONFLICT (bilhete) DO UPDATE SET
+                status_geral = EXCLUDED.status_geral,
+                area_resp = EXCLUDED.area_resp,
+                obs_operacao = EXCLUDED.obs_operacao,
+                data_modificacao = NOW();
+        """)
+
+        # Monta a lista completa para inserção otimizada em lote único
+        dados_lote = []
+        for _, r in df_trat.iterrows():
+            b_val = clean_str_strict(r["Bilhetes"])
+            if b_val:
+                dados_lote.append({
+                    "bilhete": b_val,
+                    "status_geral": str(r.get("Status_Geral", "")),
+                    "area_resp": str(r.get("Área Resp. Operação", "")),
+                    "obs_operacao": str(r.get("Obs. Operação", ""))
+                })
+
+        if dados_lote:
+            with engine_sb.begin() as conn:
+                conn.execute(upsert_sql, dados_lote)
+            print(f"☁️ {len(dados_lote)} tratativas sincronizadas em lote no Supabase!")
+    except Exception as e:
+        print(f"⚠️ Aviso ao sincronizar com o Supabase: {e}")
 
 
 def executar_auditoria():
@@ -478,14 +525,16 @@ def executar_auditoria():
                 obs_op = hist_data.get("Obs. Operação") or "Sem tratativa na operação"
                 obs_replica = hist_data.get("Obs_Auditoria_Replica") or "-"
 
-                area_resp_upper = str(gerente_resp).strip().upper()
-                obs_op_lower = str(obs_op).strip().lower()
+                st_lower = str(hist_data.get("Status_Geral") or "").strip().lower()
+                area_lower = str(gerente_resp).strip().lower()
+                obs_lower = str(obs_op).strip().lower()
+                setor_hist_lower = str(hist_data.get("Setor") or "").strip().lower()
 
                 e_suporte_backoffice = (
-                    "SUPORTE BENNER" in area_resp_upper
-                    or "SUPORTE BACKOFFICE" in area_resp_upper
-                    or "KATIA MARTINS" in area_resp_upper
-                    or any(p in obs_op_lower for p in ["ticket 375", "chamado no backoffice", "erro de integração", "erro integração", "aguardando suporte"])
+                    "backoffice" in st_lower or "suporte" in st_lower or "encaminhado" in st_lower
+                    or any(k in area_lower for k in ["backoffice", "suporte", "benner", "katia", "ti"])
+                    or any(k in setor_hist_lower for k in ["backoffice", "suporte"])
+                    or any(p in obs_lower for p in ["ticket", "chamado", "backoffice", "suporte", "benner", "erro de integração", "erro integração", "aguardando suporte"])
                 )
 
                 if hist_data.get("Setor"):
@@ -493,13 +542,13 @@ def executar_auditoria():
                 elif e_suporte_backoffice:
                     setor_final = "Suporte backoffice"
                     gerente_resp = "Suporte Backoffice"
-                elif "JAIME SCHNAIDER" in area_resp_upper or "UNIQUE" in area_resp_upper:
+                elif "JAIME SCHNAIDER" in area_lower.upper() or "UNIQUE" in area_lower.upper():
                     setor_final = "Unique"
-                elif "CENTRAL DE EVENTOS" in area_resp_upper or "EVENTO" in area_resp_upper:
+                elif "CENTRAL DE EVENTOS" in area_lower.upper() or "EVENTO" in area_lower.upper():
                     setor_final = "Central de Eventos"
-                elif "FABIANO SOUZA" in area_resp_upper or "LAZER" in area_resp_upper or "CONCIERGE" in area_resp_upper:
+                elif "FABIANO SOUZA" in area_lower.upper() or "LAZER" in area_lower.upper() or "CONCIERGE" in area_lower.upper():
                     setor_final = "Concierge/Lazer"
-                elif "PRIVATE" in area_resp_upper or "SILVANA CELANI" in area_resp_upper:
+                elif "PRIVATE" in area_lower.upper() or "SILVANA CELANI" in area_lower.upper():
                     setor_final = "Private"
                 else:
                     setor_final = "Operação"
@@ -786,7 +835,7 @@ def executar_auditoria():
             ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
 
             if col_name in currency_cols:
-                for r in range(2, max_row + 1):
+                for r in range(2, ws.max_row + 1):
                     cell = ws.cell(row=r, column=col_idx)
                     if cell.value not in ["-", None]:
                         try:
@@ -796,7 +845,7 @@ def executar_auditoria():
                             pass
 
             if col_name.startswith("Dif_"):
-                for r in range(2, max_row + 1):
+                for r in range(2, ws.max_row + 1):
                     cell = ws.cell(row=r, column=col_idx)
                     try:
                         if round(abs(float(cell.value)), 2) >= 0.01:
@@ -807,11 +856,13 @@ def executar_auditoria():
 
     wb.save(out_file_model)
 
+    # 1. Salva Memória Protegida CSV
     salvar_csv_atomico(
         df_master[["Bilhetes", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Ponto de venda", "Código Iata"]].drop_duplicates(subset=["Bilhetes"]),
         "Historico_Tratativas.csv"
     )
 
+    # 2. Salva SQLite Local
     conn = sqlite3.connect("revenue_assurance.db")
     try:
         with conn:
@@ -824,6 +875,9 @@ def executar_auditoria():
         print(f"⚠️ Erro ao atualizar o banco SQLite: {e}")
     finally:
         conn.close()
+
+    # 3. Salva/Sincroniza com o Supabase Nuvem em Lote Único
+    sincronizar_supabase_fim(df_master)
 
     print("\n" + "=" * 75)
     print(f" AUDITORIA CONCLUÍDA COM SUCESSO! SALVO EM: {out_file_model} ".center(75, "="))

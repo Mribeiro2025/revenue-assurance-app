@@ -9,6 +9,7 @@ from openpyxl.utils import get_column_letter
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from sqlalchemy import create_engine, text
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS
@@ -22,7 +23,6 @@ st.set_page_config(
 
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 ARQUIVO_USUARIOS = "usuarios_autorizados.json"
-ARQUIVO_MEMORIA = "Historico_Tratativas.csv"
 PASTA_ENVIO = "Envio"
 PASTA_INPUTS_LOCAL = r"C:\Users\mribeiro1\MARINGA TURISMO\Maringá Turismo - PLANEJAMENTO ESTRATEGICO (1)\01-Planejamento Estratégico\Auditoria de Bilhetes\inputs"
 
@@ -34,10 +34,10 @@ USUARIOS_PADRAO = {
         "status": "APROVADO",
         "data_solicitacao": "2026-08-31",
     },
-    "operacao": {
+    "fellipe": {
         "senha": "123",
-        "nome": "Equipe Operacional",
-        "perfil": "Operacao",
+        "nome": "Fellipe Fernandes",
+        "perfil": "Master",
         "status": "APROVADO",
         "data_solicitacao": "2026-08-31",
     },
@@ -80,6 +80,80 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+
+# ==============================================================================
+# CONEXÃO COM SUPABASE (POSTGRESQL NUVEM)
+# ==============================================================================
+def get_db_engine():
+    """Conecta ao Supabase buscando a URI configurada nos Secrets do Streamlit."""
+    try:
+        db_url = st.secrets["postgres"]["url"]
+        return create_engine(db_url, pool_pre_ping=True)
+    except Exception as e:
+        st.error(f"⚠️ Erro ao obter credenciais do Supabase. Verifique os Secrets do Streamlit. ({e})")
+        return None
+
+def carregar_tratativas_db():
+    """Busca as tratativas ativas diretamente no Supabase."""
+    engine = get_db_engine()
+    if not engine:
+        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao"])
+    
+    query = "SELECT bilhete, status_geral, area_resp, obs_operacao FROM tratativas"
+    try:
+        return pd.read_sql(query, engine)
+    except Exception:
+        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao"])
+
+def salvar_tratativa_supabase(bilhete, status_geral, area_resp, obs_operacao, usuario):
+    """Executa o UPSERT da tratativa individual no Supabase."""
+    engine = get_db_engine()
+    if not engine:
+        return
+
+    upsert_sql = text("""
+        INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, usuario_modificacao, data_modificacao)
+        VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :usuario, NOW())
+        ON CONFLICT (bilhete) DO UPDATE SET
+            status_geral = EXCLUDED.status_geral,
+            area_resp = EXCLUDED.area_resp,
+            obs_operacao = EXCLUDED.obs_operacao,
+            usuario_modificacao = EXCLUDED.usuario_modificacao,
+            data_modificacao = NOW();
+    """)
+    
+    with engine.begin() as conn:
+        conn.execute(upsert_sql, {
+            "bilhete": str(bilhete).strip().replace(".0", ""),
+            "status_geral": status_geral,
+            "area_resp": area_resp,
+            "obs_operacao": obs_operacao,
+            "usuario": usuario
+        })
+
+def registrar_log_supabase(logs_list):
+    """Persiste a trilha de auditoria na tabela log_auditoria do Supabase."""
+    engine = get_db_engine()
+    if not engine or not logs_list:
+        return
+    
+    df_logs = pd.DataFrame(logs_list)
+    df_logs.rename(columns={
+        "Data_Hora": "data_hora",
+        "Bilhete": "bilhete",
+        "Usuario_Acao": "usuario_acao",
+        "Status_Anterior": "status_anterior",
+        "Novo_Status": "novo_status",
+        "Area_Anterior": "area_anterior",
+        "Nova_Area": "nova_area",
+        "Observacao": "observacao",
+        "Tipo_Interacao": "tipo_interacao"
+    }, inplace=True)
+    
+    try:
+        df_logs.to_sql("log_auditoria", engine, if_exists="append", index=False)
+    except Exception as e:
+        st.warning(f"Aviso ao gravar log no Supabase: {e}")
 
 # ==============================================================================
 # 2. GESTÃO DE USUÁRIOS E SEGURANÇA MASTER
@@ -167,38 +241,6 @@ if not st.session_state["autenticado"]:
 # ==============================================================================
 # 3. TRATAMENTO DE DADOS, ARMAZENAMENTO E CARGA
 # ==============================================================================
-def salvar_arquivo_em_disco(conteudo, nome_arquivo):
-    """
-    Salva arquivos fisicamente na pasta de inputs especificada pelo usuário,
-    com fallback automático para pastas locais caso o caminho de rede não exista.
-    """
-    pastas_destino = [
-        PASTA_INPUTS_LOCAL,
-        os.path.join(os.getcwd(), "inputs"),
-        PASTA_ENVIO
-    ]
-    caminhos_salvos = []
-    for pasta in pastas_destino:
-        try:
-            os.makedirs(pasta, exist_ok=True)
-            caminho_completo = os.path.join(pasta, nome_arquivo)
-            if isinstance(conteudo, pd.DataFrame):
-                with pd.ExcelWriter(caminho_completo, engine="openpyxl") as writer:
-                    conteudo.to_excel(writer, sheet_name="Relatorio_Auditoria", index=False)
-            elif isinstance(conteudo, bytes):
-                with open(caminho_completo, "wb") as f:
-                    f.write(conteudo)
-            elif hasattr(conteudo, "read") and hasattr(conteudo, "seek"):
-                conteudo.seek(0)
-                bytes_data = conteudo.read()
-                conteudo.seek(0)
-                with open(caminho_completo, "wb") as f:
-                    f.write(bytes_data)
-            caminhos_salvos.append(caminho_completo)
-        except Exception:
-            pass
-    return caminhos_salvos
-
 def clean_str(val):
     if pd.isna(val) or val is None: return ""
     s = str(val).strip()
@@ -236,11 +278,30 @@ def padronizar_df(df):
     outras = [c for c in df_out.columns if c not in existentes]
     return df_out[existentes + outras]
 
+def mesclar_com_supabase(df_in):
+    """Sobrescreve o status e observações com os dados salvos no Supabase."""
+    df_db = carregar_tratativas_db()
+    if df_in is None or df_in.empty or df_db.empty:
+        return df_in
+
+    df_in["Bilhete_Clean"] = df_in["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+    df_db["Bilhete_Clean"] = df_db["bilhete"].astype(str).str.strip()
+
+    df_merged = pd.merge(
+        df_in,
+        df_db[["Bilhete_Clean", "status_geral", "area_resp", "obs_operacao"]],
+        on="Bilhete_Clean",
+        how="left"
+    )
+
+    df_merged["Status_Geral"] = df_merged["status_geral"].fillna(df_merged["Status_Geral"])
+    df_merged["Área Resp. Operação"] = df_merged["area_resp"].fillna(df_merged["Área Resp. Operação"])
+    df_merged["Obs. Operação"] = df_merged["obs_operacao"].fillna(df_merged["Obs. Operação"])
+
+    df_merged.drop(columns=["Bilhete_Clean", "status_geral", "area_resp", "obs_operacao"], inplace=True)
+    return df_merged
+
 def rotear_bases_backoffice(df_m, df_d, df_s, df_b):
-    """
-    Analisa e roteia dinamicamente registros entre as bases (Master, Divergências, OK e Backoffice)
-    para garantir que bilhetes direcionados ao Suporte Backoffice sejam exibidos na aba correspondente.
-    """
     df_m = padronizar_df(df_m)
     df_d = padronizar_df(df_d)
     df_s = padronizar_df(df_s)
@@ -275,7 +336,6 @@ def rotear_bases_backoffice(df_m, df_d, df_s, df_b):
     mask_bo = df_all.apply(e_backoffice_row, axis=1)
     mask_ok = df_all.apply(e_resolvido_row, axis=1)
 
-    # 1. Suporte Backoffice
     df_b_novo = df_all[mask_bo & ~mask_ok].copy()
     if not df_b_novo.empty:
         df_b_novo["Setor"] = "Suporte backoffice"
@@ -283,12 +343,10 @@ def rotear_bases_backoffice(df_m, df_d, df_s, df_b):
             lambda x: "Suporte Backoffice" if str(x).strip() in ["-", "", "Não Mapeado", "nan", "None"] else x
         )
 
-    # 2. Resolvidos -> Conciliados
     df_s_novos = df_all[mask_ok].copy()
     if not df_s_novos.empty:
         df_s = pd.concat([df_s, df_s_novos], ignore_index=True).drop_duplicates(subset=["Bilhetes"], keep="last")
 
-    # 3. Restante
     df_resto = df_all[~mask_bo & ~mask_ok].copy()
     
     if "Status_Divergencia" in df_resto.columns:
@@ -301,15 +359,11 @@ def rotear_bases_backoffice(df_m, df_d, df_s, df_b):
 
     return padronizar_df(df_m_novo), padronizar_df(df_d_novo), padronizar_df(df_s), padronizar_df(df_b_novo)
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def carregar_bases():
     vazio = padronizar_df(None)
     
     if not os.path.exists(ARQUIVO_DASHBOARD):
-        return vazio, vazio, vazio, vazio, pd.DataFrame()
-    
-    if os.path.getsize(ARQUIVO_DASHBOARD) == 0:
-        st.warning("⚠️ O arquivo de consolidado está vazio ou sendo gerado. Rode a auditoria novamente.")
         return vazio, vazio, vazio, vazio, pd.DataFrame()
 
     try:
@@ -320,199 +374,17 @@ def carregar_bases():
         b = pd.read_excel(xls, "99_Suporte backoffice") if "99_Suporte backoffice" in xls.sheet_names else None
         l = pd.read_excel(xls, "00_Log_Auditoria") if "00_Log_Auditoria" in xls.sheet_names else pd.DataFrame()
 
+        # Aplica Supabase por cima do Excel
+        m = mesclar_com_supabase(m)
+        d = mesclar_com_supabase(d)
+        s = mesclar_com_supabase(s)
+        b = mesclar_com_supabase(b)
+
         m_p, d_p, s_p, b_p = rotear_bases_backoffice(m, d, s, b)
         return m_p, d_p, s_p, b_p, l
     except Exception as e:
-        st.error(f"⚠️ O arquivo de dados está temporariamente indisponível ou corrompido. Execute o script de auditoria para restaurá-lo. ({e})")
+        st.error(f"⚠️ Erro ao carregar as bases de dados: {e}")
         return vazio, vazio, vazio, vazio, pd.DataFrame()
-
-def sincronizar_memoria_csv(df_m, df_d, df_s, df_b):
-    try:
-        df_todos = pd.concat([df_m, df_d, df_s, df_b], ignore_index=True)
-        cols_mem = [
-            c for c in [
-                "Bilhetes", "Status_Geral", "Área Resp. Operação", "Obs. Operação",
-                "Setor", "Ponto de venda", "Código Iata", "Data_Modificacao",
-                "Usuario_Modificacao", "Ultima_Alteracao"
-            ] if c in df_todos.columns
-        ]
-        df_mem = df_todos[cols_mem].drop_duplicates(subset=["Bilhetes"], keep="last")
-        
-        tmp_csv = f"{ARQUIVO_MEMORIA}.tmp"
-        df_mem.to_csv(tmp_csv, index=False, encoding="utf-8-sig")
-        if os.path.exists(ARQUIVO_MEMORIA):
-            os.remove(ARQUIVO_MEMORIA)
-        os.rename(tmp_csv, ARQUIVO_MEMORIA)
-    except Exception as e:
-        st.warning(f"Aviso de sincronização da memória CSV: {e}")
-
-def salvar_copia_retorno_automatica(novos_logs_list):
-    if not novos_logs_list:
-        return
-    try:
-        agora = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        df_alteracoes = pd.DataFrame(novos_logs_list)
-        df_alteracoes.rename(columns={
-            "Bilhete": "Nº Bilhete / LOC",
-            "Status_Anterior": "Status Anterior",
-            "Novo_Status": "Novo Status",
-            "Area_Anterior": "Área Anterior",
-            "Nova_Area": "Nova Área / Gerente",
-            "Observacao": "Observação Aplicada",
-            "Tipo_Interacao": "Ação Executada"
-        }, inplace=True)
-        
-        nome_arq = f"Relatorio_Alteracoes_{agora}.xlsx"
-        salvar_arquivo_em_disco(df_alteracoes, nome_arq)
-    except Exception as e:
-        print(f"⚠️ Aviso ao salvar cópia automática do relatório: {e}")
-
-def salvar_bases(df_m, df_d, df_s, df_b, df_l):
-    try:
-        df_m, df_d, df_s, df_b = rotear_bases_backoffice(df_m, df_d, df_s, df_b)
-
-        cols_drop = ["Dt_Parsed"]
-        def clean_df(df_in):
-            if df_in is None: return pd.DataFrame()
-            return df_in.drop(columns=cols_drop, errors="ignore")
-
-        df_m_c, df_d_c, df_s_c, df_b_c, df_l_c = clean_df(df_m), clean_df(df_d), clean_df(df_s), clean_df(df_b), clean_df(df_l)
-
-        with pd.ExcelWriter(ARQUIVO_DASHBOARD, engine="openpyxl") as writer:
-            df_m_c.to_excel(writer, sheet_name="99_Base_Divergencias_Geral", index=False)
-            df_d_c.to_excel(writer, sheet_name="98_OK_Divergencia_Operacao", index=False)
-            df_s_c.to_excel(writer, sheet_name="98_OK_Sem_Divergencia_Concil", index=False)
-            df_b_c.to_excel(writer, sheet_name="99_Suporte backoffice", index=False)
-            df_l_c.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
-
-        sincronizar_memoria_csv(df_m_c, df_d_c, df_s_c, df_b_c)
-
-        st.cache_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"Erro ao salvar arquivo consolidado: {e}")
-        return False
-
-def ingestar_lote_semanal(arquivos_novos, df_m, df_d, df_s, df_b, df_log_atual):
-    """
-    Ingestão avançada com salvamento em disco no diretório local de inputs,
-    detecção inteligente de colunas (relatórios de retorno e relatórios exportados)
-    e geração imediata do relatório de auditoria para conferência das alterações.
-    """
-    novos_registros_brutos = []
-    novos_logs = []
-    qtd_alteracoes_relatorio = 0
-    total_linhas_lidas = 0
-    agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    usr_str = f"{st.session_state.get('usuario_atual', 'Sistema')} ({st.session_state.get('login_user_id', 'master')})"
-
-    total_arquivos = len(arquivos_novos)
-
-    with st.status("📊 Processando arquivos em lote e mapeando tratativas...", expanded=True) as status_box:
-        barra_progresso = st.progress(0, text="Iniciando processamento dos arquivos...")
-        place_info = st.empty()
-
-        for idx_arq, arq in enumerate(arquivos_novos):
-            pct = int(((idx_arq + 1) / total_arquivos) * 100)
-            barra_progresso.progress(pct, text=f"📂 Lendo arquivo {idx_arq + 1} de {total_arquivos}: '{arq.name}' ({pct}%)")
-
-            # Armazena cópia física do arquivo enviado na pasta de inputs
-            salvar_arquivo_em_disco(arq, arq.name)
-
-            xls = pd.ExcelFile(arq, engine="openpyxl")
-            for sheet in xls.sheet_names:
-                df_temp = pd.read_excel(xls, sheet_name=sheet)
-                total_linhas_lidas += len(df_temp)
-                cols_raw = df_temp.columns.tolist()
-
-                # Identificação flexível das colunas do arquivo enviado
-                col_b = next((c for c in cols_raw if any(x in str(c).lower() for x in ["bilhete", "loc", "ticket"])), None)
-                col_sn = next((c for c in cols_raw if any(x in str(c).lower() for x in ["novo status", "novo_status", "status_geral", "status geral"])), None)
-                col_an = next((c for c in cols_raw if any(x in str(c).lower() for x in ["nova área", "nova area", "nova_area", "gerente", "área resp", "area resp"])), None)
-                col_obs = next((c for c in cols_raw if any(x in str(c).lower() for x in ["observação", "observacao", "obs"])), None)
-                
-                col_sa = next((c for c in cols_raw if "status anterior" in str(c).lower() or "status_anterior" in str(c).lower()), None)
-                col_aa = next((c for c in cols_raw if "área anterior" in str(c).lower() or "area_anterior" in str(c).lower()), None)
-                col_act = next((c for c in cols_raw if "ação" in str(c).lower() or "acao" in str(c).lower() or "interação" in str(c).lower()), None)
-
-                is_update_file = bool(col_b and (col_sn or col_an or col_obs))
-
-                if is_update_file:
-                    all_target_dfs = [df_m, df_d, df_s, df_b]
-                    for _, r in df_temp.iterrows():
-                        b_val = str(r[col_b]).strip().replace(".0", "") if col_b and pd.notna(r[col_b]) else ""
-                        if not b_val or b_val.lower() in ["nan", "none", ""]: 
-                            continue
-
-                        st_novo = str(r[col_sn]).strip() if col_sn and pd.notna(r[col_sn]) else ""
-                        st_ant_file = str(r[col_sa]).strip() if col_sa and pd.notna(r[col_sa]) else "-"
-                        ar_nova = str(r[col_an]).strip() if col_an and pd.notna(r[col_an]) else ""
-                        ar_ant_file = str(r[col_aa]).strip() if col_aa and pd.notna(r[col_aa]) else "-"
-                        obs_val = str(r[col_obs]).strip() if col_obs and pd.notna(r[col_obs]) else ""
-                        act_val = str(r[col_act]).strip() if col_act and pd.notna(r[col_act]) else "Ingestão via Relatório de Retorno/Base"
-
-                        real_st_ant = "-"
-                        real_ar_ant = "-"
-                        atualizado = False
-
-                        for df_t in all_target_dfs:
-                            if df_t is not None and not df_t.empty and "Bilhetes" in df_t.columns:
-                                mask = df_t["Bilhetes"].astype(str).str.strip() == b_val
-                                if mask.any():
-                                    real_st_ant = str(df_t.loc[mask, "Status_Geral"].values[0])
-                                    real_ar_ant = str(df_t.loc[mask, "Área Resp. Operação"].values[0])
-
-                                    if st_novo and st_novo != "-": df_t.loc[mask, "Status_Geral"] = st_novo
-                                    if ar_nova and ar_nova != "-": df_t.loc[mask, "Área Resp. Operação"] = ar_nova
-                                    if obs_val and obs_val != "-": df_t.loc[mask, "Obs. Operação"] = obs_val
-                                    if "Data_Modificacao" in df_t.columns: df_t.loc[mask, "Data_Modificacao"] = agora_str
-                                    if "Usuario_Modificacao" in df_t.columns: df_t.loc[mask, "Usuario_Modificacao"] = usr_str
-                                    atualizado = True
-
-                        if atualizado or (st_novo and st_novo != "-"):
-                            qtd_alteracoes_relatorio += 1
-                            novos_logs.append({
-                                "Data_Hora": agora_str,
-                                "Bilhete": b_val,
-                                "Usuario_Acao": usr_str,
-                                "Status_Anterior": real_st_ant if real_st_ant != "-" else st_ant_file,
-                                "Novo_Status": st_novo if st_novo else real_st_ant,
-                                "Area_Anterior": real_ar_ant if real_ar_ant != "-" else ar_ant_file,
-                                "Nova_Area": ar_nova if ar_nova else real_ar_ant,
-                                "Observacao": obs_val,
-                                "Tipo_Interacao": act_val
-                            })
-
-                        # Atualiza dinamicamente as métricas no topo do container de status
-                        place_info.markdown(
-                            f"🔹 **Arquivo Atual:** `{arq.name}` | **Aba:** `{sheet}` | **Linhas Lidas:** `{len(df_temp):,}`\n\n"
-                            f"📈 **Total Acumulado:** `{total_linhas_lidas:,}` linhas analisadas | `{qtd_alteracoes_relatorio:,}` alterações mapeadas com sucesso."
-                        )
-
-                else:
-                    col_bilhete = [c for c in cols_raw if "bilhete" in str(c).lower() or "ticket" in str(c).lower()]
-                    if col_bilhete:
-                        df_temp = df_temp.rename(columns={col_bilhete[0]: "Bilhetes"})
-                        df_temp["Bilhetes"] = df_temp["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
-                        novos_registros_brutos.append(df_temp)
-
-        status_box.update(label=f"✅ Processamento de {total_arquivos} arquivo(s) finalizado com sucesso!", state="complete", expanded=False)
-
-    df_novos_logs = pd.DataFrame(novos_logs)
-    df_log_consolidado = pd.concat([df_log_atual, df_novos_logs], ignore_index=True) if not df_novos_logs.empty else df_log_atual
-
-    if novos_registros_brutos:
-        df_lote = pd.concat(novos_registros_brutos, ignore_index=True)
-        bilhetes_conciliados = set(df_s["Bilhetes"].astype(str)) if df_s is not None and "Bilhetes" in df_s.columns else set()
-        df_lote_filtrado = df_lote[~df_lote["Bilhetes"].isin(bilhetes_conciliados)].copy()
-        
-        df_master_atualizado = pd.concat([df_m, df_lote_filtrado], ignore_index=True)
-        df_master_atualizado = df_master_atualizado.drop_duplicates(subset=["Bilhetes"], keep="first")
-        df_m_rot, df_d_rot, df_s_rot, df_b_rot = rotear_bases_backoffice(df_master_atualizado, df_d, df_s, df_b)
-        return df_m_rot, df_d_rot, df_s_rot, df_b_rot, df_log_consolidado, df_novos_logs, total_linhas_lidas, len(df_lote_filtrado) + qtd_alteracoes_relatorio
-
-    df_m_rot, df_d_rot, df_s_rot, df_b_rot = rotear_bases_backoffice(df_m, df_d, df_s, df_b)
-    return df_m_rot, df_d_rot, df_s_rot, df_b_rot, df_log_consolidado, df_novos_logs, total_linhas_lidas, qtd_alteracoes_relatorio
 
 def gerar_excel_estilizado(df_export, nome_aba="Relatorio_Filtrado"):
     buffer = io.BytesIO()
@@ -521,19 +393,6 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio_Filtrado"):
     
     cols_remover = [c for c in ["Dt_Parsed"] if c in df_export.columns]
     df_clean = df_export.drop(columns=cols_remover) if cols_remover else df_export.copy()
-
-    cols_prioritarias = [
-        "Data_Hora", "Bilhete", "Usuario_Acao", "Status_Anterior", "Novo_Status",
-        "Area_Anterior", "Nova_Area", "Observacao", "Tipo_Interacao",
-        "Bilhetes", "Ponto de venda", "CIA", "Fornecedor_Sistema", "Status_Cia",
-        "Status_Geral", "Status_Divergencia", "Área Resp. Operação", "Data Emissão",
-        "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa", "Taxa_Sistema", "Dif_Taxa",
-        "Comissão", "Taxa DU", "Desc.", "Incentivo", "Receita_Sistema", "Dif_Receita", "VL. Líquido",
-        "Data_Modificacao", "Usuario_Modificacao", "Ultima_Alteracao", "Obs. Operação"
-    ]
-    existentes = [c for c in cols_prioritarias if c in df_clean.columns]
-    outras = [c for c in df_clean.columns if c not in existentes]
-    df_clean = df_clean[existentes + outras]
 
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df_clean.to_excel(writer, sheet_name=nome_aba[:30], index=False)
@@ -546,78 +405,21 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio_Filtrado"):
     header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True, size=11)
     
-    diff_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
-    diff_font = Font(color="B25900", bold=True, size=10)
-    
-    warn_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
-    warn_font = Font(color="C00000", bold=True, size=10)
-    
-    normal_font = Font(size=10)
-    thin_border = Border(
-        left=Side(style="thin", color="D9D9D9"),
-        right=Side(style="thin", color="D9D9D9"),
-        top=Side(style="thin", color="D9D9D9"),
-        bottom=Side(style="thin", color="D9D9D9")
-    )
-
-    currency_cols = [
-        "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa", "Taxa_Sistema", "Dif_Taxa",
-        "Comissão", "Taxa DU", "Desc.", "Incentivo", "Receita_Sistema", "Dif_Receita", "VL. Líquido"
-    ]
-
     for cell in ws[1]:
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        cell.border = thin_border
-
-    max_row = ws.max_row
-    max_col = ws.max_column
-    col_names = [str(ws.cell(row=1, column=c).value or "") for c in range(1, max_col + 1)]
-
-    for col_idx in range(1, max_col + 1):
-        col_letter = get_column_letter(col_idx)
-        col_name = col_names[col_idx - 1]
-        
-        len_vals = [len(str(ws.cell(row=r, column=col_idx).value or "")) for r in range(1, max_row + 1)]
-        max_len = max(len_vals) if len_vals else 10
-        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
-
-        for r in range(2, max_row + 1):
-            cell = ws.cell(row=r, column=col_idx)
-            cell.border = thin_border
-            cell.font = normal_font
-
-            val_str = str(cell.value or "").strip()
-
-            if col_name in currency_cols:
-                try:
-                    if val_str not in ["-", "", "None"]:
-                        val_num = float(cell.value)
-                        cell.value = val_num
-                        cell.number_format = "R$ #,##0.00"
-                        cell.alignment = Alignment(horizontal="right", vertical="center")
-                        
-                        if "Dif_" in col_name and abs(val_num) > 0.01:
-                            cell.fill = diff_fill
-                            cell.font = diff_font
-                except Exception:
-                    pass
-
-            if col_name in ["Status_Divergencia", "Status_Cia"] and ("Divergência" in val_str or val_str not in ["OK", "Valores Corretos", "-", ""]):
-                cell.fill = warn_fill
-                cell.font = warn_font
 
     output_buffer = io.BytesIO()
     wb.save(output_buffer)
     output_buffer.seek(0)
     return output_buffer.getvalue()
 
-with st.spinner("🔄 Carregando bases de dados do painel..."):
+with st.spinner("🔄 Carregando bases de dados do painel e conectando ao Supabase..."):
     df_master, df_div_op, df_sem_div, df_backoffice, df_log = carregar_bases()
 
 # ==============================================================================
-# 4. SIDEBAR E FILTROS BRASILEIROS POR DATA
+# 4. SIDEBAR E FILTROS OPERACIONAIS
 # ==============================================================================
 st.sidebar.title("Navegação")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
@@ -640,7 +442,6 @@ if st.sidebar.button("🔒 Sair"):
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔍 Filtros Operacionais")
 
-st.sidebar.markdown("**📅 Período da Emissão:**")
 d_inicio = st.sidebar.date_input("Data Inicial:", value=datetime.date(2025, 1, 1), format="DD/MM/YYYY")
 d_fim = st.sidebar.date_input("Data Final:", value=datetime.date(2026, 12, 31), format="DD/MM/YYYY")
 
@@ -702,20 +503,11 @@ with aba_sel[0]:
     col_d1, col_d2 = st.columns(2)
     
     with col_d1:
-        st.markdown("##### ⚠️ Visão de Divergências Operacionais (Maior para o Menor)")
+        st.markdown("##### ⚠️ Visão de Divergências Operacionais")
         if not f_div_op.empty and "Status_Divergencia" in f_div_op.columns:
             df_div_chart = f_div_op["Status_Divergencia"].value_counts().reset_index()
             df_div_chart.columns = ["Status_Divergencia", "count"]
-            df_div_chart = df_div_chart.sort_values(by="count", ascending=True)
-            
-            fig_div = px.bar(
-                df_div_chart,
-                x="count", y="Status_Divergencia", orientation="h",
-                text="count",
-                color_discrete_sequence=["#002060"]
-            )
-            fig_div.update_traces(textposition="outside")
-            fig_div.update_layout(height=380, xaxis_title="Qtd. Bilhetes", yaxis_title="", margin=dict(l=10, r=30, t=20, b=20))
+            fig_div = px.bar(df_div_chart, x="count", y="Status_Divergencia", orientation="h", text="count", color_discrete_sequence=["#002060"])
             st.plotly_chart(fig_div, width="stretch")
         else:
             st.info("Nenhuma divergência registrada no período.")
@@ -725,20 +517,13 @@ with aba_sel[0]:
         if not f_master.empty:
             df_ger_chart = f_master["Área Resp. Operação"].value_counts().head(8).reset_index()
             df_ger_chart.columns = ["Gerente", "count"]
-            
-            fig_ger = px.bar(
-                df_ger_chart,
-                x="Gerente", y="count", text="count",
-                color_discrete_sequence=["#00509d"]
-            )
-            fig_ger.update_traces(textposition="outside")
-            fig_ger.update_layout(height=380, xaxis_title="", yaxis_title="Qtd. Bilhetes", margin=dict(l=10, r=10, t=20, b=20))
+            fig_ger = px.bar(df_ger_chart, x="Gerente", y="count", text="count", color_discrete_sequence=["#00509d"])
             st.plotly_chart(fig_ger, width="stretch")
 
 # ------------------------------------------------------------------------------
-# FUNÇÃO PARA RENDERIZAÇÃO E TRATATIVA COM SALVAMENTO CORRETO
+# FUNÇÃO PARA RENDERIZAÇÃO E TRATATIVA VIA SUPABASE
 # ------------------------------------------------------------------------------
-def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix, df_global_ref_name):
+def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     st.download_button(
         f"📥 Extrair Relatório ({nome_base})",
         data=gerar_excel_estilizado(df_filtrado, nome_base),
@@ -754,7 +539,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix, df_global_re
             st.info(
                 f"📌 **Dados do Primeiro Bilhete Selecionado:** CIA: `{df_sel.get('CIA', '-')}` | "
                 f"Taxa: `R$ {df_sel.get('Taxa', 0.0):,.2f}` | Gerente Atual: `{df_sel.get('Área Resp. Operação', '-')}` | "
-                f"Status Atual: `{df_sel.get('Status_Geral', '-')}` | Última Modificação: `{df_sel.get('Data_Modificacao', '-')}`"
+                f"Status Atual: `{df_sel.get('Status_Geral', '-')}`"
             )
             
             with st.form(f"form_trat_{key_prefix}"):
@@ -772,7 +557,6 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix, df_global_re
                     ]
                     status_atual_val = str(df_sel.get("Status_Geral", "Pendente de Lançamento"))
                     idx_default = opcoes_factiveis.index(status_atual_val) if status_atual_val in opcoes_factiveis else 0
-                    
                     n_status = st.selectbox("Novo Status (Obrigatório):", options=opcoes_factiveis, index=idx_default, key=f"st_{key_prefix}")
                 
                 with c_s2:
@@ -781,32 +565,21 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix, df_global_re
                 n_obs = st.text_area("Observação / Justificativa Detalhada:", value=str(df_sel.get("Obs. Operação", "")), key=f"obs_{key_prefix}")
                 
                 if st.form_submit_button("💾 Salvar e Atualizar Bilhetes"):
-                    with st.spinner("⚡ Atualizando registros e gravando histórico..."):
-                        global df_master, df_div_op, df_sem_div, df_backoffice, df_log
-                        
+                    with st.spinner("⚡ Gravando diretamente no banco Supabase..."):
                         agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
                         
-                        if df_global_ref_name == "df_master":
-                            target_df = df_master
-                        elif df_global_ref_name == "df_div_op":
-                            target_df = df_div_op
-                        elif df_global_ref_name == "df_backoffice":
-                            target_df = df_backoffice
-                        else:
-                            target_df = df_sem_div
-
-                        mask_global = target_df["Bilhetes"].isin(bilhet_sel)
-                        
-                        target_df.loc[mask_global, "Status_Geral"] = n_status
-                        target_df.loc[mask_global, "Área Resp. Operação"] = n_area
-                        target_df.loc[mask_global, "Obs. Operação"] = n_obs
-                        target_df.loc[mask_global, "Data_Modificacao"] = agora_str
-                        target_df.loc[mask_global, "Usuario_Modificacao"] = usr_str
-                        target_df.loc[mask_global, "Ultima_Alteracao"] = f"Status: '{n_status}' | Obs: {n_obs}"
-
                         novos_logs = []
                         for b_sel in bilhet_sel:
+                            # 1. Salva no Supabase
+                            salvar_tratativa_supabase(
+                                bilhete=b_sel,
+                                status_geral=n_status,
+                                area_resp=n_area,
+                                obs_operacao=n_obs,
+                                usuario=usr_str
+                            )
+                            
                             novos_logs.append({
                                 "Data_Hora": agora_str,
                                 "Bilhete": b_sel,
@@ -816,19 +589,17 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix, df_global_re
                                 "Area_Anterior": df_sel.get("Área Resp. Operação", "-"),
                                 "Nova_Area": n_area,
                                 "Observacao": n_obs,
-                                "Tipo_Interacao": f"Tratativa ({nome_base})"
+                                "Tipo_Interacao": f"Tratativa Web ({nome_base})"
                             })
-                        df_log = pd.concat([df_log, pd.DataFrame(novos_logs)], ignore_index=True)
-
-                        df_master, df_div_op, df_sem_div, df_backoffice = rotear_bases_backoffice(df_master, df_div_op, df_sem_div, df_backoffice)
                         
-                        if salvar_bases(df_master, df_div_op, df_sem_div, df_backoffice, df_log):
-                            salvar_copia_retorno_automatica(novos_logs)
-                            st.success("✅ Tratativas salvas, registradas e cópia gerada automaticamente na pasta!")
-                            st.rerun()
+                        # 2. Grava a auditoria no Supabase
+                        registrar_log_supabase(novos_logs)
+
+                        st.cache_data.clear()
+                        st.success("✅ Tratativa gravada no Supabase em nuvem com sucesso!")
+                        st.rerun()
 
     st.markdown("---")
-    st.markdown(f"##### 📄 Lista Completa dos Bilhetes - {nome_base} ({len(df_filtrado)} registros)")
     st.dataframe(df_filtrado, width="stretch", hide_index=True)
 
 # ------------------------------------------------------------------------------
@@ -836,79 +607,27 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix, df_global_re
 # ------------------------------------------------------------------------------
 with aba_sel[1]:
     st.subheader("📋 1. Pendências de Lançamento no ERP")
-    renderizar_modulo_tratativa(f_master, "Falta_de_Lancamento", "fl", "df_master")
+    renderizar_modulo_tratativa(f_master, "Falta_de_Lancamento", "fl")
 
 # ------------------------------------------------------------------------------
 # ABA 2: ERROS DE VALORES E CIA AÉREA
 # ------------------------------------------------------------------------------
 with aba_sel[2]:
     st.subheader("⚠️ 2. Divergências de Valores e Companhias Aéreas")
-    renderizar_modulo_tratativa(f_div_op, "Erros_Valores_CIA", "ev", "df_div_op")
+    renderizar_modulo_tratativa(f_div_op, "Erros_Valores_CIA", "ev")
 
 # ------------------------------------------------------------------------------
 # ABA 3: SUPORTE BACKOFFICE
 # ------------------------------------------------------------------------------
 with aba_sel[3]:
     st.subheader("🎧 3. Chamados em Análise no Suporte Backoffice")
-    
-    # Seletor dinâmico para encaminhar bilhetes diretamente ao Suporte Backoffice
-    df_todos_pendentes = pd.concat([f_master, f_div_op], ignore_index=True)
-    if not df_todos_pendentes.empty and "Bilhetes" in df_todos_pendentes.columns:
-        lista_pendentes_encaminhar = sorted(df_todos_pendentes["Bilhetes"].dropna().unique())
-        with st.expander("➕ Encaminhar Novos Bilhetes para o Suporte Backoffice", expanded=df_backoffice.empty):
-            with st.form("form_encaminhar_backoffice"):
-                st.markdown("Selecione um ou mais bilhetes da base geral para transferir diretamente para a fila do Suporte Backoffice:")
-                bilhetes_para_bo = st.multiselect("Bilhetes para Transferência:", options=lista_pendentes_encaminhar)
-                obs_bo = st.text_input("Número do Chamado / Observação para o Backoffice:", value="Encaminhado para atendimento do Suporte Backoffice")
-                
-                if st.form_submit_button("🚀 Transferir para Suporte Backoffice", type="primary"):
-                    if bilhetes_para_bo:
-                        agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
-                        
-                        novos_logs = []
-                        for df_ref in [df_master, df_div_op]:
-                            mask_b = df_ref["Bilhetes"].isin(bilhetes_para_bo)
-                            if mask_b.any():
-                                df_ref.loc[mask_b, "Status_Geral"] = "Encaminhado para Suporte Backoffice"
-                                df_ref.loc[mask_b, "Área Resp. Operação"] = "Suporte Backoffice"
-                                df_ref.loc[mask_b, "Setor"] = "Suporte backoffice"
-                                df_ref.loc[mask_b, "Obs. Operação"] = obs_bo
-                                df_ref.loc[mask_b, "Data_Modificacao"] = agora_str
-                                df_ref.loc[mask_b, "Usuario_Modificacao"] = usr_str
-                                
-                                for b_item in df_ref.loc[mask_b, "Bilhetes"]:
-                                    novos_logs.append({
-                                        "Data_Hora": agora_str,
-                                        "Bilhete": b_item,
-                                        "Usuario_Acao": usr_str,
-                                        "Status_Anterior": "Pendente",
-                                        "Novo_Status": "Encaminhado para Suporte Backoffice",
-                                        "Area_Anterior": "-",
-                                        "Nova_Area": "Suporte Backoffice",
-                                        "Observacao": obs_bo,
-                                        "Tipo_Interacao": "Transferência Direta Backoffice"
-                                    })
-                        
-                        df_log = pd.concat([df_log, pd.DataFrame(novos_logs)], ignore_index=True)
-                        df_master, df_div_op, df_sem_div, df_backoffice = rotear_bases_backoffice(df_master, df_div_op, df_sem_div, df_backoffice)
-                        salvar_bases(df_master, df_div_op, df_sem_div, df_backoffice, df_log)
-                        st.success(f"✅ {len(bilhetes_para_bo)} bilhete(s) transferidos com sucesso para a fila de Suporte Backoffice!")
-                        st.rerun()
-
-    renderizar_modulo_tratativa(f_backoffice, "Suporte_Backoffice", "sb", "df_backoffice")
+    renderizar_modulo_tratativa(f_backoffice, "Suporte_Backoffice", "sb")
 
 # ------------------------------------------------------------------------------
 # ABA 4: SEM DIVERGÊNCIA (OK)
 # ------------------------------------------------------------------------------
 with aba_sel[4]:
     st.subheader("✅ 4. Bilhetes Conciliados e Lançados")
-    st.download_button(
-        "📥 Extrair Relatório (Sem Divergência)",
-        data=gerar_excel_estilizado(f_sem_div, "Sem_Divergencia"),
-        file_name="Sem_Divergencia_Filtrado.xlsx",
-        key="btn_dl_sem_div"
-    )
     st.dataframe(f_sem_div, width="stretch", hide_index=True)
 
 # ------------------------------------------------------------------------------
@@ -937,71 +656,16 @@ if e_master():
 
     # ABA 6: LOG DE AUDITORIA
     with aba_sel[6]:
-        st.subheader("📜 Trilha de Auditoria e Histórico Completo de Alterações")
-        
-        col_la1, col_la2 = st.columns([3, 1])
-        with col_la1:
-            st.write(f"Total de eventos de auditoria registrados: **{len(df_log):,}**")
-        with col_la2:
-            if not df_log.empty:
-                st.download_button(
-                    "📥 Baixar Trilha de Auditoria (.xlsx)",
-                    data=gerar_excel_estilizado(df_log, "Trilha_Auditoria_Completa"),
-                    file_name=f"Trilha_Auditoria_Completa_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                    key="btn_dl_log_completo",
-                    type="primary"
-                )
-        st.dataframe(df_log, width="stretch", hide_index=True)
+        st.subheader("📜 Trilha de Auditoria do Supabase")
+        engine_sb = get_db_engine()
+        if engine_sb:
+            try:
+                df_log_db = pd.read_sql("SELECT * FROM log_auditoria ORDER BY id DESC LIMIT 500", engine_sb)
+                st.dataframe(df_log_db, width="stretch", hide_index=True)
+            except Exception:
+                st.info("Nenhum registro de log encontrado na tabela log_auditoria do Supabase.")
 
-    # ABA 7: CARGA DE RELATÓRIOS (AO LADO DA AUDITORIA)
+    # ABA 7: CARGA DE RELATÓRIOS
     with aba_sel[7]:
-        st.subheader("📥 Carga de Relatórios Semanais em Lote (Acesso Restrito ao Master)")
-        st.info(f"📁 Os arquivos enviados e os relatórios de auditoria gerados são armazenados automaticamente em:\n`{PASTA_INPUTS_LOCAL}`")
-        
-        arqs_semanais = st.file_uploader(
-            "Arraste ou selecione os arquivos Excel de retorno (.xlsx):",
-            type=["xlsx", "xls"],
-            accept_multiple_files=True,
-            key="uploader_master_semanal"
-        )
-        if arqs_semanais and st.button("🚀 Ingestar e Atualizar Lote Semanal", type="primary"):
-            df_m_novo, df_d_novo, df_s_novo, df_b_novo, df_log_novo, df_novos_logs, total_lidos, qtd_adicionados = ingestar_lote_semanal(
-                arqs_semanais, df_master, df_div_op, df_sem_div, df_backoffice, df_log
-            )
-            
-            with st.spinner("💾 Consolidando e salvando bases do painel..."):
-                salvar_bases(df_m_novo, df_d_novo, df_s_novo, df_b_novo, df_log_novo)
-                
-                st.session_state["ultimo_relatorio_auditoria"] = df_novos_logs
-                st.session_state["qtd_ultimos_alterados"] = qtd_adicionados
-                st.session_state["total_ultimos_lidos"] = total_lidos
-                
-                # Gravando o relatório de auditoria automaticamente na pasta de inputs
-                nome_rel_audit = f"Relatorio_Auditoria_Carga_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-                salvar_arquivo_em_disco(df_novos_logs, nome_rel_audit)
-                
-                st.success(f"🎉 Ingestão finalizada com sucesso! {qtd_adicionados:,} registros/tratativas atualizados de {total_lidos:,} linhas analisadas.")
-                st.rerun()
-
-        # Exibe SEMPRE o Relatório de Auditoria da Carga se houver registros na sessão
-        if "ultimo_relatorio_auditoria" in st.session_state and isinstance(st.session_state["ultimo_relatorio_auditoria"], pd.DataFrame):
-            df_audit_carga = st.session_state["ultimo_relatorio_auditoria"]
-            st.markdown("---")
-            st.markdown("### 📋 Relatório de Auditoria de Extração para Conferência de Alterações")
-            
-            cm1, cm2, cm3 = st.columns(3)
-            cm1.metric("Total de Linhas Analisadas", f"{st.session_state.get('total_ultimos_lidos', 0):,}")
-            cm2.metric("Alterações / Tratativas Processadas", f"{st.session_state.get('qtd_ultimos_alterados', 0):,}")
-            cm3.metric("Data/Hora da Operação", datetime.datetime.now().strftime("%d/%m/%Y %H:%M"))
-
-            if not df_audit_carga.empty:
-                st.download_button(
-                    "📥 Baixar Relatório de Auditoria Desta Carga (.xlsx)",
-                    data=gerar_excel_estilizado(df_audit_carga, "Relatorio_Auditoria_Carga"),
-                    file_name=f"Relatorio_Auditoria_Carga_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                    key="btn_dl_audit_carga_atual",
-                    type="primary"
-                )
-                st.dataframe(df_audit_carga, width="stretch", hide_index=True)
-            else:
-                st.warning("Nenhuma divergência de status/área foi alterada na carga selecionada.")
+        st.subheader("📥 Carga de Relatórios Semanais")
+        st.info("Envie aqui relatórios adicionais em lote para alimentar a visualização.")

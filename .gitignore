@@ -9,3 +9,4 @@ MGA/
 Nova pasta/
 *.xlsx.bakBackup_Dashboard_*.xlsx
 Backup_Dashboard_*.xlsx
+.streamlit/secrets.toml
