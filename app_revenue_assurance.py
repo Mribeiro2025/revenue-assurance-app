@@ -320,14 +320,22 @@ def mesclar_com_supabase(df_in):
     return df_merged
 
 def e_backoffice_row(r):
-    """4. Regra Estrita: Apenas Kátia/Suporte Backoffice no gerente OU Ticket/Chamado na obs."""
+    """
+    Regra Restrita do Backoffice:
+    Obrigatório ter Gerente como 'Suporte Backoffice' ou 'Kátia'
+    E TAMBÉM conter 'chamado', 'ticket' ou 'suporte' na observação/status.
+    """
     ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
     obs_val = str(r.get("Obs. Operação", "")).strip().lower()
     st_val = str(r.get("Status_Geral", "")).strip().lower()
 
-    tem_katia_ou_bo = any(k in ar_val for k in ["katia", "kátia", "suporte backoffice", "backoffice"])
-    tem_ticket_chamado = any(p in obs_val or p in st_val for p in ["ticket", "chamado"])
-    return tem_katia_ou_bo or tem_ticket_chamado
+    # 1. Validação do Gerente/Área Responsável
+    tem_gerente_bo = any(k in ar_val for k in ["katia", "kátia", "suporte backoffice", "backoffice"])
+    
+    # 2. Validação da presença de Chamado/Ticket/Suporte
+    tem_chamado_obs = any(p in obs_val or p in st_val for p in ["ticket", "chamado", "suporte"])
+    
+    return tem_gerente_bo and tem_chamado_obs
 
 def rotear_bases_mestra(df_master):
     if df_master.empty:
