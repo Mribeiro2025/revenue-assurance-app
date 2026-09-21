@@ -268,7 +268,7 @@ def clean_str(val):
     return re.sub(r"\.0$", "", s)
 
 def padronizar_df(df):
-    """Garante a integridade total do DataFrame sem descartar colunas originais."""
+    """Garante a integridade total do DataFrame e padroniza os status para os gráficos."""
     if df is None or df.empty:
         return pd.DataFrame(columns=[
             "Bilhetes", "Ponto de venda", "Status_Geral", "Área Resp. Operação",
@@ -289,7 +289,20 @@ def padronizar_df(df):
 
     for c in ["Ponto de venda", "Área Resp. Operação", "Obs. Operação", "Setor", "Status_Geral", "CIA", "Data Emissão", "Emissor", "Emissor_Reserva_Lemon", "Status_Sistema", "Status_Divergencia"]:
         if c not in df_out.columns: df_out[c] = "-"
-    
+
+    # 🟢 AJUSTE DE PADRONIZAÇÃO DE STATUS
+    status_map = {
+        "nao_consta": "Pendente de Lançamento (Não Consta)",
+        "não_consta": "Pendente de Lançamento (Não Consta)",
+        "nan": "Pendente de Lançamento (Não Consta)",
+        "-": "Pendente de Lançamento (Não Consta)",
+        "": "Pendente de Lançamento (Não Consta)",
+        "none": "Pendente de Lançamento (Não Consta)"
+    }
+    df_out["Status_Geral"] = df_out["Status_Geral"].astype(str).str.strip()
+    df_out["Status_Geral"] = df_out["Status_Geral"].replace(status_map)
+    df_out["Status_Geral"] = df_out["Status_Geral"].apply(lambda x: "Pendente de Lançamento (Não Consta)" if x.lower() in status_map else x)
+
     for c in ["Taxa", "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita", "Tarifa_Total"]:
         if c in df_out.columns: df_out[c] = pd.to_numeric(df_out[c], errors="coerce").fillna(0.0)
 
@@ -331,18 +344,19 @@ def rotear_bases_mestra(df_master):
 
     df_master = padronizar_df(df_master)
 
-    # Função auxiliar para verificar divergência EXCLUSIVA de Receita
+    # 🟢 CORREÇÃO INFALÍVEL: Verifica divergência EXCLUSIVA de Receita sem colidir com 'divergênCIA'
     def e_apenas_divergencia_receita(st_div):
         s = str(st_div).lower().strip()
-        if "divergência" not in s and "erro" not in s:
+        if "diverg" not in s and "erro" not in s:
             return False
         
-        tem_receita = "receita" in s
-        outros_erros = any(x in s for x in ["tarifa", "taxa", "cia", "companhia"])
+        # Remove a palavra 'divergência' para testar se há outros erros
+        s_sem_diverg = s.replace("divergência", "").replace("divergencia", "").strip()
+        tem_receita = "receita" in s_sem_diverg
+        outros_erros = any(x in s_sem_diverg for x in ["tarifa", "taxa", "cia", "companhia"])
         return tem_receita and not outros_erros
 
     # 1. Sem Divergência / Conciliados (Tela 6)
-    # REGRA AJUSTADA: Entram registros 'valores corretos', status conciliados OU que possuem EXCLUSIVAMENTE divergência de receita.
     mask_valores_corretos = df_master["Status_Geral"].astype(str).str.lower().str.contains("já lançado|conciliado|valores corretos|regularizado") | \
                            df_master["Status_Divergencia"].astype(str).str.lower().str.contains("valores corretos")
     
@@ -353,22 +367,26 @@ def rotear_bases_mestra(df_master):
     df_ok = df_master[mask_ok].copy()
     df_rest = df_master[~mask_ok].copy()
 
-    # 2. Suporte Backoffice (Tela 3 - Regra Estrita Exclusiva)
-    def e_bo_estrito(r):
+    # 2. Suporte Backoffice (Tela 3 - Regra Flexível de Alimentação)
+    def e_bo_flexivel(r):
         ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
         obs_val = str(r.get("Obs. Operação", "")).strip().lower()
         st_val = str(r.get("Status_Geral", "")).strip().lower()
-        tem_ger_bo = any(k in ar_val for k in ["katia", "kátia", "suporte backoffice", "backoffice"])
-        tem_chamado = any(p in obs_val or p in st_val for p in ["ticket", "chamado", "suporte"])
-        return tem_ger_bo and tem_chamado
+        ger_val = str(r.get("Gerentes", "")).strip().lower()
+        setor_val = str(r.get("Setor", "")).strip().lower()
+        origem_val = str(r.get("Aba_Origem", "")).strip().lower()
+        
+        return any(k in ar_val or k in ger_val or k in setor_val or k in origem_val or k in obs_val or k in st_val
+                   for k in ["katia", "kátia", "backoffice", "suporte"])
 
-    mask_bo = df_rest.apply(e_bo_estrito, axis=1)
+    mask_bo = df_rest.apply(e_bo_flexivel, axis=1)
     df_bo = df_rest[mask_bo].copy()
     df_rest = df_rest[~mask_bo].copy()
 
     # 3. Central de Eventos (Tela 4)
     mask_evt = df_rest["Setor"].astype(str).str.lower().str.contains("eventos") | \
-               df_rest["Área Resp. Operação"].astype(str).str.lower().str.contains("eventos")
+               df_rest["Área Resp. Operação"].astype(str).str.lower().str.contains("eventos") | \
+               df_rest["Gerentes"].astype(str).str.lower().str.contains("eventos")
     df_eventos = df_rest[mask_evt].copy()
     df_rest = df_rest[~mask_evt].copy()
 
@@ -378,14 +396,14 @@ def rotear_bases_mestra(df_master):
     df_lemon_virt = df_rest[mask_lemon].copy()
     df_rest = df_rest[~mask_lemon].copy()
 
-    # 5. Erros de Valores & CIA (Tela 2) -> Apenas os que CONSTAM no Benner e têm divergência REAL (Tarifa, Taxa, CIA)
+    # 5. Erros de Valores & CIA (Tela 2)
     mask_consta_benner = ~df_rest["Status_Sistema"].astype(str).str.upper().str.contains("NAO_CONSTA|NÃO_CONSTA")
-    mask_tem_divergencia = df_rest["Status_Divergencia"].astype(str).str.lower().str.contains("divergência|erro")
+    mask_tem_divergencia = df_rest["Status_Divergencia"].astype(str).str.lower().str.contains("divergência|divergencia|erro")
     
     mask_erros = mask_consta_benner | mask_tem_divergencia
     df_erros = df_rest[mask_erros].copy()
     
-    # 6. Falta de Lançamento (Tela 1) -> Somente os 100% NÃO CONSTA verdadeiros
+    # 6. Falta de Lançamento (Tela 1)
     df_falta = df_rest[~mask_erros].copy()
 
     return df_falta, df_erros, df_bo, df_eventos, df_lemon_virt, df_ok
@@ -413,9 +431,8 @@ def carregar_bases():
 
         df_m = pd.concat(frames, ignore_index=True)
         
-        # 🟢 CORREÇÃO: Remoção de duplicatas com base no número do Bilhete
+        # Remoção de duplicatas com base no número do Bilhete
         if "Bilhetes" in df_m.columns:
-            # Mantém a primeira ocorrência do bilhete e remove as cópias das abas secundárias
             df_m = df_m.drop_duplicates(subset=["Bilhetes"], keep="first").reset_index(drop=True)
 
         df_m = mesclar_com_supabase(df_m)
