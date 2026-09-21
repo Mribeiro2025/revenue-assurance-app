@@ -412,6 +412,12 @@ def carregar_bases():
             return vazio, vazio, vazio, vazio, vazio, vazio, df_log_arq
 
         df_m = pd.concat(frames, ignore_index=True)
+        
+        # 🟢 CORREÇÃO: Remoção de duplicatas com base no número do Bilhete
+        if "Bilhetes" in df_m.columns:
+            # Mantém a primeira ocorrência do bilhete e remove as cópias das abas secundárias
+            df_m = df_m.drop_duplicates(subset=["Bilhetes"], keep="first").reset_index(drop=True)
+
         df_m = mesclar_com_supabase(df_m)
 
         f_falta, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
