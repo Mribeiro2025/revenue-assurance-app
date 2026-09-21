@@ -138,7 +138,7 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 "status_geral": str(r.get("Status_Geral", "")),
                 "area_resp": str(r.get("Área Resp. Operação", "")),
                 "obs_operacao": obs_limpa,
-                "usuario": usuario
+                "usuario": str(usuario)
             })
 
     if not dados_lote:
@@ -177,7 +177,7 @@ def registrar_log_supabase(logs_list):
         pass
 
 # ==============================================================================
-# 2. GESTÃO DE USUÁRIOS E SEGURANÇA MASTER
+# 2. GESTÃO DE USUÁRIOS E SEGURANÇA MASTER (Garantia de Senha Alfanumérica)
 # ==============================================================================
 def carregar_usuarios():
     if not os.path.exists(ARQUIVO_USUARIOS):
@@ -186,11 +186,18 @@ def carregar_usuarios():
         return USUARIOS_PADRAO
     try:
         with open(ARQUIVO_USUARIOS, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            # Garantir que todas as senhas sejam tratadas como STR
+            for u in data:
+                data[u]["senha"] = str(data[u].get("senha", ""))
+            return data
     except Exception:
         return USUARIOS_PADRAO
 
 def salvar_usuarios(dict_users):
+    # Converte todas as senhas explicitamente para STRING antes de salvar
+    for u in dict_users:
+        dict_users[u]["senha"] = str(dict_users[u].get("senha", "")).strip()
     with open(ARQUIVO_USUARIOS, "w", encoding="utf-8") as f:
         json.dump(dict_users, f, ensure_ascii=False, indent=4)
 
@@ -218,9 +225,9 @@ if not st.session_state["autenticado"]:
         
         with tab_log:
             u_input = st.text_input("Usuário:", key="l_user").strip().lower()
-            p_input = st.text_input("Senha:", type="password", key="l_pass").strip()
+            p_input = str(st.text_input("Senha:", type="password", key="l_pass")).strip()
             if st.button("Acessar Portal", type="primary"):
-                if u_input in usuarios_db and usuarios_db[u_input]["senha"] == p_input:
+                if u_input in usuarios_db and str(usuarios_db[u_input]["senha"]).strip() == p_input:
                     if usuarios_db[u_input].get("status", "APROVADO") == "APROVADO":
                         st.session_state["autenticado"] = True
                         st.session_state["usuario_atual"] = usuarios_db[u_input]["nome"]
@@ -234,25 +241,25 @@ if not st.session_state["autenticado"]:
 
         with tab_pwd:
             u_reset = st.text_input("Usuário cadastrado:").strip().lower()
-            n_pass = st.text_input("Nova Senha:", type="password")
-            c_pass = st.text_input("Confirme a Nova Senha:", type="password")
+            n_pass = str(st.text_input("Nova Senha Alfanumérica:", type="password")).strip()
+            c_pass = str(st.text_input("Confirme a Nova Senha:", type="password")).strip()
             if st.button("Redefinir Senha"):
                 if u_reset in usuarios_db and n_pass and n_pass == c_pass:
                     usuarios_db[u_reset]["senha"] = n_pass
                     salvar_usuarios(usuarios_db)
-                    st.success("✅ Senha redefinida com sucesso!")
+                    st.success("✅ Senha redefinida com sucesso! Você já pode entrar com a nova senha.")
                 else:
-                    st.error("Verifique os dados informados.")
+                    st.error("Verifique se o usuário existe e se as senhas coincidem.")
 
         with tab_req:
             r_nome = st.text_input("Nome Completo:")
             r_user = st.text_input("Usuário Desejado:").strip().lower()
-            r_pass = st.text_input("Senha de Acesso:", type="password")
+            r_pass = str(st.text_input("Senha de Acesso:", type="password")).strip()
             r_perf = st.selectbox("Perfil Solicitado:", ["Operacao"])
             if st.button("Enviar Solicitação"):
                 if r_user and r_pass and r_nome:
                     usuarios_db[r_user] = {
-                        "senha": r_pass, "nome": r_nome, "perfil": r_perf,
+                        "senha": str(r_pass), "nome": r_nome, "perfil": r_perf,
                         "status": "PENDENTE", "data_solicitacao": datetime.datetime.now().strftime("%Y-%m-%d")
                     }
                     salvar_usuarios(usuarios_db)
@@ -260,7 +267,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# 3. TRATAMENTO DE DADOS, ARMAZENAMENTO E CARGA
+# 3. TRATAMENTO DE DADOS (Correção Segura Sem Erro de Float/Attribute)
 # ==============================================================================
 def clean_str(val):
     if pd.isna(val) or val is None: return ""
@@ -268,13 +275,13 @@ def clean_str(val):
     return re.sub(r"\.0$", "", s)
 
 def padronizar_df(df):
-    """Garante a integridade total do DataFrame e padroniza os status para os gráficos."""
+    """Garante a integridade total do DataFrame e padroniza os status de forma 100% segura."""
     if df is None or df.empty:
         return pd.DataFrame(columns=[
             "Bilhetes", "Ponto de venda", "Status_Geral", "Área Resp. Operação",
             "Obs. Operação", "Setor", "Data Emissão", "CIA", "Taxa", "A vista", "A credito",
             "Data_Modificacao", "Usuario_Modificacao", "Ultima_Alteracao", "Emissor", "Emissor_Reserva_Lemon",
-            "Status_Sistema", "Status_Divergencia"
+            "Status_Sistema", "Status_Divergencia", "Gerentes"
         ])
     
     df_out = df.copy().loc[:, ~df.columns.duplicated()].reset_index(drop=True)
@@ -285,23 +292,20 @@ def padronizar_df(df):
     df_out["Bilhetes"] = df_out["Bilhetes"].apply(clean_str)
     
     if "Obs. Operação" in df_out.columns:
-        df_out["Obs. Operação"] = df_out["Obs. Operação"].astype(str).str.replace("Sem tratativa na operação", "", regex=False).str.strip()
+        df_out["Obs. Operação"] = df_out["Obs. Operação"].fillna("").astype(str).str.replace("Sem tratativa na operação", "", regex=False).str.strip()
 
-    for c in ["Ponto de venda", "Área Resp. Operação", "Obs. Operação", "Setor", "Status_Geral", "CIA", "Data Emissão", "Emissor", "Emissor_Reserva_Lemon", "Status_Sistema", "Status_Divergencia"]:
-        if c not in df_out.columns: df_out[c] = "-"
+    # Preenchimento seguro convertendo tudo explicitamente para STR
+    for c in ["Ponto de venda", "Área Resp. Operação", "Obs. Operação", "Setor", "Status_Geral", "CIA", "Data Emissão", "Emissor", "Emissor_Reserva_Lemon", "Status_Sistema", "Status_Divergencia", "Gerentes"]:
+        if c not in df_out.columns:
+            df_out[c] = "-"
+        else:
+            df_out[c] = df_out[c].fillna("-").astype(str).str.strip()
 
-    # 🟢 AJUSTE DE PADRONIZAÇÃO DE STATUS
-    status_map = {
-        "nao_consta": "Pendente de Lançamento (Não Consta)",
-        "não_consta": "Pendente de Lançamento (Não Consta)",
-        "nan": "Pendente de Lançamento (Não Consta)",
-        "-": "Pendente de Lançamento (Não Consta)",
-        "": "Pendente de Lançamento (Não Consta)",
-        "none": "Pendente de Lançamento (Não Consta)"
-    }
-    df_out["Status_Geral"] = df_out["Status_Geral"].astype(str).str.strip()
-    df_out["Status_Geral"] = df_out["Status_Geral"].replace(status_map)
-    df_out["Status_Geral"] = df_out["Status_Geral"].apply(lambda x: "Pendente de Lançamento (Não Consta)" if x.lower() in status_map else x)
+    # 🟢 CORREÇÃO DO 'FLOAT HAS NO ATTRIBUTE LOWER':
+    status_map = ["nao_consta", "não_consta", "nan", "-", "", "none"]
+    df_out["Status_Geral"] = df_out["Status_Geral"].apply(
+        lambda x: "Pendente de Lançamento (Não Consta)" if str(x).lower().strip() in status_map else str(x)
+    )
 
     for c in ["Taxa", "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita", "Tarifa_Total"]:
         if c in df_out.columns: df_out[c] = pd.to_numeric(df_out[c], errors="coerce").fillna(0.0)
@@ -344,13 +348,12 @@ def rotear_bases_mestra(df_master):
 
     df_master = padronizar_df(df_master)
 
-    # 🟢 CORREÇÃO INFALÍVEL: Verifica divergência EXCLUSIVA de Receita sem colidir com 'divergênCIA'
+    # Verifica divergência EXCLUSIVA de Receita sem colidir com 'divergênCIA'
     def e_apenas_divergencia_receita(st_div):
         s = str(st_div).lower().strip()
         if "diverg" not in s and "erro" not in s:
             return False
         
-        # Remove a palavra 'divergência' para testar se há outros erros
         s_sem_diverg = s.replace("divergência", "").replace("divergencia", "").strip()
         tem_receita = "receita" in s_sem_diverg
         outros_erros = any(x in s_sem_diverg for x in ["tarifa", "taxa", "cia", "companhia"])
@@ -521,16 +524,19 @@ with st.spinner("🔄 Carregando bases de dados do painel e conectando ao Supaba
 st.sidebar.title("Navegação")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 
-if st.sidebar.button("🔑 Alterar Minha Senha"):
-    with st.sidebar.form("form_pwd"):
-        s_atu = st.text_input("Senha Atual:", type="password")
-        s_nov = st.text_input("Nova Senha:", type="password")
-        if st.form_submit_button("Salvar"):
+# Formulário de troca de senha na barra lateral
+with st.sidebar.expander("🔑 Alterar Minha Senha"):
+    with st.form("form_pwd_side"):
+        s_atu = str(st.text_input("Senha Atual:", type="password")).strip()
+        s_nov = str(st.text_input("Nova Senha Alfanumérica:", type="password")).strip()
+        if st.form_submit_button("Salvar Nova Senha"):
             u_id = st.session_state["login_user_id"]
-            if usuarios_db[u_id]["senha"] == s_atu and s_nov:
-                usuarios_db[u_id]["senha"] = s_nov
+            if str(usuarios_db[u_id]["senha"]).strip() == s_atu and s_nov:
+                usuarios_db[u_id]["senha"] = str(s_nov)
                 salvar_usuarios(usuarios_db)
-                st.sidebar.success("Senha alterada com sucesso!")
+                st.success("✅ Senha alterada com sucesso!")
+            else:
+                st.error("Senha atual incorreta.")
 
 if st.sidebar.button("🔒 Sair"):
     st.session_state["autenticado"] = False
