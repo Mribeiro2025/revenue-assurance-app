@@ -95,7 +95,7 @@ def get_db_engine():
         if "postgres" in st.secrets and "url" in st.secrets["postgres"]:
             db_url = st.secrets["postgres"]["url"]
             return create_engine(db_url, pool_pre_ping=True)
-    except Exception as e:
+    except Exception:
         pass
     return None
 
@@ -268,23 +268,26 @@ def clean_str(val):
     return re.sub(r"\.0$", "", s)
 
 def padronizar_df(df):
+    """Garante a integridade total do DataFrame sem descartar colunas originais."""
     if df is None or df.empty:
         return pd.DataFrame(columns=[
             "Bilhetes", "Ponto de venda", "Status_Geral", "Área Resp. Operação",
             "Obs. Operação", "Setor", "Data Emissão", "CIA", "Taxa", "A vista", "A credito",
-            "Data_Modificacao", "Usuario_Modificacao", "Ultima_Alteracao", "Emissor", "Emissor_Reserva_Lemon"
+            "Data_Modificacao", "Usuario_Modificacao", "Ultima_Alteracao", "Emissor", "Emissor_Reserva_Lemon",
+            "Status_Sistema", "Status_Divergencia"
         ])
+    
     df_out = df.copy().loc[:, ~df.columns.duplicated()].reset_index(drop=True)
+    
     if "Bilhetes" not in df_out.columns:
         cols_b = [c for c in df_out.columns if "bilhete" in str(c).lower() or "ticket" in str(c).lower()]
         df_out = df_out.rename(columns={cols_b[0]: "Bilhetes"}) if cols_b else df_out.assign(Bilhetes="")
     df_out["Bilhetes"] = df_out["Bilhetes"].apply(clean_str)
     
-    # 6. Remoção da frase fixa 'Sem tratativa na operação'
     if "Obs. Operação" in df_out.columns:
         df_out["Obs. Operação"] = df_out["Obs. Operação"].astype(str).str.replace("Sem tratativa na operação", "", regex=False).str.strip()
 
-    for c in ["Ponto de venda", "Área Resp. Operação", "Obs. Operação", "Setor", "Status_Geral", "CIA", "Data Emissão", "Emissor", "Emissor_Reserva_Lemon"]:
+    for c in ["Ponto de venda", "Área Resp. Operação", "Obs. Operação", "Setor", "Status_Geral", "CIA", "Data Emissão", "Emissor", "Emissor_Reserva_Lemon", "Status_Sistema", "Status_Divergencia"]:
         if c not in df_out.columns: df_out[c] = "-"
     
     for c in ["Taxa", "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita", "Tarifa_Total"]:
@@ -297,7 +300,7 @@ def padronizar_df(df):
     return df_out
 
 def mesclar_com_supabase(df_in):
-    """Sobrescreve o status e observações com os dados salvos no Supabase."""
+    """Sobrescreve o status e observações com os dados salvos no Supabase mantendo todas as colunas."""
     df_db = carregar_tratativas_db()
     if df_in is None or df_in.empty or df_db.empty:
         return df_in
@@ -319,60 +322,71 @@ def mesclar_com_supabase(df_in):
     df_merged.drop(columns=["Bilhete_Clean", "status_geral", "area_resp", "obs_operacao"], inplace=True)
     return df_merged
 
-def e_backoffice_row(r):
-    """
-    Regra Restrita do Backoffice:
-    Obrigatório ter Gerente como 'Suporte Backoffice' ou 'Kátia'
-    E TAMBÉM conter 'chamado', 'ticket' ou 'suporte' na observação/status.
-    """
-    ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
-    obs_val = str(r.get("Obs. Operação", "")).strip().lower()
-    st_val = str(r.get("Status_Geral", "")).strip().lower()
-
-    # 1. Validação do Gerente/Área Responsável
-    tem_gerente_bo = any(k in ar_val for k in ["katia", "kátia", "suporte backoffice", "backoffice"])
-    
-    # 2. Validação da presença de Chamado/Ticket/Suporte
-    tem_chamado_obs = any(p in obs_val or p in st_val for p in ["ticket", "chamado", "suporte"])
-    
-    return tem_gerente_bo and tem_chamado_obs
-
+# ==============================================================================
+# ROTEAMENTO ESTRITO COM AJUSTE DE EXCLUSIVIDADE DE RECEITA
+# ==============================================================================
 def rotear_bases_mestra(df_master):
     if df_master.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     df_master = padronizar_df(df_master)
 
-    # 1. Backoffice (Regra Estrita 4)
-    mask_bo = df_master.apply(e_backoffice_row, axis=1)
-    df_bo = df_master[mask_bo].copy()
-    df_rest = df_master[~mask_bo].copy()
+    # Função auxiliar para verificar divergência EXCLUSIVA de Receita
+    def e_apenas_divergencia_receita(st_div):
+        s = str(st_div).lower().strip()
+        if "divergência" not in s and "erro" not in s:
+            return False
+        
+        tem_receita = "receita" in s
+        outros_erros = any(x in s for x in ["tarifa", "taxa", "cia", "companhia"])
+        return tem_receita and not outros_erros
 
-    # 2. Central de Eventos (Nova Tela 5)
-    mask_eventos = df_rest["Setor"].astype(str).str.lower().str.contains("eventos") | \
-                   df_rest["Área Resp. Operação"].astype(str).str.lower().str.contains("eventos")
-    df_eventos = df_rest[mask_eventos].copy()
-    df_rest = df_rest[~mask_eventos].copy()
+    # 1. Sem Divergência / Conciliados (Tela 6)
+    # REGRA AJUSTADA: Entram registros 'valores corretos', status conciliados OU que possuem EXCLUSIVAMENTE divergência de receita.
+    mask_valores_corretos = df_master["Status_Geral"].astype(str).str.lower().str.contains("já lançado|conciliado|valores corretos|regularizado") | \
+                           df_master["Status_Divergencia"].astype(str).str.lower().str.contains("valores corretos")
+    
+    mask_so_receita = df_master["Status_Divergencia"].apply(e_apenas_divergencia_receita)
 
-    # 3. Emissor Virtual Lemontech (Nova Tela 5)
+    mask_ok = mask_valores_corretos | mask_so_receita
+
+    df_ok = df_master[mask_ok].copy()
+    df_rest = df_master[~mask_ok].copy()
+
+    # 2. Suporte Backoffice (Tela 3 - Regra Estrita Exclusiva)
+    def e_bo_estrito(r):
+        ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
+        obs_val = str(r.get("Obs. Operação", "")).strip().lower()
+        st_val = str(r.get("Status_Geral", "")).strip().lower()
+        tem_ger_bo = any(k in ar_val for k in ["katia", "kátia", "suporte backoffice", "backoffice"])
+        tem_chamado = any(p in obs_val or p in st_val for p in ["ticket", "chamado", "suporte"])
+        return tem_ger_bo and tem_chamado
+
+    mask_bo = df_rest.apply(e_bo_estrito, axis=1)
+    df_bo = df_rest[mask_bo].copy()
+    df_rest = df_rest[~mask_bo].copy()
+
+    # 3. Central de Eventos (Tela 4)
+    mask_evt = df_rest["Setor"].astype(str).str.lower().str.contains("eventos") | \
+               df_rest["Área Resp. Operação"].astype(str).str.lower().str.contains("eventos")
+    df_eventos = df_rest[mask_evt].copy()
+    df_rest = df_rest[~mask_evt].copy()
+
+    # 4. Emissor Virtual Lemontech (Tela 5)
     mask_lemon = df_rest["Emissor"].astype(str).str.lower().str.contains("virtual") | \
                  df_rest["Emissor_Reserva_Lemon"].astype(str).str.lower().str.contains("virtual")
     df_lemon_virt = df_rest[mask_lemon].copy()
     df_rest = df_rest[~mask_lemon].copy()
 
-    # 4. Sem Divergência (OK)
-    mask_ok = df_rest["Status_Geral"].astype(str).str.lower().str.contains("já lançado|conciliado|valores corretos") | \
-              df_rest["Aba_Origem"].astype(str).str.contains("98_OK_Sem_Divergencia", na=False)
-    df_ok = df_rest[mask_ok].copy()
-    df_rest = df_rest[~mask_ok].copy()
-
-    # 5. Falta de Lançamento (Não Consta)
-    mask_falta = df_rest["Status_Geral"].astype(str).str.lower().str.contains("não consta|pendente de lançamento") | \
-                 df_rest["Aba_Origem"].astype(str).str.contains("99_Base_Divergencias_Geral", na=False)
-    df_falta = df_rest[mask_falta].copy()
-
-    # 6. Erros de Valores & CIA
-    df_erros = df_rest[~mask_falta].copy()
+    # 5. Erros de Valores & CIA (Tela 2) -> Apenas os que CONSTAM no Benner e têm divergência REAL (Tarifa, Taxa, CIA)
+    mask_consta_benner = ~df_rest["Status_Sistema"].astype(str).str.upper().str.contains("NAO_CONSTA|NÃO_CONSTA")
+    mask_tem_divergencia = df_rest["Status_Divergencia"].astype(str).str.lower().str.contains("divergência|erro")
+    
+    mask_erros = mask_consta_benner | mask_tem_divergencia
+    df_erros = df_rest[mask_erros].copy()
+    
+    # 6. Falta de Lançamento (Tela 1) -> Somente os 100% NÃO CONSTA verdadeiros
+    df_falta = df_rest[~mask_erros].copy()
 
     return df_falta, df_erros, df_bo, df_eventos, df_lemon_virt, df_ok
 
@@ -408,7 +422,7 @@ def carregar_bases():
         vazio = padronizar_df(None)
         return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
 
-# 3. Gerador de Relatório Estilizado em Excel
+# Gerador de Relatório Estilizado em Excel
 def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     buffer = io.BytesIO()
     if df_export is None or df_export.empty:
@@ -561,7 +575,7 @@ if e_master():
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO C-LEVEL (Item 8)
+# ABA 0: DASHBOARD EXECUTIVO C-LEVEL
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.subheader("📊 Painel Executivo de Revenue Assurance")
@@ -616,7 +630,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
         st.info("Nenhum bilhete pendente nesta categoria.")
         return
 
-    # 2. Filtro de Busca Direta por Tela
+    # Filtro de Busca Direta por Tela
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
         termo_busca = st.text_input(f"🔍 Buscar nesta tela (por Bilhete, LOC, Cliente, Passageiro ou Gerente):", key=f"src_{key_prefix}")
@@ -644,7 +658,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     bilhetes_lista = df_exib["Bilhetes"].tolist() if "Bilhetes" in df_exib.columns else []
     bilhet_sel = st.multiselect("Selecione um ou mais Bilhetes para Tratativa:", options=bilhetes_lista, key=f"ms_{key_prefix}")
 
-    # 1. Card de Destaque dos Bilhetes Selecionados
+    # Card de Destaque dos Bilhetes Selecionados
     if bilhet_sel:
         df_sel_cards = df_exib[df_exib["Bilhetes"].isin(bilhet_sel)]
         st.markdown('<div class="highlight-card">', unsafe_allow_html=True)
@@ -681,7 +695,6 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
                 idx_ger = lista_gerentes.index(df_primeiro.get("Área Resp. Operação")) if df_primeiro.get("Área Resp. Operação") in lista_gerentes else 0
                 n_area = st.selectbox("Nova Área Responsável / Gerente:", options=lista_gerentes, index=idx_ger, key=f"ar_{key_prefix}")
             
-            # 6. Limpeza do campo de observação
             obs_init = str(df_primeiro.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
             n_obs = st.text_area("Observação / Justificativa Detalhada:", value=obs_init, key=f"obs_{key_prefix}")
             
@@ -712,7 +725,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
                 else:
                     st.error(msg)
 
-    # 1. Ordenação e Destaque Visual na Tabela
+    # Ordenação e Destaque Visual na Tabela
     df_tbl_final = df_exib.copy()
     if bilhet_sel:
         df_tbl_final["🎯 Destaque"] = df_tbl_final["Bilhetes"].isin(bilhet_sel).map({True: "⭐ SELECIONADO", False: ""})
@@ -799,43 +812,107 @@ if e_master():
             except Exception:
                 st.info("Nenhum registro de log encontrado na tabela log_auditoria do Supabase.")
 
-    # ABA 9: CARGA DE RELATÓRIOS (Item 9 - Botão de Upload Ativo)
+    # ABA 9: CARGA DE RELATÓRIOS (Processamento em Lote Protegido com Barra de Progresso)
     with aba_sel[9]:
-        st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote)")
+        st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Protegido)")
         st.markdown("Envie uma planilha `.xlsx` ou `.csv` contendo as colunas de **Bilhete**, **Novo Status**, **Área Responsável** e **Observação** para atualização em massa no Supabase.")
-        
+        st.warning("🔒 **Proteção de Escopo Ativa:** Somente bilhetes pertencentes à base auditada original serão atualizados.")
+
         arq_upload = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "xls", "csv"])
         if arq_upload:
             try:
                 if arq_upload.name.endswith(".csv"):
-                    df_up = pd.read_csv(arq_upload, dtype=str)
+                    df_up_raw = pd.read_csv(arq_upload, dtype=str)
                 else:
-                    df_up = pd.read_excel(arq_upload, dtype=str)
+                    df_up_raw = pd.read_excel(arq_upload, dtype=str)
 
-                st.markdown(f"**Pré-visualização dos Dados Recebidos (Exibindo 10 de {len(df_up)} registros):**")
-                st.dataframe(df_up.head(10), width="stretch")
+                col_b = next((c for c in df_up_raw.columns if any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
+                col_st = next((c for c in df_up_raw.columns if any(x in str(c).lower() for x in ["status", "novo status"])), None)
+                col_ar = next((c for c in df_up_raw.columns if any(x in str(c).lower() for x in ["gerente", "área", "area", "responsavel"])), None)
+                col_obs = next((c for c in df_up_raw.columns if any(x in str(c).lower() for x in ["obs", "observação"])), None)
 
-                col_b = next((c for c in df_up.columns if any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
-                col_st = next((c for c in df_up.columns if any(x in str(c).lower() for x in ["status", "novo status"])), None)
-                col_ar = next((c for c in df_up.columns if any(x in str(c).lower() for x in ["gerente", "área", "area"])), None)
-                col_obs = next((c for c in df_up.columns if any(x in str(c).lower() for x in ["obs", "observação"])), None)
+                if not col_b or not col_st:
+                    st.error("⚠️ O arquivo precisa conter ao menos uma coluna de 'Bilhete' e uma de 'Status'.")
+                else:
+                    df_up_raw["Bilhete_Clean"] = df_up_raw[col_b].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+                    df_todos["Bilhete_Clean"] = df_todos["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
 
-                if col_b and col_st:
-                    if st.button("🚀 Confirmar e Enviar Lote para o Supabase"):
-                        df_up_fmt = pd.DataFrame({
-                            "Bilhetes": df_up[col_b],
-                            "Status_Geral": df_up[col_st],
-                            "Área Resp. Operação": df_up[col_ar] if col_ar else "Operação",
-                            "Obs. Operação": df_up[col_obs] if col_obs else ""
-                        })
-                        usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
-                        ok, msg = salvar_tratativas_lote_supabase(df_up_fmt, usuario=f"Carga_Lote_{usr_str}")
-                        if ok:
-                            st.success(msg)
-                            st.rerun()
+                    # Cruzamento estrito com a base mestra original
+                    df_validos = pd.merge(
+                        df_up_raw,
+                        df_todos[["Bilhete_Clean", "Status_Geral", "Área Resp. Operação", "Obs. Operação"]].drop_duplicates("Bilhete_Clean"),
+                        on="Bilhete_Clean",
+                        how="inner",
+                        suffixes=("_Novo", "_Atual")
+                    )
+
+                    qtd_total_arq = len(df_up_raw)
+                    qtd_validos = len(df_validos)
+                    qtd_fora = qtd_total_arq - qtd_validos
+
+                    novos_logs = []
+                    lote_alteracoes = []
+                    qtd_iguais = 0
+
+                    agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
+
+                    for _, r_v in df_validos.iterrows():
+                        b_code = r_v["Bilhete_Clean"]
+                        st_novo = str(r_v.get(col_st, "")).strip()
+                        ar_novo = str(r_v.get(col_ar, r_v.get("Área Resp. Operação", ""))).strip()
+                        obs_novo = str(r_v.get(col_obs, r_v.get("Obs. Operação", ""))).strip()
+
+                        st_atual = str(r_v.get("Status_Geral", "")).strip()
+                        ar_atual = str(r_v.get("Área Resp. Operação", "")).strip()
+                        obs_atual = str(r_v.get("Obs. Operação", "")).strip()
+
+                        if st_novo == st_atual and ar_novo == ar_atual and obs_novo == obs_atual:
+                            qtd_iguais += 1
                         else:
-                            st.error(msg)
-                else:
-                    st.error("⚠️ O arquivo deve conter ao menos as colunas identificadoras de 'Bilhete' e 'Status'.")
+                            lote_alteracoes.append({
+                                "Bilhetes": b_code,
+                                "Status_Geral": st_novo,
+                                "Área Resp. Operação": ar_novo,
+                                "Obs. Operação": obs_novo
+                            })
+                            novos_logs.append({
+                                "Data_Hora": agora_str,
+                                "Bilhete": b_code,
+                                "Usuario_Acao": usr_str,
+                                "Status_Anterior": st_atual,
+                                "Novo_Status": st_novo,
+                                "Area_Anterior": ar_atual,
+                                "Nova_Area": ar_novo,
+                                "Observacao": obs_novo,
+                                "Tipo_Interacao": "Carga em Lote (Excel)"
+                            })
+
+                    st.markdown("### 📊 Relatório de Pré-Validação da Carga em Lote")
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric("Linhas na Planilha", qtd_total_arq)
+                    m2.metric("🟢 Com Alteração", len(lote_alteracoes))
+                    m3.metric("🟡 Sem Alteração (Mantidos)", qtd_iguais)
+                    m4.metric("🔴 Ignorados (Fora da Base)", qtd_fora)
+
+                    if len(lote_alteracoes) > 0:
+                        st.markdown("**Amostra de Bilhetes que Serão Atualizados:**")
+                        st.dataframe(pd.DataFrame(lote_alteracoes).head(10), width="stretch")
+
+                        if st.button("🚀 Confirmar e Processar Atualizações no Supabase"):
+                            bar_prog = st.progress(0, text="Sincronizando com o banco de dados...")
+                            
+                            df_lote_final = pd.DataFrame(lote_alteracoes)
+                            ok, msg = salvar_tratativas_lote_supabase(df_lote_final, usuario=f"Carga_Lote_{usr_str}")
+                            
+                            bar_prog.progress(50, text="Gravando trilha de auditoria...")
+                            registrar_log_supabase(novos_logs)
+                            
+                            bar_prog.progress(100, text="Concluído!")
+                            st.success(f"✅ Processamento concluído! {len(lote_alteracoes)} bilhetes foram atualizados no Supabase e registrados na Trilha de Auditoria.")
+                            st.rerun()
+                    else:
+                        st.info("ℹ️ Nenhuma alteração pendente. Todos os bilhetes válidos da planilha já possuem exatamente as mesmas tratativas registradas.")
+
             except Exception as e:
                 st.error(f"Erro ao processar o arquivo: {e}")

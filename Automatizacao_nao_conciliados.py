@@ -538,7 +538,7 @@ def executar_auditoria():
                 obs_lower = str(obs_op).strip().lower()
 
                 # Item 4: Regra Restrita de Filtragem do Backoffice (Gerente BO/Kátia AND Chamado/Ticket)
-                tem_gerente_bo = any(k in area_lower for k in ["katia", "kátia", "suporte backoffice", "backoffice"])
+                tem_gerente_bo = any(k in area_lower for k in ["katia Martins", "kátia Martins", "suporte backoffice", "backoffice"])
                 tem_chamado_obs = any(p in obs_lower or p in st_lower for p in ["ticket", "chamado", "suporte"])
 
                 e_suporte_backoffice = tem_gerente_bo and tem_chamado_obs
