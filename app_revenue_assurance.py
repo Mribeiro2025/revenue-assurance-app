@@ -8,6 +8,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 from sqlalchemy import create_engine, text
 
@@ -294,7 +295,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# 3. TRATAMENTO DE DADOS (Correção Segura Sem Erro de Float/Attribute)
+# 3. TRATAMENTO DE DADOS E PADRONIZAÇÃO
 # ==============================================================================
 def clean_str(val):
     if pd.isna(val) or val is None: return ""
@@ -339,6 +340,8 @@ def padronizar_df(df):
         if c not in df_out.columns: df_out[c] = "-"
 
     df_out["Dt_Parsed"] = pd.to_datetime(df_out["Data Emissão"], format="mixed", dayfirst=True, errors="coerce")
+    df_out["Dt_Mod_Parsed"] = pd.to_datetime(df_out["Data_Modificacao"], format="mixed", dayfirst=True, errors="coerce")
+    
     return df_out
 
 def mesclar_com_supabase(df_in):
@@ -365,7 +368,7 @@ def mesclar_com_supabase(df_in):
     return df_merged
 
 # ==============================================================================
-# ROTEAMENTO ESTRITO COM AJUSTE DE EXCLUSIVIDADE DE RECEITA
+# ROTEAMENTO ESTRITO COM CARREGAMENTO APENAS DAS 3 ABAS MESTRAS
 # ==============================================================================
 def rotear_bases_mestra(df_master):
     if df_master.empty:
@@ -385,7 +388,7 @@ def rotear_bases_mestra(df_master):
 
     # 1. Sem Divergência / Conciliados (Tela 6)
     mask_valores_corretos = df_master["Status_Geral"].astype(str).str.lower().str.contains("já lançado|conciliado|valores corretos|regularizado") | \
-                           df_master["Status_Divergencia"].astype(str).str.lower().str.contains("valores corretos")
+                            df_master["Status_Divergencia"].astype(str).str.lower().str.contains("valores corretos")
     
     mask_so_receita = df_master["Status_Divergencia"].apply(e_apenas_divergencia_receita)
 
@@ -394,7 +397,7 @@ def rotear_bases_mestra(df_master):
     df_ok = df_master[mask_ok].copy()
     df_rest = df_master[~mask_ok].copy()
 
-    # 2. Suporte Backoffice (Tela 3 - Regra Flexível de Alimentação)
+    # 2. Suporte Backoffice (Tela 3)
     def e_bo_flexivel(r):
         ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
         obs_val = str(r.get("Obs. Operação", "")).strip().lower()
@@ -444,8 +447,17 @@ def carregar_bases():
     try:
         xls = pd.ExcelFile(ARQUIVO_DASHBOARD, engine="openpyxl")
         frames = []
+        
+        # CORREÇÃO CRÍTICA DE DUPLICIDADE:
+        # Carrega estritamente APENAS as 3 abas principais do Excel
+        abas_permitidas = [
+            "99_Base_Divergencias_Geral",
+            "98_OK_Divergencia_Operacao",
+            "98_OK_Sem_Divergencia_Concil"
+        ]
+        
         for sheet in xls.sheet_names:
-            if sheet.startswith("98_") or sheet.startswith("99_"):
+            if sheet in abas_permitidas:
                 df_s = pd.read_excel(xls, sheet_name=sheet)
                 df_s["Aba_Origem"] = sheet
                 frames.append(df_s)
@@ -477,7 +489,7 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     if df_export is None or df_export.empty:
         df_export = pd.DataFrame(columns=["Aviso"], data=[["Nenhum registro encontrado para os filtros selecionados"]])
     
-    cols_remover = [c for c in ["Dt_Parsed", "Aba_Origem"] if c in df_export.columns]
+    cols_remover = [c for c in ["Dt_Parsed", "Dt_Mod_Parsed", "Aba_Origem"] if c in df_export.columns]
     df_clean = df_export.drop(columns=cols_remover) if cols_remover else df_export.copy()
 
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
@@ -597,16 +609,18 @@ f_lemon_virt = aplicar_filtros(df_lemon_virt)
 f_sem_div = aplicar_filtros(df_sem_div)
 
 # ==============================================================================
-# 5. HEADER PRINCIPAL E CARDS DE KPIS
+# 5. HEADER PRINCIPAL E CARDS DE KPIS (INCLUINDO EMISSÃO VIRTUAL)
 # ==============================================================================
 st.markdown("<div class='main-header'><h1>✈️ Garantia de Receita do Portal | Auditoria de Bilhetes</h1></div>", unsafe_allow_html=True)
 
-c1, c2, c3, c4, c5 = st.columns(5)
+# 6 colunas para contemplar 100% dos casos no mesmo cabeçalho
+c1, c2, c3, c4, c5, c6 = st.columns(6)
 c1.metric("Pendentes de ERP", f"{len(f_falta):,}")
 c2.metric("Erros Valores/CIA", f"{len(f_erros):,}")
 c3.metric("Backoffice", f"{len(f_backoffice):,}")
 c4.metric("Central de Eventos", f"{len(f_eventos):,}")
-c5.metric("Sem Divergência (OK)", f"{len(f_sem_div):,}")
+c5.metric("Emissor Virtual", f"{len(f_lemon_virt):,}")
+c6.metric("Sem Divergência (OK)", f"{len(f_sem_div):,}")
 
 st.markdown("---")
 
@@ -629,18 +643,42 @@ if e_master():
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO C-LEVEL
+# ABA 0: DASHBOARD EXECUTIVO C-LEVEL COM SLA E ÍNDICE DE RESOLUÇÃO
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
-    st.subheader("📊 Painel Executivo de Revenue Assurance")
+    st.subheader("📊 Painel Executivo C-Level & Análise de SLA de Resolução")
     
+    df_pendentes_todas = pd.concat([f_falta, f_erros, f_backoffice, f_eventos, f_lemon_virt], ignore_index=True)
+    df_todas_casos = pd.concat([df_pendentes_todas, f_sem_div], ignore_index=True)
+    
+    # Cálculo de Métricas Executivas de SLA
+    total_auditado = len(df_todas_casos)
+    total_resolvido = len(f_sem_div)
+    taxa_resolucao = (total_resolvido / total_auditado * 100) if total_auditado > 0 else 0.0
+
+    # Tempo Médio de Resolução (dias entre Emissão e Tratativa)
+    df_sla = f_sem_div.copy()
+    tempo_medio_dias = 0.0
+    if not df_sla.empty and "Dt_Parsed" in df_sla.columns and "Dt_Mod_Parsed" in df_sla.columns:
+        df_sla["Dias_Resolucao"] = (df_sla["Dt_Mod_Parsed"] - df_sla["Dt_Parsed"]).dt.days
+        df_sla_valido = df_sla[df_sla["Dias_Resolucao"] >= 0]
+        if not df_sla_valido.empty:
+            tempo_medio_dias = df_sla_valido["Dias_Resolucao"].mean()
+
+    m_exec1, m_exec2, m_exec3, m_exec4 = st.columns(4)
+    m_exec1.metric("Total de Bilhetes Auditados", f"{total_auditado:,}")
+    m_exec2.metric("Total Resolvido / Lançado", f"{total_resolvido:,}")
+    m_exec3.metric("Taxa de Resolução (%)", f"{taxa_resolucao:.1f}%")
+    m_exec4.metric("SLA Médio de Solução", f"{tempo_medio_dias:.1f} dias")
+
+    st.markdown("---")
+
     col_d1, col_d2 = st.columns(2)
     
     with col_d1:
         st.markdown("##### ⚠️ Distribuição de Pendências por Status")
-        df_todas_pend = pd.concat([f_falta, f_erros, f_backoffice, f_eventos, f_lemon_virt], ignore_index=True)
-        if not df_todas_pend.empty and "Status_Geral" in df_todas_pend.columns:
-            df_st_chart = df_todas_pend["Status_Geral"].value_counts().reset_index()
+        if not df_pendentes_todas.empty and "Status_Geral" in df_pendentes_todas.columns:
+            df_st_chart = df_pendentes_todas["Status_Geral"].value_counts().reset_index()
             df_st_chart.columns = ["Status", "Quantidade"]
             fig_pie = px.pie(df_st_chart, values="Quantidade", names="Status", hole=0.4, color_discrete_sequence=px.colors.qualitative.Bold)
             fig_pie.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=320)
@@ -650,8 +688,8 @@ with aba_sel[0]:
 
     with col_d2:
         st.markdown("##### 👤 Top 8 Gerentes por Volume de Pendências")
-        if not df_todas_pend.empty and "Área Resp. Operação" in df_todas_pend.columns:
-            df_ger_chart = df_todas_pend["Área Resp. Operação"].value_counts().head(8).reset_index()
+        if not df_pendentes_todas.empty and "Área Resp. Operação" in df_pendentes_todas.columns:
+            df_ger_chart = df_pendentes_todas["Área Resp. Operação"].value_counts().head(8).reset_index()
             df_ger_chart.columns = ["Gerente", "Quantidade"]
             fig_ger = px.bar(df_ger_chart, x="Gerente", y="Quantidade", text="Quantidade", color_discrete_sequence=["#002060"])
             fig_ger.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=320)
@@ -659,22 +697,25 @@ with aba_sel[0]:
 
     col_d3, col_d4 = st.columns(2)
     with col_d3:
-        st.markdown("##### 🏢 Volume de Pendências por Unidade / Setor")
-        if not df_todas_pend.empty and "Setor" in df_todas_pend.columns:
-            df_set = df_todas_pend["Setor"].value_counts().reset_index()
+        st.markdown("##### 🏢 Volume de Pendências por Setor")
+        if not df_pendentes_todas.empty and "Setor" in df_pendentes_todas.columns:
+            df_set = df_pendentes_todas["Setor"].value_counts().reset_index()
             df_set.columns = ["Setor", "Quantidade"]
             fig_set = px.bar(df_set, x="Setor", y="Quantidade", color="Setor", text_auto=True)
             fig_set.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=300, showlegend=False)
             st.plotly_chart(fig_set, use_container_width=True)
 
     with col_d4:
-        st.markdown("##### ✈️ Pendências por Companhia Aérea (Top 8)")
-        if not df_todas_pend.empty and "CIA" in df_todas_pend.columns:
-            df_cia = df_todas_pend["CIA"].value_counts().head(8).reset_index()
-            df_cia.columns = ["CIA", "Quantidade"]
-            fig_cia = px.bar(df_cia, x="CIA", y="Quantidade", color_discrete_sequence=["#00509d"], text_auto=True)
-            fig_cia.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=300)
-            st.plotly_chart(fig_cia, use_container_width=True)
+        st.markdown("##### ⏱️ SLA Médio de Tratativa por Gerente (Dias)")
+        if not df_sla.empty and "Dias_Resolucao" in df_sla.columns and "Área Resp. Operação" in df_sla.columns:
+            df_sla_ger = df_sla.groupby("Área Resp. Operação")["Dias_Resolucao"].mean().reset_index()
+            df_sla_ger.columns = ["Gerente", "Dias_Medios"]
+            df_sla_ger = df_sla_ger.sort_values("Dias_Medios", ascending=False).head(8)
+            fig_sla = px.bar(df_sla_ger, x="Gerente", y="Dias_Medios", text_auto=".1f", color_discrete_sequence=["#d90429"])
+            fig_sla.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=300)
+            st.plotly_chart(fig_sla, use_container_width=True)
+        else:
+            st.info("Aguardando mais tratativas salvas para consolidar índice de tempo médio de SLA.")
 
 # ------------------------------------------------------------------------------
 # FUNÇÃO REUTILIZÁVEL DE TRATATIVA COM DESTAQUE E BUSCA
