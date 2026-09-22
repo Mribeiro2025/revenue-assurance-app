@@ -76,30 +76,47 @@ def get_db_engine():
     return None
 
 def carregar_tratativas_db():
-    """Busca as tratativas ativas diretamente no Supabase."""
+    """Busca as tratativas ativas diretamente no Supabase, incluindo Setor e Gerentes."""
     engine = get_db_engine()
     if not engine:
-        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao"])
+        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes"])
     
-    query = "SELECT bilhete, status_geral, area_resp, obs_operacao FROM tratativas"
+    query = "SELECT bilhete, status_geral, area_resp, obs_operacao, setor, gerentes FROM tratativas"
     try:
         return pd.read_sql(query, engine)
     except Exception:
-        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao"])
+        # Fallback caso colunas setor/gerentes ainda não tenham sido criadas
+        try:
+            df_fallback = pd.read_sql("SELECT bilhete, status_geral, area_resp, obs_operacao FROM tratativas", engine)
+            df_fallback["setor"] = "-"
+            df_fallback["gerentes"] = "-"
+            return df_fallback
+        except Exception:
+            return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes"])
 
 def salvar_tratativas_lote_supabase(df_lote, usuario):
-    """Executa o UPSERT de um lote de tratativas no Supabase."""
+    """Executa o UPSERT de um lote de tratativas no Supabase incluindo Setor e Gerentes."""
     engine = get_db_engine()
     if not engine or df_lote.empty:
         return False, "Conexão com o banco de dados indisponível."
 
+    # Garante a criação/existência das colunas adicionais na tabela do Supabase se necessário
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS setor VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS gerentes VARCHAR(255);"))
+    except Exception:
+        pass
+
     upsert_sql = text("""
-        INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, usuario_modificacao, data_modificacao)
-        VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :usuario, NOW())
+        INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
+        VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW())
         ON CONFLICT (bilhete) DO UPDATE SET
             status_geral = EXCLUDED.status_geral,
             area_resp = EXCLUDED.area_resp,
             obs_operacao = EXCLUDED.obs_operacao,
+            setor = COALESCE(EXCLUDED.setor, tratativas.setor),
+            gerentes = COALESCE(EXCLUDED.gerentes, tratativas.gerentes),
             usuario_modificacao = EXCLUDED.usuario_modificacao,
             data_modificacao = NOW();
     """)
@@ -112,8 +129,9 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
             
             st_val = str(r.get("Status_Geral", "")).strip()
             ar_val = str(r.get("Área Resp. Operação", "")).strip()
+            setor_val = str(r.get("Setor", "-")).strip()
+            gerente_val = str(r.get("Gerentes", "-")).strip()
             
-            # Trava de segurança: impede salvar '-' no banco se for status/área inválida
             if st_val in ["-", "", "None", "nan"]:
                 st_val = "Pendente de Lançamento (Não Consta)"
             if ar_val in ["-", "", "None", "nan"]:
@@ -124,6 +142,8 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 "status_geral": st_val,
                 "area_resp": ar_val,
                 "obs_operacao": obs_limpa,
+                "setor": setor_val,
+                "gerentes": gerente_val,
                 "usuario": str(usuario)
             })
 
@@ -355,7 +375,7 @@ def padronizar_df(df):
     return df_out
 
 def mesclar_com_supabase(df_in):
-    """Sobrescreve o status e observações com os dados salvos no Supabase mantendo todas as colunas."""
+    """Sobrescreve o status, área responsável, observações, setor e gerentes com os dados salvos no Supabase."""
     df_db = carregar_tratativas_db()
     if df_in is None or df_in.empty or df_db.empty:
         return df_in
@@ -365,12 +385,12 @@ def mesclar_com_supabase(df_in):
 
     df_merged = pd.merge(
         df_in,
-        df_db[["Bilhete_Clean", "status_geral", "area_resp", "obs_operacao"]],
+        df_db[["Bilhete_Clean", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes"]],
         on="Bilhete_Clean",
         how="left"
     )
 
-    # Atualiza apenas se os dados do banco não forem nulos ou vazios
+    # Atualiza se os dados do banco forem válidos
     df_merged["Status_Geral"] = df_merged["status_geral"].where(
         df_merged["status_geral"].notna() & ~df_merged["status_geral"].isin(["-", "", "None"]), 
         df_merged["Status_Geral"]
@@ -383,8 +403,19 @@ def mesclar_com_supabase(df_in):
         df_merged["obs_operacao"].notna() & ~df_merged["obs_operacao"].isin(["-", "", "None"]), 
         df_merged["Obs. Operação"]
     )
+    if "setor" in df_merged.columns:
+        df_merged["Setor"] = df_merged["setor"].where(
+            df_merged["setor"].notna() & ~df_merged["setor"].isin(["-", "", "None"]), 
+            df_merged.get("Setor", "-")
+        )
+    if "gerentes" in df_merged.columns:
+        df_merged["Gerentes"] = df_merged["gerentes"].where(
+            df_merged["gerentes"].notna() & ~df_merged["gerentes"].isin(["-", "", "None"]), 
+            df_merged.get("Gerentes", "-")
+        )
 
-    df_merged.drop(columns=["Bilhete_Clean", "status_geral", "area_resp", "obs_operacao"], inplace=True)
+    cols_drop = [c for c in ["Bilhete_Clean", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes"] if c in df_merged.columns]
+    df_merged.drop(columns=cols_drop, inplace=True)
     return df_merged
 
 # ==============================================================================
@@ -757,7 +788,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     df_exib = df_filtrado.copy()
     if termo_busca.strip():
         term = termo_busca.strip().lower()
-        cols_search = [c for c in ["Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Ponto de venda", "Gerentes", "Área Resp. Operação", "Consultor", "Cliente"] if c in df_exib.columns]
+        cols_search = [c for c in ["Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Ponto de venda", "Gerentes", "Área Resp. Operação", "Consultor", "Cliente", "Setor"] if c in df_exib.columns]
         mask_src = pd.Series(False, index=df_exib.index)
         for col in cols_search:
             mask_src |= df_exib[col].astype(str).str.lower().str.contains(term, na=False)
@@ -776,7 +807,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
             obs_card = str(r_card.get('Obs. Operação', '')).replace("Sem tratativa na operação", "").strip() or '-'
             st.markdown(f"""
             * **Bilhete:** `{r_card.get('Bilhetes')}` | **CIA:** {r_card.get('CIA')} | **Ponto Venda:** {r_card.get('Ponto de venda')}
-            * **Gerente Atual:** {r_card.get('Área Resp. Operação')} | **Status Atual:** `{r_card.get('Status_Geral')}`
+            * **Gerente Atual:** {r_card.get('Área Resp. Operação')} | **Setor:** {r_card.get('Setor')} | **Status Atual:** `{r_card.get('Status_Geral')}`
             * **Obs. Atual:** {obs_card}
             """)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -815,7 +846,9 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
                     "Bilhetes": bilhet_sel,
                     "Status_Geral": [n_status] * len(bilhet_sel),
                     "Área Resp. Operação": [n_area] * len(bilhet_sel),
-                    "Obs. Operação": [n_obs] * len(bilhet_sel)
+                    "Obs. Operação": [n_obs] * len(bilhet_sel),
+                    "Setor": [df_primeiro.get("Setor", "-")] * len(bilhet_sel),
+                    "Gerentes": [df_primeiro.get("Gerentes", "-")] * len(bilhet_sel)
                 })
 
                 ok, msg = salvar_tratativas_lote_supabase(df_up, usuario=usr_str)
@@ -935,9 +968,9 @@ if e_master():
                 else:
                     df_up_raw = pd.read_excel(arq_upload, dtype=str)
 
-                # Deteção com prioridade estrita na coluna 'Área Resp. Operação' e 'Status_Geral'
                 cols_up = df_up_raw.columns.tolist()
                 
+                # Identificação das colunas da planilha enviada
                 col_b = next((c for c in cols_up if c in ["Bilhetes", "Bilhete"] or any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
                 
                 col_st = next((c for c in cols_up if c == "Status_Geral"), None)
@@ -953,6 +986,8 @@ if e_master():
                     col_ar = next((c for c in cols_up if "gerente" in str(c).lower()), None)
 
                 col_obs = next((c for c in cols_up if any(x in str(c).lower() for x in ["obs", "observação", "observacao"])), None)
+                col_setor = next((c for c in cols_up if str(c).lower() == "setor"), None)
+                col_gerentes = next((c for c in cols_up if str(c).lower() in ["gerentes", "gerente"]), None)
 
                 if not col_b or not col_st:
                     st.error("⚠️ O arquivo precisa conter ao menos uma coluna de 'Bilhete' e uma de 'Status_Geral'.")
@@ -962,7 +997,7 @@ if e_master():
 
                     df_validos = pd.merge(
                         df_up_raw,
-                        df_todos[["Bilhete_Clean", "Status_Geral", "Área Resp. Operação", "Obs. Operação"]].drop_duplicates("Bilhete_Clean"),
+                        df_todos[["Bilhete_Clean", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Gerentes"]].drop_duplicates("Bilhete_Clean"),
                         on="Bilhete_Clean",
                         how="inner",
                         suffixes=("_Novo", "_Atual")
@@ -981,27 +1016,39 @@ if e_master():
 
                     for _, r_v in df_validos.iterrows():
                         b_code = r_v["Bilhete_Clean"]
-                        st_novo = str(r_v.get(col_st, "")).strip()
-                        ar_novo = str(r_v.get(col_ar, r_v.get("Área Resp. Operação", ""))).strip()
-                        obs_novo = str(r_v.get(col_obs, r_v.get("Obs. Operação", ""))).strip()
+                        
+                        # Resgate inteligente dos valores novos capturando com ou sem sufixo '_Novo'
+                        st_novo = str(r_v.get(f"{col_st}_Novo", r_v.get(col_st, ""))).strip()
+                        ar_novo = str(r_v.get(f"{col_ar}_Novo", r_v.get(col_ar, r_v.get("Área Resp. Operação_Novo", r_v.get("Área Resp. Operação", ""))))).strip()
+                        obs_novo = str(r_v.get(f"{col_obs}_Novo" if col_obs else "Obs. Operação_Novo", r_v.get(col_obs or "Obs. Operação", ""))).strip()
+                        setor_novo = str(r_v.get(f"{col_setor}_Novo" if col_setor else "Setor_Novo", r_v.get(col_setor or "Setor", ""))).strip()
+                        gerentes_novo = str(r_v.get(f"{col_gerentes}_Novo" if col_gerentes else "Gerentes_Novo", r_v.get(col_gerentes or "Gerentes", ""))).strip()
 
                         st_atual = str(r_v.get("Status_Geral_Atual", r_v.get("Status_Geral", ""))).strip()
                         ar_atual = str(r_v.get("Área Resp. Operação_Atual", r_v.get("Área Resp. Operação", ""))).strip()
                         obs_atual = str(r_v.get("Obs. Operação_Atual", r_v.get("Obs. Operação", ""))).strip()
+                        setor_atual = str(r_v.get("Setor_Atual", r_v.get("Setor", ""))).strip()
+                        gerentes_atual = str(r_v.get("Gerentes_Atual", r_v.get("Gerentes", ""))).strip()
 
                         if st_novo in ["-", "", "None", "nan"]:
                             st_novo = st_atual or "Pendente de Lançamento (Não Consta)"
                         if ar_novo in ["-", "", "None", "nan"]:
                             ar_novo = ar_atual or "Operação"
+                        if setor_novo in ["-", "", "None", "nan"]:
+                            setor_novo = setor_atual or "-"
+                        if gerentes_novo in ["-", "", "None", "nan"]:
+                            gerentes_novo = gerentes_atual or "-"
 
-                        if st_novo == st_atual and ar_novo == ar_atual and obs_novo == obs_atual:
+                        if st_novo == st_atual and ar_novo == ar_atual and obs_novo == obs_atual and setor_novo == setor_atual and gerentes_novo == gerentes_atual:
                             qtd_iguais += 1
                         else:
                             lote_alteracoes.append({
                                 "Bilhetes": b_code,
                                 "Status_Geral": st_novo,
                                 "Área Resp. Operação": ar_novo,
-                                "Obs. Operação": obs_novo
+                                "Obs. Operação": obs_novo,
+                                "Setor": setor_novo,
+                                "Gerentes": gerentes_novo
                             })
                             novos_logs.append({
                                 "Data_Hora": agora_str,
