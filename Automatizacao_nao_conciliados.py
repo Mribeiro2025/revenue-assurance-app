@@ -168,17 +168,10 @@ def extract_keys(val):
 
 
 def carregar_tratativas_e_logs_anteriores(out_file):
-    """
-    Busca o histórico de tratativas com a seguinte hierarquia:
-    1. Supabase (PostgreSQL NUVEM) - Fonte Única da Verdade.
-    2. Memória CSV local (Historico_Tratativas.csv) - Fallback offline.
-    3. Consolidado Excel anterior (Dashboard_Revenue_Assurance_Consolidado.xlsx).
-    """
     dict_historico = {}
     df_log_antigo = pd.DataFrame()
 
     def indexar_memoria(b_raw, dados):
-        """Indexa os dados do bilhete aplicando chaves flexíveis e ignorando nulos."""
         if not b_raw or str(b_raw).strip().lower() in ["nan", "none", "", "-"]:
             return
 
@@ -190,7 +183,6 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                 if val_str and val_str not in ["-", "nan", "none", "Sem tratativa na operação"]:
                     dict_historico[k][col] = val
 
-    # 1º Passo: Carrega do Excel consolidado anterior
     if os.path.exists(out_file):
         try:
             xls = pd.ExcelFile(out_file, engine="openpyxl")
@@ -224,7 +216,6 @@ def carregar_tratativas_e_logs_anteriores(out_file):
         except Exception as e:
             print(f"⚠️ Aviso ao carregar histórico do Excel: {e}")
 
-    # 2º Passo: Aplica a memória protegida em CSV local
     file_memoria = "Historico_Tratativas.csv"
     if os.path.exists(file_memoria) and os.path.getsize(file_memoria) > 0:
         try:
@@ -249,7 +240,6 @@ def carregar_tratativas_e_logs_anteriores(out_file):
         except Exception as e:
             print(f"⚠️ Erro ao ler memória CSV: {e}")
 
-    # 3º Passo: RESGATE DO SUPABASE (PRIORIDADE MÁXIMA PARA TRATATIVAS WEB)
     engine_sb = obter_engine_supabase()
     if engine_sb:
         try:
@@ -268,7 +258,7 @@ def carregar_tratativas_e_logs_anteriores(out_file):
         except Exception as e:
             print(f"⚠️ Aviso ao conectar/carregar dados do Supabase: {e}")
     else:
-        print("⚠️ Conexão com Supabase não estabelecida. Verifique se a pasta '.streamlit/secrets.toml' existe.")
+        print("⚠️ Conexão com Supabase não estabelecida.")
 
     return dict_historico, df_log_antigo
 
@@ -288,7 +278,6 @@ def encontrar_arquivo(nomes_possiveis):
 
 
 def salvar_csv_atomico(df, caminho_csv):
-    """Garante gravação segura protegida contra travamentos do OneDrive."""
     tmp_path = f"{caminho_csv}.tmp"
     df.to_csv(tmp_path, index=False, encoding="utf-8-sig")
     if os.path.exists(caminho_csv):
@@ -297,7 +286,6 @@ def salvar_csv_atomico(df, caminho_csv):
 
 
 def sincronizar_supabase_fim(df_master):
-    """Envia tratativas e histórico de auditoria em LOTE (Batch Executemany) para o Supabase."""
     engine_sb = obter_engine_supabase()
     if not engine_sb or df_master.empty:
         return
@@ -365,7 +353,6 @@ def executar_auditoria():
                     "Gerente_Responsavel": clean_str_strict(r.get("Gerentes")),
                 }
 
-    # Item 7: Indexação Expandida do Extrato Lemontech
     print("\n[2/5] Indexando Extrato OBT Lemontech...")
     caminho_lemon = encontrar_arquivo(["Extrato_Bilhetes_lemontech.xlsx", "Extrato_Bilhetes_lemontech.XLSX"])
     lemon_index = {}
@@ -388,7 +375,6 @@ def executar_auditoria():
                 "Lemon_Source": clean_str_strict(r.get("Source")) or "-",
                 "Lemon_Ponto_Venda": clean_str_strict(r.get("Ponto de Venda")) or "-",
             }
-            # Mapeia por Bilhete, Nº Pedido e Solicitação
             for col_k in ["Bilhete", "Nº Pedido", "Solicitação"]:
                 for k in extract_keys(r.get(col_k)):
                     if k not in lemon_index:
@@ -460,7 +446,7 @@ def executar_auditoria():
                 if k not in sabre_index:
                     sabre_index[k] = info
 
-    print("\n[5/5] Auditando e Conciliando Emissões das Cias Aéreas...")
+    print("\n[5/5] Auditando e Conciliando Emissões das Cias Aéreas com MAPEAMENTO DINÂMICO DE VALORES...")
     fontes = [
         (["AZUL.XLSX", "AZUL.xlsx"], "Azul"),
         (["BSP.XLSX", "BSP.xlsx"], "BSP"),
@@ -476,6 +462,7 @@ def executar_auditoria():
 
         df_raw = pd.read_excel(caminho_arq, header=None)
         curr_iata, curr_ponto_venda = "", ""
+        col_map = {}
 
         for r_idx in tqdm(range(len(df_raw)), desc=f"Auditando {nome_fonte}", unit="linha"):
             row = df_raw.iloc[r_idx]
@@ -485,6 +472,16 @@ def executar_auditoria():
             col4 = safe_get_col(row, 4)
             col5 = safe_get_col(row, 5)
             col6 = safe_get_col(row, 6)
+
+            # Detecta e Atualiza o Mapeamento Dinâmico de Colunas
+            row_str = [str(x).strip().upper() for x in row.values]
+            if any("BILHETE" in x or "A VISTA" in x or "A CREDITO" in x or "TARIFA" in x for x in row_str):
+                col_map = {}
+                for c_idx, val in enumerate(row.values):
+                    if pd.notna(val):
+                        v_clean = str(val).strip()
+                        col_map[v_clean] = c_idx
+                continue
 
             if re.match(r"^\d{2}-\d{5}", col0) or re.match(r"^\d{7,8}$", col0):
                 curr_iata = col0
@@ -518,7 +515,6 @@ def executar_auditoria():
                     continue
 
                 doc_val = safe_get_col(row, 22)
-
                 hist_data = buscar_memoria(dict_historico, bilhete_chave)
 
                 ponto_venda_final = curr_ponto_venda or hist_data.get("Ponto de venda") or "Não Mapeado"
@@ -529,7 +525,6 @@ def executar_auditoria():
 
                 gerente_resp = hist_data.get("Área Resp. Operação") or m_iata.get("Gerente_Responsavel", "Não Mapeado")
                 
-                # Item 6: Limpeza do campo de observação
                 obs_op = str(hist_data.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
                 obs_replica = hist_data.get("Obs_Auditoria_Replica") or "-"
 
@@ -537,8 +532,7 @@ def executar_auditoria():
                 area_lower = str(gerente_resp).strip().lower()
                 obs_lower = str(obs_op).strip().lower()
 
-                # Item 4: Regra Restrita de Filtragem do Backoffice (Gerente BO/Kátia AND Chamado/Ticket)
-                tem_gerente_bo = any(k in area_lower for k in ["katia Martins", "kátia Martins", "suporte backoffice", "backoffice"])
+                tem_gerente_bo = any(k in area_lower for k in ["katia martins", "kátia martins", "suporte backoffice", "backoffice"])
                 tem_chamado_obs = any(p in obs_lower or p in st_lower for p in ["ticket", "chamado", "suporte"])
 
                 e_suporte_backoffice = tem_gerente_bo and tem_chamado_obs
@@ -565,16 +559,26 @@ def executar_auditoria():
                 s_match = next((sabre_index[ek] for ek in keys_emissao if ek in sabre_index), None)
                 l_match = next((lemon_index[ek] for ek in keys_emissao if ek in lemon_index), None)
 
-                a_vista = safe_get_num(row, 8)
-                a_credito = safe_get_num(row, 10)
+                # ==============================================================
+                # EXTRAÇÃO DINÂMICA SEGURA DOS VALORES MONETÁRIOS
+                # ==============================================================
+                def get_val_dinamico(hdr_options):
+                    for h in hdr_options:
+                        if h in col_map:
+                            return safe_get_num(row, col_map[h])
+                    return 0.0
+
+                a_vista = get_val_dinamico(["A vista", "A VISTA"])
+                a_credito = get_val_dinamico(["A credito", "A CREDITO", "A Crédito"])
                 tarifa_emitida = a_vista + a_credito
-                taxa_emitida = safe_get_num(row, 11)
-                comissao = safe_get_num(row, 13)
-                taxa_du = safe_get_num(row, 14)
-                desc = safe_get_num(row, 15)
-                incentivo = safe_get_num(row, 18)
+                
+                taxa_emitida = get_val_dinamico(["Taxa", "TAXA"])
+                comissao = get_val_dinamico(["Comissão", "COMISSÃO", "Comissao"])
+                taxa_du = get_val_dinamico(["Taxa DU", "TAXA DU"])
+                desc = get_val_dinamico(["Desc.", "DESC."])
+                incentivo = get_val_dinamico(["Incentivo", "INCENTIVO"])
                 receita_emitida = comissao + taxa_du + incentivo
-                vl_liquido = safe_get_num(row, 20)
+                vl_liquido = get_val_dinamico(["VL. Líquido", "VL. LÍQUIDO", "VL. Liquido"])
 
                 if b_match:
                     status_sistema = b_match["Benner_Situação"]
@@ -690,7 +694,6 @@ def executar_auditoria():
                     "Cliente": cliente_sistema,
                     "Setor": setor_final,
                     "Aba_Destino": aba_destino,
-                    # Item 7: Composição dos Campos Lemontech
                     "Tipo_Emissao_Lemon": l_match["Lemon_OnOff"] if l_match else "-",
                     "Consultor_Lemon": l_match["Lemon_Consultor"] if l_match else "-",
                     "Emissor_Reserva_Lemon": l_match["Lemon_Emissor_Reserva"] if l_match else "-",
@@ -763,7 +766,6 @@ def executar_auditoria():
         "Forma_Pagto_Lemon", "Autorizacao_Cartao_Lemon", "Modalidade_Lemon", "Emissao_Online_Lemon", "Source_Lemon", "Ponto_Venda_Lemon", "Sistema Reserva", "Cliente", "Setor",
     ]
 
-    # Checagem dinâmica de colunas para prevenir KeyError
     cols_35_existentes = [c for c in cols_35 if c in df_master.columns]
     cols_30_existentes = [c for c in cols_30_furo if c in df_master.columns]
 
@@ -872,13 +874,11 @@ def executar_auditoria():
 
     wb.save(out_file_model)
 
-    # 1. Salva Memória Protegida CSV
     salvar_csv_atomico(
         df_master[["Bilhetes", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Ponto de venda", "Código Iata"]].drop_duplicates(subset=["Bilhetes"]),
         "Historico_Tratativas.csv"
     )
 
-    # 2. Salva SQLite Local
     conn = sqlite3.connect("revenue_assurance.db")
     try:
         with conn:
@@ -892,7 +892,6 @@ def executar_auditoria():
     finally:
         conn.close()
 
-    # 3. Salva/Sincroniza com o Supabase Nuvem em Lote Único
     sincronizar_supabase_fim(df_master)
 
     print("\n" + "=" * 75)

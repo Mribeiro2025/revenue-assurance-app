@@ -22,31 +22,6 @@ st.set_page_config(
 )
 
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
-ARQUIVO_USUARIOS = "usuarios_autorizados.json"
-
-USUARIOS_PADRAO = {
-    "mribeiro": {
-        "senha": "123",
-        "nome": "Marcos Ribeiro",
-        "perfil": "Master",
-        "status": "APROVADO",
-        "data_solicitacao": "2026-08-31",
-    },
-    "fellipe": {
-        "senha": "123",
-        "nome": "Fellipe Fernandes",
-        "perfil": "Master",
-        "status": "APROVADO",
-        "data_solicitacao": "2026-08-31",
-    },
-    "backoffice": {
-        "senha": "123",
-        "nome": "Atendimento Backoffice",
-        "perfil": "Operacao",
-        "status": "APROVADO",
-        "data_solicitacao": "2026-08-31",
-    },
-}
 
 st.markdown(
     """
@@ -177,32 +152,81 @@ def registrar_log_supabase(logs_list):
         pass
 
 # ==============================================================================
-# 2. GESTÃO DE USUÁRIOS E SEGURANÇA MASTER (Garantia de Senha Alfanumérica)
+# 2. GESTÃO DE USUÁRIOS NO SUPABASE
 # ==============================================================================
-def carregar_usuarios():
-    if not os.path.exists(ARQUIVO_USUARIOS):
-        with open(ARQUIVO_USUARIOS, "w", encoding="utf-8") as f:
-            json.dump(USUARIOS_PADRAO, f, ensure_ascii=False, indent=4)
-        return USUARIOS_PADRAO
+def carregar_usuarios_supabase():
+    """Busca os usuários cadastrados na tabela usuarios do Supabase."""
+    engine = get_db_engine()
+    if not engine:
+        return {}
+    
+    query = "SELECT usuario, senha, nome, perfil, status, data_solicitacao FROM usuarios"
     try:
-        with open(ARQUIVO_USUARIOS, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            # Garantir que todas as senhas sejam tratadas como STR
-            for u in data:
-                data[u]["senha"] = str(data[u].get("senha", ""))
-            return data
+        df_u = pd.read_sql(query, engine)
+        dict_u = {}
+        for _, row in df_u.iterrows():
+            dict_u[str(row["usuario"]).strip().lower()] = {
+                "senha": str(row["senha"]).strip(),
+                "nome": str(row["nome"]).strip(),
+                "perfil": str(row["perfil"]).strip(),
+                "status": str(row["status"]).strip().upper(),
+                "data_solicitacao": str(row["data_solicitacao"])
+            }
+        return dict_u
     except Exception:
-        return USUARIOS_PADRAO
+        return {}
 
-def salvar_usuarios(dict_users):
-    # Converte todas as senhas explicitamente para STRING antes de salvar
-    for u in dict_users:
-        dict_users[u]["senha"] = str(dict_users[u].get("senha", "")).strip()
-    with open(ARQUIVO_USUARIOS, "w", encoding="utf-8") as f:
-        json.dump(dict_users, f, ensure_ascii=False, indent=4)
+def salvar_usuario_supabase(u_id, senha, nome, perfil, status="PENDENTE"):
+    """Insere ou atualiza um usuário no Supabase."""
+    engine = get_db_engine()
+    if not engine:
+        return False, "Conexão com o banco indisponível."
+    
+    sql = text("""
+        INSERT INTO usuarios (usuario, senha, nome, perfil, status, data_solicitacao)
+        VALUES (:u, :p, :n, :perf, :st, CURRENT_DATE)
+        ON CONFLICT (usuario) DO UPDATE SET
+            senha = EXCLUDED.senha,
+            nome = EXCLUDED.nome,
+            perfil = EXCLUDED.perfil,
+            status = EXCLUDED.status;
+    """)
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql, {"u": u_id, "p": senha, "n": nome, "perf": perfil, "st": status})
+        return True, "Operação realizada com sucesso."
+    except Exception as e:
+        return False, f"Erro no banco: {e}"
 
-usuarios_db = carregar_usuarios()
+def atualizar_senha_supabase(u_id, nova_senha):
+    """Atualiza a senha de um usuário no Supabase."""
+    engine = get_db_engine()
+    if not engine:
+        return False, "Conexão com o banco indisponível."
+    
+    sql = text("UPDATE usuarios SET senha = :p WHERE usuario = :u;")
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql, {"u": u_id, "p": nova_senha})
+        return True, "Senha redefinida com sucesso."
+    except Exception as e:
+        return False, f"Erro no banco: {e}"
 
+def atualizar_status_usuario_supabase(u_id, novo_status):
+    """Atualiza o status (APROVADO/REJEITADO) de um usuário no Supabase."""
+    engine = get_db_engine()
+    if not engine:
+        return False
+    
+    sql = text("UPDATE usuarios SET status = :st WHERE usuario = :u;")
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql, {"u": u_id, "st": novo_status})
+        return True
+    except Exception:
+        return False
+
+# Inicialização de Sessão
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
 if "usuario_atual" not in st.session_state:
@@ -215,7 +239,7 @@ if "login_user_id" not in st.session_state:
 def e_master():
     u_id = st.session_state.get("login_user_id", "")
     perfil = st.session_state.get("perfil_atual", "")
-    return u_id == "mribeiro" or perfil in ["Master", "Compliance"]
+    return u_id in ["mribeiro", "fellipe"] or perfil in ["Master", "Compliance"]
 
 if not st.session_state["autenticado"]:
     col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
@@ -227,8 +251,9 @@ if not st.session_state["autenticado"]:
             u_input = st.text_input("Usuário:", key="l_user").strip().lower()
             p_input = str(st.text_input("Senha:", type="password", key="l_pass")).strip()
             if st.button("Acessar Portal", type="primary"):
-                if u_input in usuarios_db and str(usuarios_db[u_input]["senha"]).strip() == p_input:
-                    if usuarios_db[u_input].get("status", "APROVADO") == "APROVADO":
+                usuarios_db = carregar_usuarios_supabase()
+                if u_input in usuarios_db and usuarios_db[u_input]["senha"] == p_input:
+                    if usuarios_db[u_input].get("status") == "APROVADO":
                         st.session_state["autenticado"] = True
                         st.session_state["usuario_atual"] = usuarios_db[u_input]["nome"]
                         st.session_state["perfil_atual"] = usuarios_db[u_input]["perfil"]
@@ -244,10 +269,13 @@ if not st.session_state["autenticado"]:
             n_pass = str(st.text_input("Nova Senha Alfanumérica:", type="password")).strip()
             c_pass = str(st.text_input("Confirme a Nova Senha:", type="password")).strip()
             if st.button("Redefinir Senha"):
+                usuarios_db = carregar_usuarios_supabase()
                 if u_reset in usuarios_db and n_pass and n_pass == c_pass:
-                    usuarios_db[u_reset]["senha"] = n_pass
-                    salvar_usuarios(usuarios_db)
-                    st.success("✅ Senha redefinida com sucesso! Você já pode entrar com a nova senha.")
+                    ok, msg = atualizar_senha_supabase(u_reset, n_pass)
+                    if ok:
+                        st.success("✅ Senha redefinida no Supabase! Você já pode entrar com a nova senha.")
+                    else:
+                        st.error(f"Erro ao atualizar: {msg}")
                 else:
                     st.error("Verifique se o usuário existe e se as senhas coincidem.")
 
@@ -258,12 +286,11 @@ if not st.session_state["autenticado"]:
             r_perf = st.selectbox("Perfil Solicitado:", ["Operacao"])
             if st.button("Enviar Solicitação"):
                 if r_user and r_pass and r_nome:
-                    usuarios_db[r_user] = {
-                        "senha": str(r_pass), "nome": r_nome, "perfil": r_perf,
-                        "status": "PENDENTE", "data_solicitacao": datetime.datetime.now().strftime("%Y-%m-%d")
-                    }
-                    salvar_usuarios(usuarios_db)
-                    st.success("✅ Solicitação enviada! Aguarde a liberação do usuário Master.")
+                    ok, msg = salvar_usuario_supabase(r_user, r_pass, r_nome, r_perf, status="PENDENTE")
+                    if ok:
+                        st.success("✅ Solicitação enviada! Aguarde a liberação do usuário Master.")
+                    else:
+                        st.error(f"Erro ao salvar solicitação: {msg}")
     st.stop()
 
 # ==============================================================================
@@ -294,14 +321,12 @@ def padronizar_df(df):
     if "Obs. Operação" in df_out.columns:
         df_out["Obs. Operação"] = df_out["Obs. Operação"].fillna("").astype(str).str.replace("Sem tratativa na operação", "", regex=False).str.strip()
 
-    # Preenchimento seguro convertendo tudo explicitamente para STR
     for c in ["Ponto de venda", "Área Resp. Operação", "Obs. Operação", "Setor", "Status_Geral", "CIA", "Data Emissão", "Emissor", "Emissor_Reserva_Lemon", "Status_Sistema", "Status_Divergencia", "Gerentes"]:
         if c not in df_out.columns:
             df_out[c] = "-"
         else:
             df_out[c] = df_out[c].fillna("-").astype(str).str.strip()
 
-    # 🟢 CORREÇÃO DO 'FLOAT HAS NO ATTRIBUTE LOWER':
     status_map = ["nao_consta", "não_consta", "nan", "-", "", "none"]
     df_out["Status_Geral"] = df_out["Status_Geral"].apply(
         lambda x: "Pendente de Lançamento (Não Consta)" if str(x).lower().strip() in status_map else str(x)
@@ -348,7 +373,6 @@ def rotear_bases_mestra(df_master):
 
     df_master = padronizar_df(df_master)
 
-    # Verifica divergência EXCLUSIVA de Receita sem colidir com 'divergênCIA'
     def e_apenas_divergencia_receita(st_div):
         s = str(st_div).lower().strip()
         if "diverg" not in s and "erro" not in s:
@@ -434,7 +458,6 @@ def carregar_bases():
 
         df_m = pd.concat(frames, ignore_index=True)
         
-        # Remoção de duplicatas com base no número do Bilhete
         if "Bilhetes" in df_m.columns:
             df_m = df_m.drop_duplicates(subset=["Bilhetes"], keep="first").reset_index(drop=True)
 
@@ -524,17 +547,19 @@ with st.spinner("🔄 Carregando bases de dados do painel e conectando ao Supaba
 st.sidebar.title("Navegação")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 
-# Formulário de troca de senha na barra lateral
 with st.sidebar.expander("🔑 Alterar Minha Senha"):
     with st.form("form_pwd_side"):
         s_atu = str(st.text_input("Senha Atual:", type="password")).strip()
         s_nov = str(st.text_input("Nova Senha Alfanumérica:", type="password")).strip()
         if st.form_submit_button("Salvar Nova Senha"):
             u_id = st.session_state["login_user_id"]
-            if str(usuarios_db[u_id]["senha"]).strip() == s_atu and s_nov:
-                usuarios_db[u_id]["senha"] = str(s_nov)
-                salvar_usuarios(usuarios_db)
-                st.success("✅ Senha alterada com sucesso!")
+            usuarios_db = carregar_usuarios_supabase()
+            if u_id in usuarios_db and usuarios_db[u_id]["senha"] == s_atu and s_nov:
+                ok, msg = atualizar_senha_supabase(u_id, s_nov)
+                if ok:
+                    st.success("✅ Senha alterada com sucesso no Supabase!")
+                else:
+                    st.error(f"Erro ao salvar senha: {msg}")
             else:
                 st.error("Senha atual incorreta.")
 
@@ -545,7 +570,7 @@ if st.sidebar.button("🔒 Sair"):
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔍 Filtros Operacionais")
 
-d_inicio = st.sidebar.date_input("Data Inicial:", value=datetime.date(2025, 1, 1), format="DD/MM/YYYY")
+d_inicio = st.sidebar.date_input("Data Inicial:", value=datetime.date(2024, 1, 1), format="DD/MM/YYYY")
 d_fim = st.sidebar.date_input("Data Final:", value=datetime.date(2026, 12, 31), format="DD/MM/YYYY")
 
 df_todos = pd.concat([df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
@@ -659,7 +684,6 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
         st.info("Nenhum bilhete pendente nesta categoria.")
         return
 
-    # Filtro de Busca Direta por Tela
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
         termo_busca = st.text_input(f"🔍 Buscar nesta tela (por Bilhete, LOC, Cliente, Passageiro ou Gerente):", key=f"src_{key_prefix}")
@@ -687,7 +711,6 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     bilhetes_lista = df_exib["Bilhetes"].tolist() if "Bilhetes" in df_exib.columns else []
     bilhet_sel = st.multiselect("Selecione um ou mais Bilhetes para Tratativa:", options=bilhetes_lista, key=f"ms_{key_prefix}")
 
-    # Card de Destaque dos Bilhetes Selecionados
     if bilhet_sel:
         df_sel_cards = df_exib[df_exib["Bilhetes"].isin(bilhet_sel)]
         st.markdown('<div class="highlight-card">', unsafe_allow_html=True)
@@ -754,7 +777,6 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
                 else:
                     st.error(msg)
 
-    # Ordenação e Destaque Visual na Tabela
     df_tbl_final = df_exib.copy()
     if bilhet_sel:
         df_tbl_final["🎯 Destaque"] = df_tbl_final["Bilhetes"].isin(bilhet_sel).map({True: "⭐ SELECIONADO", False: ""})
@@ -762,7 +784,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
         df_tbl_final = df_tbl_final[cols_order].sort_values("🎯 Destaque", ascending=False)
 
     st.markdown("---")
-    st.dataframe(df_tbl_final, width="stretch", hide_index=True)
+    st.dataframe(df_tbl_final, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------------------------
 # ABAS OPERACIONAIS
@@ -804,44 +826,45 @@ with aba_sel[6]:
     if s_ok.strip():
         term = s_ok.strip().lower()
         df_ok_view = df_ok_view[df_ok_view["Bilhetes"].astype(str).str.lower().str.contains(term, na=False)]
-    st.dataframe(df_ok_view, width="stretch", hide_index=True)
+    st.dataframe(df_ok_view, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------------------------
 # ABAS EXCLUSIVAS DO MASTER
 # ------------------------------------------------------------------------------
 if e_master():
-    # ABA 7: GESTÃO DE ACESSOS
     with aba_sel[7]:
         st.subheader("⚙️ Central de Aprovação de Acessos")
+        usuarios_db = carregar_usuarios_supabase()
         pendentes = {k: v for k, v in usuarios_db.items() if v.get("status") == "PENDENTE"}
         if pendentes:
             for u_k, u_v in pendentes.items():
                 st.write(f"👤 **{u_v['nome']}** (`{u_k}`) | Perfil: **{u_v['perfil']}**")
                 ca1, ca2, _ = st.columns([1, 1, 4])
                 if ca1.button(f"✅ Aprovar {u_k}"):
-                    usuarios_db[u_k]["status"] = "APROVADO"
-                    salvar_usuarios(usuarios_db)
-                    st.success("Usuário aprovado!")
-                    st.rerun()
+                    if atualizar_status_usuario_supabase(u_k, "APROVADO"):
+                        st.success(f"Usuário {u_k} aprovado!")
+                        st.rerun()
+                    else:
+                        st.error("Erro ao aprovar no banco de dados.")
                 if ca2.button(f"❌ Rejeitar {u_k}"):
-                    usuarios_db[u_k]["status"] = "REJEITADO"
-                    salvar_usuarios(usuarios_db)
-                    st.rerun()
+                    if atualizar_status_usuario_supabase(u_k, "REJEITADO"):
+                        st.success(f"Usuário {u_k} rejeitado.")
+                        st.rerun()
+                    else:
+                        st.error("Erro ao rejeitar no banco de dados.")
         else:
             st.info("Nenhuma solicitação de acesso pendente.")
 
-    # ABA 8: LOG DE AUDITORIA
     with aba_sel[8]:
         st.subheader("📜 Trilha de Auditoria do Supabase")
         engine_sb = get_db_engine()
         if engine_sb:
             try:
                 df_log_db = pd.read_sql("SELECT * FROM log_auditoria ORDER BY id DESC LIMIT 500", engine_sb)
-                st.dataframe(df_log_db, width="stretch", hide_index=True)
+                st.dataframe(df_log_db, use_container_width=True, hide_index=True)
             except Exception:
                 st.info("Nenhum registro de log encontrado na tabela log_auditoria do Supabase.")
 
-    # ABA 9: CARGA DE RELATÓRIOS (Processamento em Lote Protegido com Barra de Progresso)
     with aba_sel[9]:
         st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Protegido)")
         st.markdown("Envie uma planilha `.xlsx` ou `.csv` contendo as colunas de **Bilhete**, **Novo Status**, **Área Responsável** e **Observação** para atualização em massa no Supabase.")
@@ -866,7 +889,6 @@ if e_master():
                     df_up_raw["Bilhete_Clean"] = df_up_raw[col_b].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
                     df_todos["Bilhete_Clean"] = df_todos["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
 
-                    # Cruzamento estrito com a base mestra original
                     df_validos = pd.merge(
                         df_up_raw,
                         df_todos[["Bilhete_Clean", "Status_Geral", "Área Resp. Operação", "Obs. Operação"]].drop_duplicates("Bilhete_Clean"),
@@ -926,7 +948,7 @@ if e_master():
 
                     if len(lote_alteracoes) > 0:
                         st.markdown("**Amostra de Bilhetes que Serão Atualizados:**")
-                        st.dataframe(pd.DataFrame(lote_alteracoes).head(10), width="stretch")
+                        st.dataframe(pd.DataFrame(lote_alteracoes).head(10), use_container_width=True)
 
                         if st.button("🚀 Confirmar e Processar Atualizações no Supabase"):
                             bar_prog = st.progress(0, text="Sincronizando com o banco de dados...")
