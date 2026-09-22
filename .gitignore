@@ -10,3 +10,8 @@ Nova pasta/
 *.xlsx.bakBackup_Dashboard_*.xlsx
 Backup_Dashboard_*.xlsx
 .streamlit/secrets.toml
+.env
+.streamlit/secrets.toml
+usuarios_autorizados.json
+__pycache__/
+*.pyc

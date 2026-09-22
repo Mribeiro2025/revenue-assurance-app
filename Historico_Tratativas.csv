@@ -1,8 +1,8 @@
 ﻿Bilhetes,Status_Geral,Área Resp. Operação,Obs. Operação,Setor,Ponto de venda,Código Iata
 VNBIHG,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,Matriz (Barueri),14-00042-0
-MH8NQI,Pendente de Lançamento (Não Consta),Keli Santi,VOID em 22/04/2026,Operação,Matriz (Barueri),57-00054-3
-MGPCMY,Pendente de Lançamento (Não Consta),Keli Santi,VOID EM 22/06/2026,Operação,Matriz (Barueri),57-00054-3
-HN36VT,Pendente de Lançamento (Não Consta),Keli Santi,VOID EM 22/04/2026,Operação,Matriz (Barueri),57-00054-3
+MH8NQI,NAO_CONSTA,Keli Santi,VOID em 22/04/2026,Operação,Matriz (Barueri),57-00054-3
+MGPCMY,NAO_CONSTA,Keli Santi,VOID EM 22/06/2026,Operação,Matriz (Barueri),57-00054-3
+HN36VT,NAO_CONSTA,Keli Santi,VOID EM 22/04/2026,Operação,Matriz (Barueri),57-00054-3
 ZESYXE,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,Matriz (Barueri),57-02108-6
 RRZ1SK,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,Matriz (Barueri),57-02108-6
 YQ5GTA,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,Matriz (Barueri),57-02108-6
@@ -14,8 +14,8 @@ BRWD6R,NAO_CONSTA,Keli Santi,,Operação,Matriz (Barueri),57-05782-5
 CR777E,NAO_CONSTA,Keli Santi,ticket 375383 - Randon - erro de integração / integrou sem RLOC dia e sem valor,Operação,Matriz (Barueri),57-05782-5
 OJ8B2P,NAO_CONSTA,Keli Santi,,Operação,Matriz (Barueri),57-05782-5
 UR98XK,NAO_CONSTA,Keli Santi,,Operação,Matriz (Barueri),57-05782-5
-YG982L,Pendente de Lançamento (Não Consta),Keli Santi,GDS MQIEIM  Concur ag gestão Randon,Operação,Matriz (Barueri),57-05782-5
-WMESFJ,Pendente de Lançamento (Não Consta),Keli Santi,GDS ALRIKK CONCUR ag gestão Randon,Operação,Matriz (Barueri),57-05782-5
+YG982L,NAO_CONSTA,Keli Santi,GDS MQIEIM  Concur ag gestão Randon,Operação,Matriz (Barueri),57-05782-5
+WMESFJ,NAO_CONSTA,Keli Santi,GDS ALRIKK CONCUR ag gestão Randon,Operação,Matriz (Barueri),57-05782-5
 RWZC5Q,NAO_CONSTA,Keli Santi,,Operação,Matriz (Barueri),57-05782-5
 JHWCHV,NAO_CONSTA,Keli Santi,,Operação,Matriz (Barueri),57-05782-5
 EW24SQ,NAO_CONSTA,Keli Santi,,Operação,Matriz (Barueri),57-05782-5
@@ -66,131 +66,131 @@ GS1E9R,NAO_CONSTA,Keli Santi,Integrado sem LOC cia. Em verificação com Suporte
 XMYKRZ,NAO_CONSTA,Keli Santi,Integrado sem LOC cia. Em verificação com Suporte Benner,Operação,Matriz (Barueri),57-05782-5
 IJ7UHC,NAO_CONSTA,Keli Santi,Integrado sem LOC cia. Em verificação com Suporte Benner,Operação,Matriz (Barueri),57-05782-5
 SJSJ7P,NAO_CONSTA,Keli Santi,Integrado sem LOC cia. Em verificação com Suporte Benner,Operação,Matriz (Barueri),57-05782-5
-VWJ7MD,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-SPBJVQ,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-HKIJ5Z,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-HSDR4B,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-DGIZUY,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-TJRDVS,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-AKEDVM,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-HSLK7B,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-VMIVGJ,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-SF5SJB,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-HSQVNR,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-PNCQTG,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-DJGLQP,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-CJHRSP,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-TS692E,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-NI4QHV,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-TNME8D,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-EM95UW,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-LMR9GG,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-PRHRTX,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-UHYJWL,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-WLQVRM,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-INGVST,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-YRMQ3H,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-QW9JXT,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-OQ1N4K,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-NN4SRG,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-MWN3HQ,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-DR2EPH,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-LKMJGM,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-QRPGGH,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-EJDPNP,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-IQCMNK,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-GMPW4D,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-ZG5NSB,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-QQVH3H,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-VK7WTC,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-LSFGME,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-TT2WNE,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-HSNRSR,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-JRNH4E,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-XRPP9H,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-MWNGQQ,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-GM8ZPW,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-HT59TB,Pendente de Lançamento (Não Consta),Keli Santi,Concur aguard Integração 78,Operação,Matriz (Barueri),57-05782-5
-VTD7RE,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-QIQ6QF,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-MSRB9B,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-RJ4F2C,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-DNF7ND,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-AS986B,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-DIPM8P,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-QT183B,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-ZTFT6R,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-DQ9MSK,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-BJLC3M,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-CW5LKA,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-WPR6PA,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-HN78RT,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-SLJDQM,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-PLKR5J,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-WRJVWK,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-MSCD2R,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-WQG1QN,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-KNHWPT,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-IIEEYF,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-HNFZGD,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-MRJSQH,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-MIB55S,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-VLWVQM,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-PGVUJY,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-NJHF7P,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-PHRT5V,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-QFCDKB,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-LNCHXG,Pendente de Lançamento (Não Consta),Keli Santi,Concur aguard APROVADOR,Operação,Matriz (Barueri),57-05782-5
-RLRGKZ,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-UPH35N,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-MJ9RMC,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-ELMVUJ,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-QLLL9J,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-NWPLSQ,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-QMK47G,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-KF3DTB,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-KF4CUB,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-PKJQ2M,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-KL6FSM,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-ZJDIJF,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-VM9PQZ,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-YTBC2R,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-JN32PG,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-WJJK4C,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-ULQEVM,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-YQJM5K,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-UMP9UJ,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-SSLY5E,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-OGMBPL,Pendente de Lançamento (Não Consta),Keli Santi,Concur aguard Integração 78,Operação,Matriz (Barueri),57-05782-5
-BIENSS,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-VMQYWZ,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-ORKJ7U,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-BWVIMN,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-LH9K6V,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-PP5RJA,Pendente de Lançamento (Não Consta),Keli Santi,concur aguard  Aprovador,Operação,Matriz (Barueri),57-05782-5
-GJTKYP,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-QHIH8V,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-JIG2TF,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-YH6SKL,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-PNU87Q,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-NMBITJ,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-BHH72S,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-UJZR9S,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-JNYW8D,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-XPMS7N,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-OIWR2C,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-FW9DMQ,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-CPZTPN,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-ENRYRD,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-XRP5YK,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-LWZ1YT,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-MRVD4E,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-SKJBRP,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-MKHZXP,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-SKJYRP,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-YTE8FE,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-FJRRSP,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
-EGGJJY,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+VWJ7MD,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+SPBJVQ,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+HKIJ5Z,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+HSDR4B,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+DGIZUY,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+TJRDVS,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+AKEDVM,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+HSLK7B,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+VMIVGJ,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+SF5SJB,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+HSQVNR,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+PNCQTG,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+DJGLQP,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+CJHRSP,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+TS692E,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+NI4QHV,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+TNME8D,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+EM95UW,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+LMR9GG,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+PRHRTX,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+UHYJWL,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+WLQVRM,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+INGVST,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+YRMQ3H,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+QW9JXT,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+OQ1N4K,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+NN4SRG,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+MWN3HQ,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+DR2EPH,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+LKMJGM,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+QRPGGH,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+EJDPNP,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+IQCMNK,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+GMPW4D,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+ZG5NSB,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+QQVH3H,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+VK7WTC,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+LSFGME,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+TT2WNE,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+HSNRSR,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+JRNH4E,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+XRPP9H,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+MWNGQQ,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+GM8ZPW,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+HT59TB,NAO_CONSTA,Keli Santi,Concur aguard Integração 78,Operação,Matriz (Barueri),57-05782-5
+VTD7RE,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+QIQ6QF,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+MSRB9B,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+RJ4F2C,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+DNF7ND,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+AS986B,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+DIPM8P,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+QT183B,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+ZTFT6R,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+DQ9MSK,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+BJLC3M,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+CW5LKA,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+WPR6PA,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+HN78RT,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+SLJDQM,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+PLKR5J,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+WRJVWK,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+MSCD2R,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+WQG1QN,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+KNHWPT,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+IIEEYF,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+HNFZGD,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+MRJSQH,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+MIB55S,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+VLWVQM,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+PGVUJY,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+NJHF7P,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+PHRT5V,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+QFCDKB,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+LNCHXG,NAO_CONSTA,Keli Santi,Concur aguard APROVADOR,Operação,Matriz (Barueri),57-05782-5
+RLRGKZ,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+UPH35N,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+MJ9RMC,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+ELMVUJ,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+QLLL9J,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+NWPLSQ,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+QMK47G,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+KF3DTB,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+KF4CUB,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+PKJQ2M,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+KL6FSM,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+ZJDIJF,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+VM9PQZ,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+YTBC2R,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+JN32PG,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+WJJK4C,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+ULQEVM,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+YQJM5K,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+UMP9UJ,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+SSLY5E,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+OGMBPL,NAO_CONSTA,Keli Santi,Concur aguard Integração 78,Operação,Matriz (Barueri),57-05782-5
+BIENSS,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+VMQYWZ,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+ORKJ7U,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+BWVIMN,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+LH9K6V,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+PP5RJA,NAO_CONSTA,Keli Santi,concur aguard  Aprovador,Operação,Matriz (Barueri),57-05782-5
+GJTKYP,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+QHIH8V,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+JIG2TF,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+YH6SKL,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+PNU87Q,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+NMBITJ,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+BHH72S,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+UJZR9S,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+JNYW8D,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+XPMS7N,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+OIWR2C,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+FW9DMQ,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+CPZTPN,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+ENRYRD,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+XRP5YK,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+LWZ1YT,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+MRVD4E,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+SKJBRP,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+MKHZXP,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+SKJYRP,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+YTE8FE,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+FJRRSP,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
+EGGJJY,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-05782-5
 WN2ZKW,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5
 ARW6GE,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5
 YJ5I8S,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5
@@ -334,10 +334,10 @@ GNQJND,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,Matriz
 KT89KB,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,Matriz (Barueri),57-15204-5
 EMMYRG,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,Matriz (Barueri),57-15204-5
 PSZYUH,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,Matriz (Barueri),57-15284-1
-AKMYYZ,Pendente de Lançamento (Não Consta),Keli Santi,"Palfinger - Concur R$ 993,43 tarifa/taxa R$ 91,40-",Operação,Matriz (Barueri),57-15786-6
-LL4USM,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
-WQL8WN,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
-NKLF3Z,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
+AKMYYZ,NAO_CONSTA,Keli Santi,"Palfinger - Concur R$ 993,43 tarifa/taxa R$ 91,40-",Operação,Matriz (Barueri),57-15786-6
+LL4USM,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
+WQL8WN,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
+NKLF3Z,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
 FRZ66U,NAO_CONSTA,Keli Santi,Integrado sem LOC cia. Em verificação com Suporte Benner,Operação,Matriz (Barueri),57-15786-6
 THDQGY,NAO_CONSTA,Keli Santi,Integrado sem LOC cia. Em verificação com Suporte Benner,Operação,Matriz (Barueri),57-15786-6
 HH42QI,NAO_CONSTA,Keli Santi,Integrado sem LOC cia. Em verificação com Suporte Benner,Operação,Matriz (Barueri),57-15786-6
@@ -345,14 +345,14 @@ HITY2P,NAO_CONSTA,Keli Santi,Integrado sem LOC cia. Em verificação com Suporte
 ISHLGR,NAO_CONSTA,Keli Santi,Integrado sem LOC cia. Em verificação com Suporte Benner,Operação,Matriz (Barueri),57-15786-6
 VWSC3A,NAO_CONSTA,Keli Santi,Integrado sem LOC cia. Em verificação com Suporte Benner,Operação,Matriz (Barueri),57-15786-6
 RHCPRY,NAO_CONSTA,Keli Santi,Integrado sem LOC cia. Em verificação com Suporte Benner,Operação,Matriz (Barueri),57-15786-6
-NPLLQN,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
-NW199Q,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
-CG9CRY,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
-TQ652K,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
-HHD7VI,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
-EKGZ4Z,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
-KWKW2N,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
-OMUSWW,Pendente de Lançamento (Não Consta),Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
+NPLLQN,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
+NW199Q,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
+CG9CRY,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
+TQ652K,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
+HHD7VI,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
+EKGZ4Z,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
+KWKW2N,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
+OMUSWW,NAO_CONSTA,Keli Santi,Concur não integra loc / Camila/Suporte,Operação,Matriz (Barueri),57-15786-6
 GS7L8R,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-15786-6
 KSR3VE,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-15846-3
 MWP3PQ,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Matriz (Barueri),57-16378-3
@@ -363,15 +363,15 @@ BIRYQC,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre
 BGNW7V,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0
 OW1FGD,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0
 WMQ9QJ,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-70382-2
-ASQ7QB,Pendente de Lançamento (Não Consta),Keli Santi,VOID on-line ok benner,Operação,Matriz (Barueri),57-71137-1
-INE5MD,Pendente de Lançamento (Não Consta),Keli Santi,VOID on-line ok benner,Operação,Matriz (Barueri),57-71137-1
-OP7UHA,Pendente de Lançamento (Não Consta),Keli Santi,VOID on-line ok benner,Operação,Matriz (Barueri),57-71137-1
-SS29SH,Pendente de Lançamento (Não Consta),Keli Santi,VOID on-line ok benner,Operação,Matriz (Barueri),57-71137-1
+ASQ7QB,NAO_CONSTA,Keli Santi,VOID on-line ok benner,Operação,Matriz (Barueri),57-71137-1
+INE5MD,NAO_CONSTA,Keli Santi,VOID on-line ok benner,Operação,Matriz (Barueri),57-71137-1
+OP7UHA,NAO_CONSTA,Keli Santi,VOID on-line ok benner,Operação,Matriz (Barueri),57-71137-1
+SS29SH,NAO_CONSTA,Keli Santi,VOID on-line ok benner,Operação,Matriz (Barueri),57-71137-1
 IJR2QP,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-71137-1
 LIGS9S,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-71137-1
 VRTPXX,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-71137-1
 LMEUPW,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-71137-1
-TNGITG,Pendente de Lançamento (Não Consta),Keli Santi,VOID on-line ok benner,Operação,Matriz (Barueri),57-71564-1
+TNGITG,NAO_CONSTA,Keli Santi,VOID on-line ok benner,Operação,Matriz (Barueri),57-71564-1
 GTBCRB,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-71564-1
 XTEHQE,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-71564-1
 SJ36QS,NAO_CONSTA,Rosangela Pallu,"Bilhete lançado, enviado para baixa manual 21/08",Operação,Matriz (Barueri),57-72826-3
@@ -423,51 +423,51 @@ OWJ1HQ,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Even
 2301450951,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-51159-1
 3996314274,Emitido e Lançado,Rosangela Pallu,,Operação,Matriz (Barueri),57-51159-1
 2202035799,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0
-2202906208,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2202912683,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2202918678,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2202954156,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2202906208,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2202912683,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2202918678,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2202954156,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
 2202979933,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
-2202997435,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2202997875,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2202997435,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2202997875,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
 2203090030,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
-2203090417,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203090417,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
 2203095749,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
-2203107915,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203109114,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203107915,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203109114,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
 2203131230,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
 2203145159,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
 2203152892,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
 2203153594,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
 2203154318,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
 2203155417,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
-2203175192,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203177552,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203179553,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203181391,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203182007,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203286260,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203175192,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203177552,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203179553,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203181391,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203182007,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203286260,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
 2203313308,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
-2203319959,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203330581,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203338953,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203343705,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203346584,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203365325,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203365401,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203366836,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203408183,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203412368,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203319959,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203330581,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203338953,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203343705,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203346584,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203365325,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203365401,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203366836,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203408183,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203412368,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
 2203791736,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
-2203831640,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203835980,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-2203864345,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203831640,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203835980,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203864345,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
 2203874776,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
-2203880344,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+2203880344,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
 2203948120,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
 2204454696,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0
-2279531325,Pendente de Lançamento (Não Consta),Keli Santi,Campo auditoria mostra regularizado 15/04,Operação,Porto Alegre,57-51823-0
-2279845848,Pendente de Lançamento (Não Consta),Keli Santi,Campo auditoria mostra regularizado 15/04,Operação,Porto Alegre,57-51823-0
+2279531325,NAO_CONSTA,Keli Santi,Campo auditoria mostra regularizado 15/04,Operação,Porto Alegre,57-51823-0
+2279845848,NAO_CONSTA,Keli Santi,Campo auditoria mostra regularizado 15/04,Operação,Porto Alegre,57-51823-0
 2300005319,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
 2300006605,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
 2300972282,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-51823-0
@@ -478,9 +478,9 @@ OWJ1HQ,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Even
 2301041264,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0
 2301043991,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0
 2301044412,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0
-4476757173,Pendente de Lançamento (Não Consta),Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-5232543252,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
-5232543253,Emitido e Lançado,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+4476757173,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+5232543252,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
+5232543253,NAO_CONSTA,Keli Santi,chamado 380894-status Elaborando?,Operação,Porto Alegre,57-51823-0
 2299944685,NAO_CONSTA,Keli Santi,,Operação,Porto Alegre,57-51823-0
 4477901546,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0
 4477955508,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0
@@ -519,29 +519,29 @@ OWJ1HQ,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Even
 5232376604,Emitido e Lançado,Central de Eventos,,Central de Eventos,São Paulo,57-51829-6
 5232376619,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-51829-6
 5232571221,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-51829-6
-1957923763,Pendente de Lançamento (Não Consta),Keli Santi,aguardando Guilherme - ASSENTO Randon,Operação,Porto Alegre,57-53486-4
+1957923763,NAO_CONSTA,Keli Santi,aguardando Guilherme - ASSENTO Randon,Operação,Porto Alegre,57-53486-4
 1957923764,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53486-4
 1957923765,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53486-4
 1957923766,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53486-4
 1957923767,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53486-4
 1957923768,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53486-4
 1957923769,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53486-4
-2202038894,Pendente de Lançamento (Não Consta),Keli Santi,Processado Erro-integração Lemon/ Sem CC,Operação,Porto Alegre,57-53486-4
-2202790577,Pendente de Lançamento (Não Consta),Keli Santi,Randon aguardando RLOC - Randon,Operação,Porto Alegre,57-53486-4
-2203095004,Pendente de Lançamento (Não Consta),Keli Santi,Randon aguardando RLOC - Randon,Operação,Porto Alegre,57-53486-4
+2202038894,NAO_CONSTA,Keli Santi,Processado Erro-integração Lemon/ Sem CC,Operação,Porto Alegre,57-53486-4
+2202790577,NAO_CONSTA,Keli Santi,Randon aguardando RLOC - Randon,Operação,Porto Alegre,57-53486-4
+2203095004,NAO_CONSTA,Keli Santi,Randon aguardando RLOC - Randon,Operação,Porto Alegre,57-53486-4
 2204327051,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53486-4
-4477193933,Emitido e Lançado,Keli Santi,Randon aguardando RLOC - Randon,Operação,Porto Alegre,57-53486-4
+4477193933,NAO_CONSTA,Keli Santi,Randon aguardando RLOC - Randon,Operação,Porto Alegre,57-53486-4
 4477513905,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53486-4
 4477583915,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53486-4
-5232447219,Pendente de Lançamento (Não Consta),Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
-5232447220,Pendente de Lançamento (Não Consta),Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
-5232447221,Pendente de Lançamento (Não Consta),Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
-5232447222,Pendente de Lançamento (Não Consta),Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
-5232447223,Pendente de Lançamento (Não Consta),Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
-5232447224,Pendente de Lançamento (Não Consta),Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
-5232447229,Pendente de Lançamento (Não Consta),Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
-5232447231,Pendente de Lançamento (Não Consta),Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
-5232597552,Pendente de Lançamento (Não Consta),Keli Santi,Randon-Processado Erro-Integração Concur/requisição,Operação,Porto Alegre,57-53486-4
+5232447219,NAO_CONSTA,Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
+5232447220,NAO_CONSTA,Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
+5232447221,NAO_CONSTA,Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
+5232447222,NAO_CONSTA,Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
+5232447223,NAO_CONSTA,Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
+5232447224,NAO_CONSTA,Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
+5232447229,NAO_CONSTA,Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
+5232447231,NAO_CONSTA,Keli Santi,Randon-Processado Erro-Integração Concur/Sem aprovador,Operação,Porto Alegre,57-53486-4
+5232597552,NAO_CONSTA,Keli Santi,Randon-Processado Erro-Integração Concur/requisição,Operação,Porto Alegre,57-53486-4
 5232597622,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53486-4
 5232597630,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53486-4
 1948657988,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-53489-0
@@ -549,9 +549,9 @@ OWJ1HQ,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Even
 2615527183,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53489-0
 4477642101,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53489-0
 5580955077,OK,Keli Santi,"a diferença de tarifa é R$ 8,31 (como consta no bilhete) e o valor do FEE é R$ 7,99.",Operação,Porto Alegre,57-53489-0
-1948657989,Emitido e Lançado,Keli Santi,RLOC TKT MOISCY - aguard consultor ANA - RLOC ASSENTO,Operação,Porto Alegre,57-53489-0
+1948657989,NAO_CONSTA,Keli Santi,RLOC TKT MOISCY - aguard consultor ANA - RLOC ASSENTO,Operação,Porto Alegre,57-53489-0
 2300707290,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53490-1
-4477138363,Pendente de Lançamento (Não Consta),Keli Santi,- aguard RLOC,Operação,Porto Alegre,57-53494-5
+4477138363,NAO_CONSTA,Keli Santi,- aguard RLOC,Operação,Porto Alegre,57-53494-5
 1957916754,Emitido e Lançado,Jaime Schnaider,TESOURARIA - SOLICITANDO CORREÇÃO,Unique,São Paulo,57-53501-5
 1957926366,Emitido e Lançado,Jaime Schnaider,,Unique,São Paulo,57-53501-5
 1957926371,Emitido e Lançado,Jaime Schnaider,,Unique,São Paulo,57-53501-5
@@ -721,15 +721,15 @@ OWJ1HQ,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Even
 1957919563,NAO_CONSTA,Rosangela Pallu,Rloc. AKQCCW-1 - consultor não tinha lançado.,Operação,Curitiba,57-55956-3
 1957919564,NAO_CONSTA,Rosangela Pallu,Rloc. AKQCCW-2 - consultor não tinha lançado.,Operação,Curitiba,57-55956-3
 2297300276,Emitido e Lançado,Keli Santi,,Operação,São Paulo,57-56042-5
-4477215923,Pendente de Lançamento (Não Consta),Keli Santi,- aguard RLOC,Operação,São Paulo,57-56042-5
-4477216227,Pendente de Lançamento (Não Consta),Keli Santi,- aguard RLOC,Operação,São Paulo,57-56042-5
-4477216228,Pendente de Lançamento (Não Consta),Keli Santi,- aguard RLOC,Operação,São Paulo,57-56042-5
-2203400131,Pendente de Lançamento (Não Consta),Keli Santi,- aguard RLOC,Operação,São Paulo,57-56042-5
+4477215923,NAO_CONSTA,Keli Santi,- aguard RLOC,Operação,São Paulo,57-56042-5
+4477216227,NAO_CONSTA,Keli Santi,- aguard RLOC,Operação,São Paulo,57-56042-5
+4477216228,NAO_CONSTA,Keli Santi,- aguard RLOC,Operação,São Paulo,57-56042-5
+2203400131,NAO_CONSTA,Keli Santi,- aguard RLOC,Operação,São Paulo,57-56042-5
 2204311058,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,São Paulo,57-56042-5
 2300495957,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,São Paulo,57-56042-5
 2300699088,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,São Paulo,57-56042-5
-4477076534,Pendente de Lançamento (Não Consta),Keli Santi,- aguard RLOC,Operação,São Paulo,57-56042-5
-4477076535,Pendente de Lançamento (Não Consta),Keli Santi,- aguard RLOC,Operação,São Paulo,57-56042-5
+4477076534,NAO_CONSTA,Keli Santi,- aguard RLOC,Operação,São Paulo,57-56042-5
+4477076535,NAO_CONSTA,Keli Santi,- aguard RLOC,Operação,São Paulo,57-56042-5
 2204325947,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-56134-6
 1942456860,Emitido e Lançado,Marcelo Pereira,,Operação,Rio de Janeiro,57-56138-3
 2202291791,Emitido e Lançado,Marcelo Pereira,,Operação,Rio de Janeiro,57-56138-3

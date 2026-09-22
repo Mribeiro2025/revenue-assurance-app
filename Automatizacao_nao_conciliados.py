@@ -167,6 +167,15 @@ def extract_keys(val):
     return list(keys)
 
 
+def gerar_chave_composta(codigo, data_str):
+    """Gera chave composta Codigo_Data para desambiguar reemissões/LOCs reutilizados."""
+    cod_limpo = clean_str_strict(codigo).upper()
+    dt_limpa = clean_str_strict(data_str).replace("/", "").replace("-", "")
+    if cod_limpo and dt_limpa:
+        return f"{cod_limpo}_{dt_limpa}"
+    return cod_limpo
+
+
 def carregar_tratativas_e_logs_anteriores(out_file):
     dict_historico = {}
     df_log_antigo = pd.DataFrame()
@@ -380,7 +389,7 @@ def executar_auditoria():
                     if k not in lemon_index:
                         lemon_index[k] = info_lemon
 
-    print("\n[3/5] Indexando ERP Benner...")
+    print("\n[3/5] Indexando ERP Benner com suporte a Data de Emissão...")
     if os.path.exists("Acumulado.parquet"):
         df_benner = pd.read_parquet("Acumulado.parquet")
     else:
@@ -396,6 +405,8 @@ def executar_auditoria():
     if not df_benner.empty:
         for idx, r in tqdm(df_benner.iterrows(), total=len(df_benner), desc="Indexando Benner", unit="linha"):
             rloc_cia_val = clean_str_strict(r.get("Rloc Cia") or r.get("Rloc CIA") or r.get("Código Rloc") or r.get("Localizador")) or "-"
+            dt_benner_raw = clean_str_strict(r.get("Data Emissão") or r.get("Data") or r.get("Data Emissao") or "")
+            
             info = {
                 "Benner_Index": idx,
                 "Benner_Situação": clean_str_strict(r.get("Situação")) or "ATIVO",
@@ -415,6 +426,11 @@ def executar_auditoria():
                 for k in extract_keys(r.get(col)):
                     if k not in benner_index:
                         benner_index[k] = info
+                    # Indexação composta por Data para diferenciar bilhetes reemitidos/LOCs recorrentes
+                    if dt_benner_raw:
+                        ch_comp = gerar_chave_composta(k, dt_benner_raw)
+                        if ch_comp not in benner_index:
+                            benner_index[ch_comp] = info
 
     print("\n[4/5] Indexando Relatório Sabre...")
     caminho_sabre = encontrar_arquivo(["Relacao_Sabre_3.xlsx", "Relacao_Sabre.xlsx", "Relacao_Sabre_3.XLSX"])
@@ -446,7 +462,7 @@ def executar_auditoria():
                 if k not in sabre_index:
                     sabre_index[k] = info
 
-    print("\n[5/5] Auditando e Conciliando Emissões das Cias Aéreas com MAPEAMENTO DINÂMICO DE VALORES...")
+    print("\n[5/5] Auditando e Conciliando Emissões das Cias Aéreas com MAPEAMENTO DINÂMICO DE VALORES E DOCUMENTOS...")
     fontes = [
         (["AZUL.XLSX", "AZUL.xlsx"], "Azul"),
         (["BSP.XLSX", "BSP.xlsx"], "BSP"),
@@ -475,11 +491,11 @@ def executar_auditoria():
 
             # Detecta e Atualiza o Mapeamento Dinâmico de Colunas
             row_str = [str(x).strip().upper() for x in row.values]
-            if any("BILHETE" in x or "A VISTA" in x or "A CREDITO" in x or "TARIFA" in x for x in row_str):
+            if any("BILHETE" in x or "A VISTA" in x or "A CREDITO" in x or "TARIFA" in x or "DOCUMENTO" in x for x in row_str):
                 col_map = {}
                 for c_idx, val in enumerate(row.values):
                     if pd.notna(val):
-                        v_clean = str(val).strip()
+                        v_clean = str(val).strip().upper()
                         col_map[v_clean] = c_idx
                 continue
 
@@ -492,8 +508,6 @@ def executar_auditoria():
             if col3 != "" and col3 not in ["BILHETE\\RLOC", "BILHETE", "RLOC", "[]"] and col1 != "CIA":
                 if col3.upper() in ["BILHETE\\RLOC", "BILHETE", "RLOC"] or col5.upper() in ["EMISSÃO", "EMISSAO"]:
                     continue
-
-                bilhete_chave = clean_str_strict(col3)
 
                 dt_emissao = ""
                 pagto = ""
@@ -514,7 +528,21 @@ def executar_auditoria():
                 if not dt_emissao or dt_emissao.upper() in ["EMISSÃO", "EMISSAO"]:
                     continue
 
-                doc_val = safe_get_col(row, 22)
+                # ==============================================================
+                # TRATAMENTO SEGURO DE BILHETE vs DOCUMENTO vs LOCALIZADOR
+                # ==============================================================
+                doc_col_idx = col_map.get("DOCUMENTO", col_map.get("DOCUMENTO", 22))
+                doc_val = safe_get_col(row, doc_col_idx)
+
+                # Se a coluna 'Documento' trouxer um bilhete longo (10+ dígitos), prioriza como Bilhete Real
+                clean_doc = re.sub(r"[^0-9]", "", doc_val)
+                if clean_doc and len(clean_doc) >= 8:
+                    bilhete_chave = doc_val
+                    loc_reserva = col3
+                else:
+                    bilhete_chave = col3
+                    loc_reserva = doc_val
+
                 hist_data = buscar_memoria(dict_historico, bilhete_chave)
 
                 ponto_venda_final = curr_ponto_venda or hist_data.get("Ponto de venda") or "Não Mapeado"
@@ -553,9 +581,18 @@ def executar_auditoria():
                 else:
                     setor_final = "Operação"
 
-                keys_emissao = set(extract_keys(col3) + extract_keys(doc_val))
+                keys_emissao = set(extract_keys(bilhete_chave) + extract_keys(col3) + extract_keys(doc_val))
 
-                b_match = next((benner_index[ek] for ek in keys_emissao if ek in benner_index), None)
+                # Busca no Benner priorizando a combinação BILHETE + DATA DE EMISSÃO
+                b_match = None
+                for ek in keys_emissao:
+                    ch_comp = gerar_chave_composta(ek, dt_emissao)
+                    if ch_comp in benner_index:
+                        b_match = benner_index[ch_comp]
+                        break
+                    elif ek in benner_index:
+                        b_match = benner_index[ek]
+
                 s_match = next((sabre_index[ek] for ek in keys_emissao if ek in sabre_index), None)
                 l_match = next((lemon_index[ek] for ek in keys_emissao if ek in lemon_index), None)
 
@@ -564,8 +601,9 @@ def executar_auditoria():
                 # ==============================================================
                 def get_val_dinamico(hdr_options):
                     for h in hdr_options:
-                        if h in col_map:
-                            return safe_get_num(row, col_map[h])
+                        h_up = h.upper()
+                        if h_up in col_map:
+                            return safe_get_num(row, col_map[h_up])
                     return 0.0
 
                 a_vista = get_val_dinamico(["A vista", "A VISTA"])
@@ -633,12 +671,12 @@ def executar_auditoria():
                 else:
                     status_sistema = "NAO_CONSTA"
                     fornec_sistema = "-"
-                    loc_sistema = col3
+                    loc_sistema = loc_reserva or col3
                     rloc_cia_sistema = (
                         col3 if (len(col3) <= 8 and not col3.isdigit() and col3.upper() not in ["[]", "NAN"])
                         else "-"
                     )
-                    bilhete_sistema = col3
+                    bilhete_sistema = bilhete_chave
                     tarifa_sistema, taxa_sistema, receita_sistema = 0.0, 0.0, 0.0
                     cliente_sistema = ponto_venda_final
                     emissor_sistema, sist_reserva = "-", "-"
@@ -712,6 +750,19 @@ def executar_auditoria():
         return
 
     df_master = pd.DataFrame(registros_conciliados)
+
+    # ==============================================================
+    # DEDUPLICAÇÃO E LIMPEZA DE ESPAÇOS EM BRANCO
+    # ==============================================================
+    for col_str in ["Bilhetes", "Localizador_Sistema", "Data Emissão", "CIA", "Ponto de venda"]:
+        if col_str in df_master.columns:
+            df_master[col_str] = df_master[col_str].astype(str).str.strip()
+
+    # Remove duplicatas exatas geradas por relatórios com múltiplas linhas por emissão
+    df_master = df_master.drop_duplicates(
+        subset=["Bilhetes", "Data Emissão", "A vista", "A credito", "Taxa", "Comissão"],
+        keep="first"
+    )
 
     a_vista_col = df_master["A vista"] if "A vista" in df_master.columns else pd.Series(0.0, index=df_master.index)
     a_credito_col = df_master["A credito"] if "A credito" in df_master.columns else pd.Series(0.0, index=df_master.index)
