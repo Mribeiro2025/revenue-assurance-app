@@ -109,10 +109,20 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
         b_clean = re.sub(r"\.0$", "", str(r.get("Bilhetes", "")).strip())
         if b_clean and b_clean.lower() not in ["nan", "none", ""]:
             obs_limpa = str(r.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
+            
+            st_val = str(r.get("Status_Geral", "")).strip()
+            ar_val = str(r.get("Área Resp. Operação", "")).strip()
+            
+            # Trava de segurança: impede salvar '-' no banco se for status/área inválida
+            if st_val in ["-", "", "None", "nan"]:
+                st_val = "Pendente de Lançamento (Não Consta)"
+            if ar_val in ["-", "", "None", "nan"]:
+                ar_val = "Operação"
+
             dados_lote.append({
                 "bilhete": b_clean,
-                "status_geral": str(r.get("Status_Geral", "")),
-                "area_resp": str(r.get("Área Resp. Operação", "")),
+                "status_geral": st_val,
+                "area_resp": ar_val,
                 "obs_operacao": obs_limpa,
                 "usuario": str(usuario)
             })
@@ -360,9 +370,19 @@ def mesclar_com_supabase(df_in):
         how="left"
     )
 
-    df_merged["Status_Geral"] = df_merged["status_geral"].fillna(df_merged["Status_Geral"])
-    df_merged["Área Resp. Operação"] = df_merged["area_resp"].fillna(df_merged["Área Resp. Operação"])
-    df_merged["Obs. Operação"] = df_merged["obs_operacao"].fillna(df_merged["Obs. Operação"])
+    # Atualiza apenas se os dados do banco não forem nulos ou vazios
+    df_merged["Status_Geral"] = df_merged["status_geral"].where(
+        df_merged["status_geral"].notna() & ~df_merged["status_geral"].isin(["-", "", "None"]), 
+        df_merged["Status_Geral"]
+    )
+    df_merged["Área Resp. Operação"] = df_merged["area_resp"].where(
+        df_merged["area_resp"].notna() & ~df_merged["area_resp"].isin(["-", "", "None"]), 
+        df_merged["Área Resp. Operação"]
+    )
+    df_merged["Obs. Operação"] = df_merged["obs_operacao"].where(
+        df_merged["obs_operacao"].notna() & ~df_merged["obs_operacao"].isin(["-", "", "None"]), 
+        df_merged["Obs. Operação"]
+    )
 
     df_merged.drop(columns=["Bilhete_Clean", "status_geral", "area_resp", "obs_operacao"], inplace=True)
     return df_merged
@@ -448,7 +468,6 @@ def carregar_bases():
         xls = pd.ExcelFile(ARQUIVO_DASHBOARD, engine="openpyxl")
         frames = []
         
-        # CORREÇÃO CRÍTICA DE DUPLICIDADE:
         # Carrega estritamente APENAS as 3 abas principais do Excel
         abas_permitidas = [
             "99_Base_Divergencias_Geral",
@@ -609,11 +628,10 @@ f_lemon_virt = aplicar_filtros(df_lemon_virt)
 f_sem_div = aplicar_filtros(df_sem_div)
 
 # ==============================================================================
-# 5. HEADER PRINCIPAL E CARDS DE KPIS (INCLUINDO EMISSÃO VIRTUAL)
+# 5. HEADER PRINCIPAL E CARDS DE KPIS
 # ==============================================================================
 st.markdown("<div class='main-header'><h1>✈️ Garantia de Receita do Portal | Auditoria de Bilhetes</h1></div>", unsafe_allow_html=True)
 
-# 6 colunas para contemplar 100% dos casos no mesmo cabeçalho
 c1, c2, c3, c4, c5, c6 = st.columns(6)
 c1.metric("Pendentes de ERP", f"{len(f_falta):,}")
 c2.metric("Erros Valores/CIA", f"{len(f_erros):,}")
@@ -643,7 +661,7 @@ if e_master():
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO C-LEVEL COM SLA E ÍNDICE DE RESOLUÇÃO
+# ABA 0: DASHBOARD EXECUTIVO C-LEVEL COM SLA
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.subheader("📊 Painel Executivo C-Level & Análise de SLA de Resolução")
@@ -651,12 +669,10 @@ with aba_sel[0]:
     df_pendentes_todas = pd.concat([f_falta, f_erros, f_backoffice, f_eventos, f_lemon_virt], ignore_index=True)
     df_todas_casos = pd.concat([df_pendentes_todas, f_sem_div], ignore_index=True)
     
-    # Cálculo de Métricas Executivas de SLA
     total_auditado = len(df_todas_casos)
     total_resolvido = len(f_sem_div)
     taxa_resolucao = (total_resolvido / total_auditado * 100) if total_auditado > 0 else 0.0
 
-    # Tempo Médio de Resolução (dias entre Emissão e Tratativa)
     df_sla = f_sem_div.copy()
     tempo_medio_dias = 0.0
     if not df_sla.empty and "Dt_Parsed" in df_sla.columns and "Dt_Mod_Parsed" in df_sla.columns:
@@ -908,7 +924,7 @@ if e_master():
 
     with aba_sel[9]:
         st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Protegido)")
-        st.markdown("Envie uma planilha `.xlsx` ou `.csv` contendo as colunas de **Bilhete**, **Novo Status**, **Área Responsável** e **Observação** para atualização em massa no Supabase.")
+        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização em massa no Supabase.")
         st.warning("🔒 **Proteção de Escopo Ativa:** Somente bilhetes pertencentes à base auditada original serão atualizados.")
 
         arq_upload = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "xls", "csv"])
@@ -919,13 +935,27 @@ if e_master():
                 else:
                     df_up_raw = pd.read_excel(arq_upload, dtype=str)
 
-                col_b = next((c for c in df_up_raw.columns if any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
-                col_st = next((c for c in df_up_raw.columns if any(x in str(c).lower() for x in ["status", "novo status"])), None)
-                col_ar = next((c for c in df_up_raw.columns if any(x in str(c).lower() for x in ["gerente", "área", "area", "responsavel"])), None)
-                col_obs = next((c for c in df_up_raw.columns if any(x in str(c).lower() for x in ["obs", "observação"])), None)
+                # Deteção com prioridade estrita na coluna 'Área Resp. Operação' e 'Status_Geral'
+                cols_up = df_up_raw.columns.tolist()
+                
+                col_b = next((c for c in cols_up if c in ["Bilhetes", "Bilhete"] or any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
+                
+                col_st = next((c for c in cols_up if c == "Status_Geral"), None)
+                if not col_st:
+                    col_st = next((c for c in cols_up if any(x in str(c).lower() for x in ["novo status", "status_geral"])), None)
+                if not col_st:
+                    col_st = next((c for c in cols_up if "status" in str(c).lower() and "cia" not in str(c).lower() and "sistema" not in str(c).lower()), None)
+                
+                col_ar = next((c for c in cols_up if c == "Área Resp. Operação"), None)
+                if not col_ar:
+                    col_ar = next((c for c in cols_up if any(x in str(c).lower() for x in ["área resp", "area resp", "responsavel"])), None)
+                if not col_ar:
+                    col_ar = next((c for c in cols_up if "gerente" in str(c).lower()), None)
+
+                col_obs = next((c for c in cols_up if any(x in str(c).lower() for x in ["obs", "observação", "observacao"])), None)
 
                 if not col_b or not col_st:
-                    st.error("⚠️ O arquivo precisa conter ao menos uma coluna de 'Bilhete' e uma de 'Status'.")
+                    st.error("⚠️ O arquivo precisa conter ao menos uma coluna de 'Bilhete' e uma de 'Status_Geral'.")
                 else:
                     df_up_raw["Bilhete_Clean"] = df_up_raw[col_b].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
                     df_todos["Bilhete_Clean"] = df_todos["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
@@ -955,9 +985,14 @@ if e_master():
                         ar_novo = str(r_v.get(col_ar, r_v.get("Área Resp. Operação", ""))).strip()
                         obs_novo = str(r_v.get(col_obs, r_v.get("Obs. Operação", ""))).strip()
 
-                        st_atual = str(r_v.get("Status_Geral", "")).strip()
-                        ar_atual = str(r_v.get("Área Resp. Operação", "")).strip()
-                        obs_atual = str(r_v.get("Obs. Operação", "")).strip()
+                        st_atual = str(r_v.get("Status_Geral_Atual", r_v.get("Status_Geral", ""))).strip()
+                        ar_atual = str(r_v.get("Área Resp. Operação_Atual", r_v.get("Área Resp. Operação", ""))).strip()
+                        obs_atual = str(r_v.get("Obs. Operação_Atual", r_v.get("Obs. Operação", ""))).strip()
+
+                        if st_novo in ["-", "", "None", "nan"]:
+                            st_novo = st_atual or "Pendente de Lançamento (Não Consta)"
+                        if ar_novo in ["-", "", "None", "nan"]:
+                            ar_novo = ar_atual or "Operação"
 
                         if st_novo == st_atual and ar_novo == ar_atual and obs_novo == obs_atual:
                             qtd_iguais += 1
