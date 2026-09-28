@@ -119,7 +119,10 @@ def clean_str_strict(val):
 def clean_iata(val):
     if pd.isna(val) or val is None:
         return ""
-    return str(val).replace("-", "").replace(" ", "").strip()
+    s = str(val).strip()
+    s = re.sub(r"\.0$", "", s)            # Remove .0 caso o Pandas leia como float
+    s = re.sub(r"[^A-Za-z0-9]", "", s)    # Remove hífens, espaços e caracteres especiais
+    return s.upper()
 
 
 def safe_get_col(row, idx, default=""):
@@ -366,12 +369,20 @@ def executar_auditoria():
     iata_dict = {}
 
     if not df_iata.empty:
+        # Mapeamento flexível de colunas (ignora maiúsculas/minúsculas, acentos e caracteres especiais)
+        cols_map = {re.sub(r"[^a-z]", "", str(col).lower()): col for col in df_iata.columns}
+        
+        # Identifica automaticamente as colunas correspondentes
+        col_codigo = next((cols_map[k] for k in cols_map if "cod" in k or "iata" in k), df_iata.columns[0])
+        col_nome = next((cols_map[k] for k in cols_map if "nome" in k or "razao" in k or "empresa" in k), df_iata.columns[1] if len(df_iata.columns) > 1 else df_iata.columns[0])
+        col_gerente = next((cols_map[k] for k in cols_map if "gerente" in k or "resp" in k), df_iata.columns[2] if len(df_iata.columns) > 2 else df_iata.columns[0])
+
         for idx, r in tqdm(df_iata.iterrows(), total=len(df_iata), desc="Indexando IATAs", unit="reg"):
-            k = clean_iata(r.get("Código IATA"))
+            k = clean_iata(r.get(col_codigo))
             if k:
                 iata_dict[k] = {
-                    "Nome_IATA_Oficial": clean_str_strict(r.get("Nome IATA")),
-                    "Gerente_Responsavel": clean_str_strict(r.get("Gerentes")),
+                    "Nome_IATA_Oficial": clean_str_strict(r.get(col_nome)),
+                    "Gerente_Responsavel": clean_str_strict(r.get(col_gerente)),
                 }
 
     print("\n[2/5] Indexando Extrato OBT Lemontech...")
@@ -557,13 +568,17 @@ def executar_auditoria():
 
                 hist_data = buscar_memoria(dict_historico, bilhete_chave)
 
-                ponto_venda_final = curr_ponto_venda or hist_data.get("Ponto de venda") or "Não Mapeado"
+                ponto_venda_final = curr_ponto_venda or hist_data.get("Ponto de venda") or ""
                 iata_final = curr_iata or hist_data.get("Código Iata") or "DIRETO"
-
                 iata_clean = clean_iata(iata_final)
                 m_iata = iata_dict.get(iata_clean, {})
 
-                gerente_resp = hist_data.get("Área Resp. Operação") or m_iata.get("Gerente_Responsavel", "Não Mapeado")
+                gerente_do_dict = m_iata.get("Gerente_Responsavel", "")
+                gerente_resp = (
+                    clean_str_strict(hist_data.get("Área Resp. Operação"))
+                    or clean_str_strict(gerente_do_dict)
+                    or ""
+                )
                 
                 obs_op = str(hist_data.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
                 obs_replica = hist_data.get("Obs_Auditoria_Replica") or "-"
