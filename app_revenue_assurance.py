@@ -21,7 +21,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
 ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 
 st.markdown(
@@ -85,7 +84,6 @@ def carregar_tratativas_db():
     try:
         return pd.read_sql(query, engine)
     except Exception:
-        # Fallback caso colunas setor/gerentes ainda não tenham sido criadas
         try:
             df_fallback = pd.read_sql("SELECT bilhete, status_geral, area_resp, obs_operacao FROM tratativas", engine)
             df_fallback["setor"] = "-"
@@ -99,15 +97,12 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
     engine = get_db_engine()
     if not engine or df_lote.empty:
         return False, "Conexão com o banco de dados indisponível."
-
-    # Garante a criação/existência das colunas adicionais na tabela do Supabase se necessário
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS setor VARCHAR(255);"))
             conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS gerentes VARCHAR(255);"))
     except Exception:
         pass
-
     upsert_sql = text("""
         INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
         VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW())
@@ -120,7 +115,6 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
             usuario_modificacao = EXCLUDED.usuario_modificacao,
             data_modificacao = NOW();
     """)
-
     dados_lote = []
     for _, r in df_lote.iterrows():
         b_clean = re.sub(r"\.0$", "", str(r.get("Bilhetes", "")).strip())
@@ -136,7 +130,6 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 st_val = "Pendente de Lançamento (Não Consta)"
             if ar_val in ["-", "", "None", "nan"]:
                 ar_val = "Operação"
-
             dados_lote.append({
                 "bilhete": b_clean,
                 "status_geral": st_val,
@@ -146,10 +139,8 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 "gerentes": gerente_val,
                 "usuario": str(usuario)
             })
-
     if not dados_lote:
         return False, "Nenhum bilhete válido para atualização."
-
     try:
         with engine.begin() as conn:
             conn.execute(upsert_sql, dados_lote)
@@ -183,30 +174,47 @@ def registrar_log_supabase(logs_list):
         pass
 
 # ==============================================================================
-# 2. GESTÃO DE USUÁRIOS NO SUPABASE
+# 2. GESTÃO DE USUÁRIOS NO SUPABASE E LOCAL
 # ==============================================================================
 def carregar_usuarios_supabase():
-    """Busca os usuários cadastrados na tabela usuarios do Supabase."""
-    engine = get_db_engine()
-    if not engine:
-        return {}
+    """Busca os usuários cadastrados no Supabase integrando com o arquivo usuarios_autorizados.json local."""
+    dict_u = {}
     
-    query = "SELECT usuario, senha, nome, perfil, status, data_solicitacao FROM usuarios"
-    try:
-        df_u = pd.read_sql(query, engine)
-        dict_u = {}
-        for _, row in df_u.iterrows():
-            dict_u[str(row["usuario"]).strip().lower()] = {
-                "senha": str(row["senha"]).strip(),
-                "nome": str(row["nome"]).strip(),
-                "perfil": str(row["perfil"]).strip(),
-                "status": str(row["status"]).strip().upper(),
-                "data_solicitacao": str(row["data_solicitacao"])
-            }
-        return dict_u
-    except Exception:
-        return {}
+    # 1. Carrega dados do arquivo local se existir
+    if os.path.exists("usuarios_autorizados.json"):
+        try:
+            with open("usuarios_autorizados.json", "r", encoding="utf-8") as f:
+                data_json = json.load(f)
+                for k, v in data_json.items():
+                    dict_u[str(k).strip().lower()] = {
+                        "senha": str(v.get("senha", "")).strip(),
+                        "nome": str(v.get("nome", "")).strip(),
+                        "perfil": str(v.get("perfil", "Operacao")).strip(),
+                        "status": str(v.get("status", "APROVADO")).strip().upper(),
+                        "data_solicitacao": str(v.get("data_solicitacao", ""))
+                    }
+        except Exception:
+            pass
 
+    # 2. Sobrescreve com as informações atualizadas do Supabase
+    engine = get_db_engine()
+    if engine:
+        query = "SELECT usuario, senha, nome, perfil, status, data_solicitacao FROM usuarios"
+        try:
+            df_u = pd.read_sql(query, engine)
+            for _, row in df_u.iterrows():
+                u_key = str(row["usuario"]).strip().lower()
+                dict_u[u_key] = {
+                    "senha": str(row["senha"]).strip(),
+                    "nome": str(row["nome"]).strip(),
+                    "perfil": str(row["perfil"]).strip(),
+                    "status": str(row["status"]).strip().upper(),
+                    "data_solicitacao": str(row["data_solicitacao"])
+                }
+        except Exception:
+            pass
+            
+    return dict_u
 
 def salvar_usuario_supabase(u_id, senha, nome, perfil, status="PENDENTE"):
     """Insere ou atualiza um usuário no Supabase."""
@@ -230,7 +238,6 @@ def salvar_usuario_supabase(u_id, senha, nome, perfil, status="PENDENTE"):
     except Exception as e:
         return False, f"Erro no banco: {e}"
 
-
 def atualizar_senha_supabase(u_id, nova_senha):
     """Atualiza a senha de um usuário no Supabase."""
     engine = get_db_engine()
@@ -244,7 +251,6 @@ def atualizar_senha_supabase(u_id, nova_senha):
         return True, "Senha redefinida com sucesso."
     except Exception as e:
         return False, f"Erro no banco: {e}"
-
 
 def atualizar_status_usuario_supabase(u_id, novo_status):
     """Atualiza o status (APROVADO/REJEITADO) de um usuário no Supabase."""
@@ -260,58 +266,6 @@ def atualizar_status_usuario_supabase(u_id, novo_status):
     except Exception:
         return False
 
-
-def semear_usuarios_iniciais_supabase():
-    """Sincroniza automaticamente a lista padrão de usuários autorizados no Supabase."""
-    usuarios_padrao = {
-        "compliance1": {
-            "senha": "123",
-            "nome": "Compliance - Auditoria 01",
-            "perfil": "Compliance",
-            "status": "APROVADO"
-        },
-        "mribeiro": {
-            "senha": "123",
-            "nome": "Marcos Ribeiro",
-            "perfil": "Master",
-            "status": "APROVADO"
-        },
-        "ffernandes": {
-            "senha": "123",
-            "nome": "Felipe Fernandes",
-            "perfil": "Master",
-            "status": "APROVADO"
-        },
-        "operacao": {
-            "senha": "123",
-            "nome": "Equipe Operacional",
-            "perfil": "Operacao",
-            "status": "APROVADO"
-        },
-        "backoffice": {
-            "senha": "123",
-            "nome": "Atendimento Backoffice",
-            "perfil": "Operacao",
-            "status": "APROVADO"
-        }
-    }
-    
-    usuarios_existentes = carregar_usuarios_supabase()
-    
-    for u_id, dados in usuarios_padrao.items():
-        if u_id not in usuarios_existentes:
-            salvar_usuario_supabase(
-                u_id, 
-                dados["senha"], 
-                dados["nome"], 
-                dados["perfil"], 
-                status=dados["status"]
-            )
-
-# Executa o semeamento automático ao iniciar o app
-semear_usuarios_iniciais_supabase()
-
-
 # Inicialização de Sessão
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
@@ -322,12 +276,10 @@ if "perfil_atual" not in st.session_state:
 if "login_user_id" not in st.session_state:
     st.session_state["login_user_id"] = None
 
-
 def e_master():
     u_id = st.session_state.get("login_user_id", "")
     perfil = st.session_state.get("perfil_atual", "")
-    return u_id in ["mribeiro", "ffernandes"] or perfil in ["Master", "Compliance"]
-
+    return u_id in ["mribeiro", "fellipe", "ffernandes"] or perfil in ["Master", "Compliance"]
 
 if not st.session_state["autenticado"]:
     col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
@@ -342,7 +294,7 @@ if not st.session_state["autenticado"]:
             if st.button("Acessar Portal", type="primary"):
                 usuarios_db = carregar_usuarios_supabase()
                 
-                # Validação Padrão com busca direta no Supabase
+                # 1. VALIDAÇÃO PADRÃO
                 if u_input in usuarios_db and usuarios_db[u_input]["senha"] == p_input:
                     if usuarios_db[u_input].get("status") == "APROVADO":
                         st.session_state["autenticado"] = True
@@ -352,6 +304,38 @@ if not st.session_state["autenticado"]:
                         st.rerun()
                     else:
                         st.warning("⏳ Seu usuário está aguardando aprovação do Gestor Master.")
+                
+                # 2. REGRAS DE FALLBACK/CONTINGÊNCIA PARA MASTER E COMPLIANCE
+                elif u_input == "mribeiro" and p_input in ["14052013", "123"]:
+                    st.session_state["autenticado"] = True
+                    st.session_state["usuario_atual"] = "Marcos Ribeiro"
+                    st.session_state["perfil_atual"] = "Master"
+                    st.session_state["login_user_id"] = "mribeiro"
+                    st.rerun()
+                elif u_input in ["fellipe", "ffernandes"] and p_input == "123":
+                    st.session_state["autenticado"] = True
+                    st.session_state["usuario_atual"] = "Fellipe Fernandes"
+                    st.session_state["perfil_atual"] = "Master"
+                    st.session_state["login_user_id"] = u_input
+                    st.rerun()
+                elif u_input == "compliance1" and p_input == "123":
+                    st.session_state["autenticado"] = True
+                    st.session_state["usuario_atual"] = "Compliance - Auditoria 01"
+                    st.session_state["perfil_atual"] = "Compliance"
+                    st.session_state["login_user_id"] = "compliance1"
+                    st.rerun()
+                elif u_input == "backoffice" and p_input == "123":
+                    st.session_state["autenticado"] = True
+                    st.session_state["usuario_atual"] = "Atendimento Backoffice"
+                    st.session_state["perfil_atual"] = "Operacao"
+                    st.session_state["login_user_id"] = "backoffice"
+                    st.rerun()
+                elif u_input == "operacao" and p_input == "123":
+                    st.session_state["autenticado"] = True
+                    st.session_state["usuario_atual"] = "Equipe Operacional"
+                    st.session_state["perfil_atual"] = "Operacao"
+                    st.session_state["login_user_id"] = "operacao"
+                    st.rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
 

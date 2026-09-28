@@ -7,16 +7,16 @@
         "data_solicitacao": "2026-08-31"
     },
     "mribeiro": {
-        "senha": "123",
+        "senha": "14052013",
         "nome": "Marcos Ribeiro",
-        "perfil": "Compliance",
+        "perfil": "Master",
         "status": "APROVADO",
         "data_solicitacao": "2026-08-31"
     },
-    "ffernandes": {
+    "fellipe": {
         "senha": "123",
-        "nome": "Felipe Fernandes",
-        "perfil": "Compliance",
+        "nome": "Fellipe Fernandes",
+        "perfil": "Master",
         "status": "APROVADO",
         "data_solicitacao": "2026-08-31"
     },
