@@ -535,45 +535,55 @@ def rotear_bases_mestra(df_master):
 
 @st.cache_data(ttl=60)
 def carregar_bases():
+    """
+    Carrega as abas do Excel e aplica TRAVA RIGOROSA contra duplicidades.
+    Evita a contagem repetida de bilhetes presentes na '99_Base_Divergencias_Geral' e em sub-abas.
+    """
     if not os.path.exists(ARQUIVO_DASHBOARD):
         vazio = padronizar_df(None)
         return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
-
+    
     try:
         xls = pd.ExcelFile(ARQUIVO_DASHBOARD, engine="openpyxl")
         frames = []
         
-        # Carrega estritamente APENAS as 3 abas principais do Excel
-        abas_permitidas = [
+        # Abas principais de auditoria
+        abas_alvo = [
             "99_Base_Divergencias_Geral",
             "98_OK_Divergencia_Operacao",
             "98_OK_Sem_Divergencia_Concil"
         ]
         
-        for sheet in xls.sheet_names:
-            if sheet in abas_permitidas:
+        for sheet in abas_alvo:
+            if sheet in xls.sheet_names:
                 df_s = pd.read_excel(xls, sheet_name=sheet)
                 df_s["Aba_Origem"] = sheet
                 frames.append(df_s)
-
+                
         df_log_arq = pd.read_excel(xls, "00_Log_Auditoria") if "00_Log_Auditoria" in xls.sheet_names else pd.DataFrame()
-
+        
         if not frames:
             vazio = padronizar_df(None)
             return vazio, vazio, vazio, vazio, vazio, vazio, df_log_arq
-
+            
+        # Unificação e TRAVA DE DUPLICIDADE ESTRITA
         df_m = pd.concat(frames, ignore_index=True)
         
+        # Criar chave limpa de validação
         if "Bilhetes" in df_m.columns:
-            df_m = df_m.drop_duplicates(subset=["Bilhetes"], keep="first").reset_index(drop=True)
-
+            df_m["Bilhete_Clean"] = df_m["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+            # Trava Antiduplicidade: MANTÉM APENAS A PRIMEIRA OCORRÊNCIA DO BILHETE
+            df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
+            
+        # Mesclagem prioritária com as tratativas gravadas no Supabase
         df_m = mesclar_com_supabase(df_m)
-
+        
+        # Roteamento de telas sem duplicar
         f_falta, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
         return f_falta, f_erros, f_bo, f_evt, f_lem, f_ok, df_log_arq
 
     except Exception as e:
-        st.error(f"⚠️ Erro ao carregar as bases de dados: {e}")
+        st.error(f"⚠️ Erro ao carregar e deduplicar as bases de dados: {e}")
         vazio = padronizar_df(None)
         return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
 
