@@ -23,7 +23,6 @@ print(" MOTOR DE AUDITORIA FP&A ADVANCED - REVENUE ASSURANCE ".center(75, "="))
 print("=" * 75)
 
 PASTA_ENVIO = "Envio"
-
 MAPA_CIAS = {
     "JJ": "LATAM", "LA": "LATAM", "PZ": "LATAM", "4C": "LATAM", "XL": "LATAM", "4M": "LATAM",
     "G3": "GOL", "AD": "AZUL", "TP": "TAP", "CM": "COPA", "AA": "AMERICAN", "UA": "UNITED",
@@ -33,7 +32,6 @@ MAPA_CIAS = {
     "LX": "SWISS", "ET": "ETHIOPIAN", "AT": "MAROC", "SA": "SOUTH AFRICAN", "OB": "BOLIVIANA",
     "PY": "PARAGUAY", "HR": "HAHN", "AZ": "ITA AIRWAYS", "JA": "JETSMART",
 }
-
 
 # ==============================================================================
 # CONEXÃO E AUXILIARES DO SUPABASE / BANCO DE DADOS NUVEM
@@ -50,7 +48,6 @@ def obter_engine_supabase():
                 import tomli as tomllib
             except ImportError:
                 import toml as tomllib
-
         secrets_path = os.path.join(DIR_ATUAL, ".streamlit", "secrets.toml")
         if os.path.exists(secrets_path):
             with open(secrets_path, "rb") as f:
@@ -62,15 +59,12 @@ def obter_engine_supabase():
         pass
     return None
 
-
 def auto_converter_benner_parquet():
     """Garante conversão e atualização automática do Acumulado.xlsx -> Parquet."""
     arq_xlsx = "Acumulado.xlsx"
     arq_parquet = "Acumulado.parquet"
-
     if not os.path.exists(arq_xlsx):
         return
-
     precisa_converter = False
     if not os.path.exists(arq_parquet):
         precisa_converter = True
@@ -79,7 +73,6 @@ def auto_converter_benner_parquet():
         mtime_parquet = os.path.getmtime(arq_parquet)
         if mtime_xlsx > mtime_parquet:
             precisa_converter = True
-
     if precisa_converter:
         print("\n⏳ [AUTO-CONVERTER] Atualizando 'Acumulado.parquet' a partir de 'Acumulado.xlsx'...")
         try:
@@ -88,7 +81,6 @@ def auto_converter_benner_parquet():
             print("⚡ [AUTO-CONVERTER] Base Parquet sincronizada com sucesso!")
         except Exception as e:
             print(f"⚠️ Erro ao converter Parquet automaticamente: {e}")
-
 
 def clean_num(val):
     if pd.isna(val) or val is None:
@@ -105,7 +97,6 @@ def clean_num(val):
     except (ValueError, TypeError):
         return 0.0
 
-
 def clean_str_strict(val):
     if pd.isna(val) or val is None:
         return ""
@@ -115,7 +106,6 @@ def clean_str_strict(val):
         return ""
     return s
 
-
 def clean_iata(val):
     if pd.isna(val) or val is None:
         return ""
@@ -124,18 +114,15 @@ def clean_iata(val):
     s = re.sub(r"[^A-Za-z0-9]", "", s)    # Remove hífens, espaços e caracteres especiais
     return s.upper()
 
-
 def safe_get_col(row, idx, default=""):
     if idx < len(row):
         return clean_str_strict(row.iloc[idx])
     return default
 
-
 def safe_get_num(row, idx, default=0.0):
     if idx < len(row):
         return clean_num(row.iloc[idx])
     return default
-
 
 def extract_keys(val):
     if pd.isna(val) or val is None:
@@ -144,7 +131,6 @@ def extract_keys(val):
     s = s.replace("[", "").replace("]", "").replace("R$", "").strip()
     if not s or s in ("NAN", "NONE", "NULL", "0", "-"):
         return []
-
     keys = set()
     clean_str = re.sub(r"[^A-Z0-9]", "", s)
     if clean_str:
@@ -156,7 +142,6 @@ def extract_keys(val):
             keys.add(clean_str[3:])
         if len(clean_str) >= 10 and clean_str.isdigit():
             keys.add(clean_str[-10:])
-
     tokens = re.split(r"[\s/\\,-]+", s)
     for tok in tokens:
         t_clean = re.sub(r"[^A-Z0-9]", "", tok)
@@ -166,9 +151,7 @@ def extract_keys(val):
                 keys.add(t_clean.lstrip("0"))
                 if len(t_clean) >= 10:
                     keys.add(t_clean[-10:])
-
     return list(keys)
-
 
 def gerar_chave_composta(codigo, data_str):
     """Gera chave composta Codigo_Data para desambiguar reemissões/LOCs reutilizados."""
@@ -178,15 +161,12 @@ def gerar_chave_composta(codigo, data_str):
         return f"{cod_limpo}_{dt_limpa}"
     return cod_limpo
 
-
 def carregar_tratativas_e_logs_anteriores(out_file):
     dict_historico = {}
     df_log_antigo = pd.DataFrame()
-
     def indexar_memoria(b_raw, dados):
         if not b_raw or str(b_raw).strip().lower() in ["nan", "none", "", "-"]:
             return
-
         for k in extract_keys(b_raw):
             if k not in dict_historico:
                 dict_historico[k] = {}
@@ -194,18 +174,15 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                 val_str = str(val).strip() if pd.notna(val) else ""
                 if val_str and val_str not in ["-", "nan", "none", "Sem tratativa na operação"]:
                     dict_historico[k][col] = val
-
     if os.path.exists(out_file):
         try:
             xls = pd.ExcelFile(out_file, engine="openpyxl")
             if "00_Log_Auditoria" in xls.sheet_names:
                 df_log_antigo = pd.read_excel(xls, sheet_name="00_Log_Auditoria")
-
             abas_ordenadas = sorted(
                 [a for a in xls.sheet_names if a.startswith("98_") or a.startswith("99_")],
                 reverse=True
             )
-
             for aba in abas_ordenadas:
                 df_temp = pd.read_excel(xls, sheet_name=aba)
                 if "Bilhetes" in df_temp.columns:
@@ -227,7 +204,6 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                             })
         except Exception as e:
             print(f"⚠️ Aviso ao carregar histórico do Excel: {e}")
-
     file_memoria = "Historico_Tratativas.csv"
     if os.path.exists(file_memoria) and os.path.getsize(file_memoria) > 0:
         try:
@@ -251,7 +227,6 @@ def carregar_tratativas_e_logs_anteriores(out_file):
             print(f"🛡️ Memória protegida '{file_memoria}' sincronizada com sucesso.")
         except Exception as e:
             print(f"⚠️ Erro ao ler memória CSV: {e}")
-
     engine_sb = obter_engine_supabase()
     if engine_sb:
         try:
@@ -271,9 +246,7 @@ def carregar_tratativas_e_logs_anteriores(out_file):
             print(f"⚠️ Aviso ao conectar/carregar dados do Supabase: {e}")
     else:
         print("⚠️ Conexão com Supabase não estabelecida.")
-
     return dict_historico, df_log_antigo
-
 
 def buscar_memoria(dict_historico, bilhete_raw):
     for k in extract_keys(bilhete_raw):
@@ -281,13 +254,11 @@ def buscar_memoria(dict_historico, bilhete_raw):
             return dict_historico[k]
     return {}
 
-
 def encontrar_arquivo(nomes_possiveis):
     for nome in nomes_possiveis:
         if os.path.exists(nome):
             return nome
     return None
-
 
 def salvar_csv_atomico(df, caminho_csv):
     tmp_path = f"{caminho_csv}.tmp"
@@ -296,24 +267,20 @@ def salvar_csv_atomico(df, caminho_csv):
         os.remove(caminho_csv)
     os.rename(tmp_path, caminho_csv)
 
-
 def sincronizar_supabase_fim(df_master):
     engine_sb = obter_engine_supabase()
     if not engine_sb or df_master.empty:
         return
-
     try:
         from sqlalchemy import text
         cols_req = [c for c in ["Bilhetes", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Gerentes"] if c in df_master.columns]
         df_trat = df_master[cols_req].dropna(subset=["Bilhetes"]).drop_duplicates(subset=["Bilhetes"])
-
         try:
             with engine_sb.begin() as conn:
                 conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS setor VARCHAR(255);"))
                 conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS gerentes VARCHAR(255);"))
         except Exception:
             pass
-
         upsert_sql = text("""
             INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
             VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, 'Motor_VSCode', NOW())
@@ -325,7 +292,6 @@ def sincronizar_supabase_fim(df_master):
                 gerentes = COALESCE(EXCLUDED.gerentes, tratativas.gerentes),
                 data_modificacao = NOW();
         """)
-
         dados_lote = []
         for _, r in df_trat.iterrows():
             b_val = clean_str_strict(r["Bilhetes"])
@@ -339,7 +305,6 @@ def sincronizar_supabase_fim(df_master):
                     "setor": str(r.get("Setor", "-")),
                     "gerentes": str(r.get("Gerentes", "-"))
                 })
-
         if dados_lote:
             with engine_sb.begin() as conn:
                 conn.execute(upsert_sql, dados_lote)
@@ -347,14 +312,10 @@ def sincronizar_supabase_fim(df_master):
     except Exception as e:
         print(f"⚠️ Aviso ao sincronizar com o Supabase: {e}")
 
-
 def executar_auditoria():
     auto_converter_benner_parquet()
-
     out_file_model = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
-
     dict_historico, df_log_acumulado = carregar_tratativas_e_logs_anteriores(out_file_model)
-
     if os.path.exists(out_file_model):
         dt_bkp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         try:
@@ -362,21 +323,19 @@ def executar_auditoria():
             print(f"📦 Backup de segurança gerado: Backup_Dashboard_{dt_bkp}.xlsx")
         except Exception as e:
             print(f"⚠️ Aviso ao criar backup: {e}")
-
+            
     print("\n[1/5] Carregando Relação IATA...")
     caminho_iata = encontrar_arquivo(["Relacao_Iata_2.xlsx", "Relacao_Iata.xlsx", "Relacao_Iata_2.XLSX"])
     df_iata = pd.read_excel(caminho_iata) if caminho_iata else pd.DataFrame()
     iata_dict = {}
-
     if not df_iata.empty:
         # Mapeamento flexível de colunas (ignora maiúsculas/minúsculas, acentos e caracteres especiais)
         cols_map = {re.sub(r"[^a-z]", "", str(col).lower()): col for col in df_iata.columns}
         
-        # Identifica automaticamente as colunas correspondentes
         col_codigo = next((cols_map[k] for k in cols_map if "cod" in k or "iata" in k), df_iata.columns[0])
         col_nome = next((cols_map[k] for k in cols_map if "nome" in k or "razao" in k or "empresa" in k), df_iata.columns[1] if len(df_iata.columns) > 1 else df_iata.columns[0])
         col_gerente = next((cols_map[k] for k in cols_map if "gerente" in k or "resp" in k), df_iata.columns[2] if len(df_iata.columns) > 2 else df_iata.columns[0])
-
+        
         for idx, r in tqdm(df_iata.iterrows(), total=len(df_iata), desc="Indexando IATAs", unit="reg"):
             k = clean_iata(r.get(col_codigo))
             if k:
@@ -388,7 +347,6 @@ def executar_auditoria():
     print("\n[2/5] Indexando Extrato OBT Lemontech...")
     caminho_lemon = encontrar_arquivo(["Extrato_Bilhetes_lemontech.xlsx", "Extrato_Bilhetes_lemontech.XLSX"])
     lemon_index = {}
-
     if caminho_lemon:
         df_lemon = pd.read_excel(caminho_lemon, engine="openpyxl")
         for idx, r in tqdm(df_lemon.iterrows(), total=len(df_lemon), desc="Indexando Lemontech", unit="reg"):
@@ -418,13 +376,11 @@ def executar_auditoria():
     else:
         caminho_benner = encontrar_arquivo(["Acumulado.xlsx", "Acumulado.XLSX"])
         df_benner = pd.read_excel(caminho_benner, sheet_name="Planilha1") if caminho_benner else pd.DataFrame()
-
     benner_index = {}
     key_cols_benner = [
         "Bilhete", "Localizador", "Rloc Cia", "Rloc CIA", "Código Rloc",
         "Pedido", "Fatura/Documento", "Handle Accounting", "Accounting VM", "Apurações Fee"
     ]
-
     if not df_benner.empty:
         for idx, r in tqdm(df_benner.iterrows(), total=len(df_benner), desc="Indexando Benner", unit="linha"):
             rloc_cia_val = clean_str_strict(r.get("Rloc Cia") or r.get("Rloc CIA") or r.get("Código Rloc") or r.get("Localizador")) or "-"
@@ -449,7 +405,6 @@ def executar_auditoria():
                 for k in extract_keys(r.get(col)):
                     if k not in benner_index:
                         benner_index[k] = info
-                    # Indexação composta por Data para diferenciar bilhetes reemitidos/LOCs recorrentes
                     if dt_benner_raw:
                         ch_comp = gerar_chave_composta(k, dt_benner_raw)
                         if ch_comp not in benner_index:
@@ -461,7 +416,6 @@ def executar_auditoria():
     if caminho_sabre:
         lines = pd.read_excel(caminho_sabre).iloc[:, 0].dropna().astype(str).tolist()
         sabre_rows = []
-
         for line in lines:
             if "Total Amount" in line or "Total Commission" in line or "PCC,DATE,AL CODE" in line:
                 continue
@@ -469,12 +423,10 @@ def executar_auditoria():
             if len(parts) >= 15 and parts[0] != "PCC":
                 cleaned = [p.replace('="', "").replace('"', "").strip() for p in parts]
                 sabre_rows.append(cleaned[:15])
-
         df_sabre = pd.DataFrame(
             sabre_rows,
             columns=["PCC", "DATE", "AL_CODE", "TICKET_NUM", "PNR", "NAME", "LAST_NAME", "CUR", "OB", "COM_AMT", "TOTAL", "FOP", "AGT", "TIME", "STATUS"]
         )
-
         for idx, r in tqdm(df_sabre.iterrows(), total=len(df_sabre), desc="Indexando Sabre", unit="reg"):
             info = {
                 "Sabre_PCC": r["PCC"],
@@ -493,16 +445,13 @@ def executar_auditoria():
         (["GOL.XLSX", "GOL.xlsx"], "GOL"),
     ]
     registros_conciliados = []
-
     for lista_nomes, nome_fonte in fontes:
         caminho_arq = encontrar_arquivo(lista_nomes)
         if not caminho_arq:
             continue
-
         df_raw = pd.read_excel(caminho_arq, header=None)
         curr_iata, curr_ponto_venda = "", ""
         col_map = {}
-
         for r_idx in tqdm(range(len(df_raw)), desc=f"Auditando {nome_fonte}", unit="linha"):
             row = df_raw.iloc[r_idx]
             col0 = safe_get_col(row, 0)
@@ -511,7 +460,7 @@ def executar_auditoria():
             col4 = safe_get_col(row, 4)
             col5 = safe_get_col(row, 5)
             col6 = safe_get_col(row, 6)
-
+            
             # Detecta e Atualiza o Mapeamento Dinâmico de Colunas
             row_str = [str(x).strip().upper() for x in row.values]
             if any("BILHETE" in x or "A VISTA" in x or "A CREDITO" in x or "TARIFA" in x or "DOCUMENTO" in x for x in row_str):
@@ -521,8 +470,9 @@ def executar_auditoria():
                         v_clean = str(val).strip().upper()
                         col_map[v_clean] = c_idx
                 continue
-
-            if re.match(r"^\d{2}-\d{5}", col0) or re.match(r"^\d{7,8}$", col0):
+                
+            # Regex ajustada para capturar IATAs com múltiplos hífens/espaços (ex: 57-05782-5)
+            if re.match(r"^\s*(\d{2}-?\d{5}-?\d?|\d{7,8})\s*$", col0):
                 curr_iata = col0
                 if col4:
                     curr_ponto_venda = col4
@@ -531,7 +481,6 @@ def executar_auditoria():
             if col3 != "" and col3 not in ["BILHETE\\RLOC", "BILHETE", "RLOC", "[]"] and col1 != "CIA":
                 if col3.upper() in ["BILHETE\\RLOC", "BILHETE", "RLOC"] or col5.upper() in ["EMISSÃO", "EMISSAO"]:
                     continue
-
                 dt_emissao = ""
                 pagto = ""
                 if re.match(r"^\d{2}/\d{2}/\d{4}", col4):
@@ -547,17 +496,12 @@ def executar_auditoria():
                     elif col5 and col5.upper() not in ["EMISSÃO", "EMISSAO"]:
                         dt_emissao = col5
                         pagto = col6
-
                 if not dt_emissao or dt_emissao.upper() in ["EMISSÃO", "EMISSAO"]:
                     continue
 
-                # ==============================================================
-                # TRATAMENTO SEGURO DE BILHETE vs DOCUMENTO vs LOCALIZADOR
-                # ==============================================================
-                doc_col_idx = col_map.get("DOCUMENTO", col_map.get("DOCUMENTO", 22))
+                # TRATAMENTO DE BILHETE vs DOCUMENTO vs LOCALIZADOR
+                doc_col_idx = col_map.get("DOCUMENTO", 22)
                 doc_val = safe_get_col(row, doc_col_idx)
-
-                # Se a coluna 'Documento' trouxer um bilhete longo (10+ dígitos), prioriza como Bilhete Real
                 clean_doc = re.sub(r"[^0-9]", "", doc_val)
                 if clean_doc and len(clean_doc) >= 8:
                     bilhete_chave = doc_val
@@ -567,29 +511,44 @@ def executar_auditoria():
                     loc_reserva = doc_val
 
                 hist_data = buscar_memoria(dict_historico, bilhete_chave)
-
-                ponto_venda_final = curr_ponto_venda or hist_data.get("Ponto de venda") or ""
+                
+                # IATA E MAPA DE GERENTES
                 iata_final = curr_iata or hist_data.get("Código Iata") or "DIRETO"
                 iata_clean = clean_iata(iata_final)
                 m_iata = iata_dict.get(iata_clean, {})
-
-                gerente_do_dict = m_iata.get("Gerente_Responsavel", "")
-                gerente_resp = (
-                    clean_str_strict(hist_data.get("Área Resp. Operação"))
-                    or clean_str_strict(gerente_do_dict)
-                    or ""
-                )
                 
+                # Resolução inteligente do Gerente Responsável
+                gerente_do_dict = clean_str_strict(m_iata.get("Gerente_Responsavel"))
+                hist_gerente = clean_str_strict(hist_data.get("Área Resp. Operação"))
+                
+                if hist_gerente and hist_gerente.lower() not in ["não mapeado", "nao mapeado", "-", "sem mapeamento", "nan", "none"]:
+                    gerente_resp = hist_gerente
+                elif gerente_do_dict and gerente_do_dict.lower() not in ["não mapeado", "nao mapeado", "-", "nan", "none"]:
+                    gerente_resp = gerente_do_dict
+                else:
+                    gerente_resp = "Não Mapeado"
+                
+                # Resolução inteligente do Ponto de Venda / Cliente
+                ponto_curr = clean_str_strict(curr_ponto_venda)
+                ponto_hist = clean_str_strict(hist_data.get("Ponto de venda"))
+                ponto_oficial = clean_str_strict(m_iata.get("Nome_IATA_Oficial"))
+                
+                if ponto_curr and ponto_curr.lower() not in ["não mapeado", "nao mapeado", "-", "nan", "none"]:
+                    ponto_venda_final = ponto_curr
+                elif ponto_hist and ponto_hist.lower() not in ["não mapeado", "nao mapeado", "-", "nan", "none"]:
+                    ponto_venda_final = ponto_hist
+                elif ponto_oficial and ponto_oficial.lower() not in ["não mapeado", "nao mapeado", "-", "nan", "none"]:
+                    ponto_venda_final = ponto_oficial
+                else:
+                    ponto_venda_final = "Não Mapeado"
+
                 obs_op = str(hist_data.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
                 obs_replica = hist_data.get("Obs_Auditoria_Replica") or "-"
-
                 st_lower = str(hist_data.get("Status_Geral") or "").strip().lower()
                 area_lower = str(gerente_resp).strip().lower()
                 obs_lower = str(obs_op).strip().lower()
-
                 tem_gerente_bo = any(k in area_lower for k in ["katia martins", "kátia martins", "suporte backoffice", "backoffice"])
                 tem_chamado_obs = any(p in obs_lower or p in st_lower for p in ["ticket", "chamado", "suporte"])
-
                 e_suporte_backoffice = tem_gerente_bo and tem_chamado_obs
 
                 if hist_data.get("Setor"):
@@ -609,8 +568,6 @@ def executar_auditoria():
                     setor_final = "Operação"
 
                 keys_emissao = set(extract_keys(bilhete_chave) + extract_keys(col3) + extract_keys(doc_val))
-
-                # Busca no Benner priorizando a combinação BILHETE + DATA DE EMISSÃO
                 b_match = None
                 for ek in keys_emissao:
                     ch_comp = gerar_chave_composta(ek, dt_emissao)
@@ -623,9 +580,6 @@ def executar_auditoria():
                 s_match = next((sabre_index[ek] for ek in keys_emissao if ek in sabre_index), None)
                 l_match = next((lemon_index[ek] for ek in keys_emissao if ek in lemon_index), None)
 
-                # ==============================================================
-                # EXTRAÇÃO DINÂMICA SEGURA DOS VALORES MONETÁRIOS
-                # ==============================================================
                 def get_val_dinamico(hdr_options):
                     for h in hdr_options:
                         h_up = h.upper()
@@ -636,7 +590,6 @@ def executar_auditoria():
                 a_vista = get_val_dinamico(["A vista", "A VISTA"])
                 a_credito = get_val_dinamico(["A credito", "A CREDITO", "A Crédito"])
                 tarifa_emitida = a_vista + a_credito
-                
                 taxa_emitida = get_val_dinamico(["Taxa", "TAXA"])
                 comissao = get_val_dinamico(["Comissão", "COMISSÃO", "Comissao"])
                 taxa_du = get_val_dinamico(["Taxa DU", "TAXA DU"])
@@ -657,14 +610,12 @@ def executar_auditoria():
                     cliente_sistema = b_match["Benner_Cliente"]
                     emissor_sistema = b_match["Benner_Emissor"]
                     sist_reserva = b_match["Benner_Sistema_Reserva"]
-
                     sigla_cia = col1.strip().upper()
                     nome_esperado_cia = MAPA_CIAS.get(sigla_cia, sigla_cia)
                     status_cia = (
                         "OK" if (nome_esperado_cia in fornec_sistema.upper() or sigla_cia in fornec_sistema.upper())
                         else "Divergência de Cia Aérea"
                     )
-
                     dif_tarifa = tarifa_emitida - tarifa_sistema
                     dif_taxa = taxa_emitida - taxa_sistema
                     dif_receita = receita_emitida - receita_sistema
@@ -686,14 +637,12 @@ def executar_auditoria():
                             divs.append("Receita")
                         if status_cia != "OK":
                             divs.append("Cia Aérea")
-
                         if divs:
                             status_divergencia = f"Divergência de {' e '.join(divs)}"
                             aba_destino = "98_OK_Divergencia_Operacao"
                         else:
                             status_divergencia = "Valores Corretos"
                             aba_destino = "98_OK_Sem_Divergencia_Concil"
-
                     status_geral = hist_data.get("Status_Geral") or "Emitido e Lançado"
                 else:
                     status_sistema = "NAO_CONSTA"
@@ -778,14 +727,10 @@ def executar_auditoria():
 
     df_master = pd.DataFrame(registros_conciliados)
 
-    # ==============================================================
-    # DEDUPLICAÇÃO E LIMPEZA DE ESPAÇOS EM BRANCO
-    # ==============================================================
     for col_str in ["Bilhetes", "Localizador_Sistema", "Data Emissão", "CIA", "Ponto de venda"]:
         if col_str in df_master.columns:
             df_master[col_str] = df_master[col_str].astype(str).str.strip()
 
-    # Remove duplicatas exatas geradas por relatórios com múltiplas linhas por emissão
     df_master = df_master.drop_duplicates(
         subset=["Bilhetes", "Data Emissão", "A vista", "A credito", "Taxa", "Comissão"],
         keep="first"
@@ -794,7 +739,6 @@ def executar_auditoria():
     a_vista_col = df_master["A vista"] if "A vista" in df_master.columns else pd.Series(0.0, index=df_master.index)
     a_credito_col = df_master["A credito"] if "A credito" in df_master.columns else pd.Series(0.0, index=df_master.index)
     df_master["Tarifa_Total"] = pd.to_numeric(a_vista_col, errors="coerce").fillna(0.0) + pd.to_numeric(a_credito_col, errors="coerce").fillna(0.0)
-
     inc_col = df_master["Incentivo"] if "Incentivo" in df_master.columns else pd.Series(0.0, index=df_master.index)
     com_col = df_master["Comissão"] if "Comissão" in df_master.columns else pd.Series(0.0, index=df_master.index)
     tdu_col = df_master["Taxa DU"] if "Taxa DU" in df_master.columns else pd.Series(0.0, index=df_master.index)
@@ -859,7 +803,6 @@ def executar_auditoria():
     df_99_operacao = df_99_gen[df_99_gen["Setor"] == "Operação"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_existentes)
 
     print("\n[6/6] Exportando Dashboard Formatado em Excel...")
-
     with pd.ExcelWriter(out_file_model, engine="openpyxl") as writer:
         pareto_df.to_excel(writer, sheet_name="01_Pareto_Cliente", index=False)
         df_98_div.to_excel(writer, sheet_name="98_OK_Divergencia_Operacao", index=False)
@@ -871,7 +814,6 @@ def executar_auditoria():
         df_99_unique.to_excel(writer, sheet_name="99_Unique", index=False)
         df_99_private.to_excel(writer, sheet_name="99_Private", index=False)
         df_99_operacao.to_excel(writer, sheet_name="99_Operação", index=False)
-
         if not df_log_acumulado.empty:
             df_log_acumulado.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
         else:
@@ -880,7 +822,6 @@ def executar_auditoria():
             ).to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
 
     wb = openpyxl.load_workbook(out_file_model)
-
     header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True)
     thin_border = Border(
@@ -888,7 +829,6 @@ def executar_auditoria():
     )
     fill_alerta = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
     font_alerta = Font(color="9C0006", bold=True)
-
     currency_cols = [
         "Tarifa_Pendente_R$", "Taxa_Pendente_R$", "Receita_Pendente_R$", "Receita_Risco",
         "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa", "Taxa_Sistema",
@@ -899,16 +839,13 @@ def executar_auditoria():
     for sheetname in tqdm(wb.sheetnames, desc="Formatando Abas do Excel", unit="aba"):
         ws = wb[sheetname]
         ws.views.sheetView[0].showGridLines = True
-
         if sheetname not in ["01_Pareto_Cliente", "00_Log_Auditoria"]:
             for cell in ws[1]:
                 cell.fill = header_fill
                 cell.font = header_font
                 cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
                 cell.border = thin_border
-
         max_row = ws.max_row
-
         if max_row > 1 and sheetname not in ["01_Pareto_Cliente", "00_Log_Auditoria"]:
             ws.cell(row=max_row + 1, column=1, value="TOTAL").font = Font(bold=True)
             for col_idx in range(1, ws.max_column + 1):
@@ -925,11 +862,9 @@ def executar_auditoria():
         for col_idx in range(1, ws.max_column + 1):
             col_letter = get_column_letter(col_idx)
             col_name = str(ws.cell(row=1, column=col_idx).value or "")
-
             len_vals = [len(str(ws.cell(row=r, column=col_idx).value or "")) for r in range(1, ws.max_row + 1)]
             max_len = max(len_vals) if len_vals else 10
             ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
-
             if col_name in currency_cols:
                 for r in range(2, ws.max_row + 1):
                     cell = ws.cell(row=r, column=col_idx)
@@ -939,7 +874,6 @@ def executar_auditoria():
                             cell.number_format = "R$ #,##0.00"
                         except (ValueError, TypeError):
                             pass
-
             if col_name.startswith("Dif_"):
                 for r in range(2, ws.max_row + 1):
                     cell = ws.cell(row=r, column=col_idx)
@@ -975,7 +909,6 @@ def executar_auditoria():
     print("\n" + "=" * 75)
     print(f" AUDITORIA CONCLUÍDA COM SUCESSO! SALVO EM: {out_file_model} ".center(75, "="))
     print("=" * 75)
-
 
 if __name__ == "__main__":
     executar_auditoria()
