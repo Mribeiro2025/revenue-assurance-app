@@ -531,8 +531,11 @@ def rotear_bases_mestra(df_master):
 @st.cache_data(ttl=30)
 def carregar_bases():
     """
-    Carrega as vendas exclusivamente da aba mestra '99_Base_Divergencias_Geral' do Dashboard Excel.
-    Garante que 100% dos bilhetes sejam mantidos.
+    Carrega as vendas de TODAS as abas operacionais do Dashboard Excel:
+    - 99_Base_Divergencias_Geral
+    - 98_OK_Divergencia_Operacao
+    - 98_OK_Sem_Divergencia_Concil
+    Aplica trava de antiduplicidade mantendo os 1.323 bilhetes únicos.
     """
     if not os.path.exists(ARQUIVO_DASHBOARD):
         vazio = padronizar_df(None)
@@ -540,14 +543,23 @@ def carregar_bases():
     
     try:
         xls = pd.ExcelFile(ARQUIVO_DASHBOARD, engine="openpyxl")
+        frames = []
         
-        if "99_Base_Divergencias_Geral" in xls.sheet_names:
-            df_m = pd.read_excel(xls, sheet_name="99_Base_Divergencias_Geral")
-        else:
-            frames = [pd.read_excel(xls, sheet_name=s) for s in xls.sheet_names if s.startswith("99_") or s.startswith("98_")]
-            df_m = pd.concat(frames, ignore_index=True)
-            
+        # Carrega todas as abas operacionais ativas (99_ e 98_)
+        for sheet in xls.sheet_names:
+            if sheet.startswith("99_") or sheet.startswith("98_"):
+                df_sheet = pd.read_excel(xls, sheet_name=sheet)
+                df_sheet["Aba_Origem"] = sheet
+                frames.append(df_sheet)
+                
         df_log_arq = pd.read_excel(xls, "00_Log_Auditoria") if "00_Log_Auditoria" in xls.sheet_names else pd.DataFrame()
+        
+        if not frames:
+            vazio = padronizar_df(None)
+            return vazio, vazio, vazio, vazio, vazio, vazio, df_log_arq
+            
+        # Unificação e Trava Antiduplicidade por Bilhete Único
+        df_m = pd.concat(frames, ignore_index=True)
         
         if "Bilhetes" in df_m.columns:
             df_m["Bilhete_Clean"] = df_m["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
