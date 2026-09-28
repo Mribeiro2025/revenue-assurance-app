@@ -301,15 +301,25 @@ def sincronizar_supabase_fim(df_master):
 
     try:
         from sqlalchemy import text
-        df_trat = df_master[["Bilhetes", "Status_Geral", "Área Resp. Operação", "Obs. Operação"]].dropna(subset=["Bilhetes"]).drop_duplicates(subset=["Bilhetes"])
+        cols_req = [c for c in ["Bilhetes", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Gerentes"] if c in df_master.columns]
+        df_trat = df_master[cols_req].dropna(subset=["Bilhetes"]).drop_duplicates(subset=["Bilhetes"])
+
+        try:
+            with engine_sb.begin() as conn:
+                conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS setor VARCHAR(255);"))
+                conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS gerentes VARCHAR(255);"))
+        except Exception:
+            pass
 
         upsert_sql = text("""
-            INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, usuario_modificacao, data_modificacao)
-            VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, 'Motor_VSCode', NOW())
+            INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
+            VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, 'Motor_VSCode', NOW())
             ON CONFLICT (bilhete) DO UPDATE SET
                 status_geral = EXCLUDED.status_geral,
                 area_resp = EXCLUDED.area_resp,
                 obs_operacao = EXCLUDED.obs_operacao,
+                setor = COALESCE(EXCLUDED.setor, tratativas.setor),
+                gerentes = COALESCE(EXCLUDED.gerentes, tratativas.gerentes),
                 data_modificacao = NOW();
         """)
 
@@ -322,13 +332,15 @@ def sincronizar_supabase_fim(df_master):
                     "bilhete": b_val,
                     "status_geral": str(r.get("Status_Geral", "")),
                     "area_resp": str(r.get("Área Resp. Operação", "")),
-                    "obs_operacao": obs_limpa
+                    "obs_operacao": obs_limpa,
+                    "setor": str(r.get("Setor", "-")),
+                    "gerentes": str(r.get("Gerentes", "-"))
                 })
 
         if dados_lote:
             with engine_sb.begin() as conn:
                 conn.execute(upsert_sql, dados_lote)
-            print(f"☁️ {len(dados_lote)} tratativas sincronizadas em lote no Supabase!")
+            print(f"☁️ {len(dados_lote)} tratativas sincronizadas em lote no Supabase com Setor e Gerentes!")
     except Exception as e:
         print(f"⚠️ Aviso ao sincronizar com o Supabase: {e}")
 

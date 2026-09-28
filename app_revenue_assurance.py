@@ -426,7 +426,6 @@ def mesclar_com_supabase(df_excel):
     df_excel["Bilhete_Clean"] = df_excel["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
     df_db["Bilhete_Clean"] = df_db["bilhete"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
     
-    # Apenas as 4 colunas permitidas do Supabase
     cols_sup_desejadas = ["area_resp", "obs_operacao", "setor", "gerentes"]
     cols_presentes = [c for c in cols_sup_desejadas if c in df_db.columns]
     
@@ -437,7 +436,6 @@ def mesclar_com_supabase(df_excel):
         how="left"
     )
     
-    # Mapeamento para atualizar EXCLUSIVAMENTE os 4 campos autorizados
     muta_map = [
         ("Área Resp. Operação", "area_resp"),
         ("Obs. Operação", "obs_operacao"),
@@ -455,35 +453,26 @@ def mesclar_com_supabase(df_excel):
     df_merged.drop(columns=cols_drop, inplace=True, errors="ignore")
     return df_merged
 
-# ==============================================================================
-# ROTEAMENTO ESTRITO - DECLARADO ANTES DE CARREGAR_BASES()
-# ==============================================================================
 def rotear_bases_mestra(df_master):
     """
     Roteia a base mestra soberana para as 6 telas operacionais sem descartar nenhum bilhete.
     """
     if df_master is None or df_master.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-
     df_master = padronizar_df(df_master)
-
     def e_apenas_divergencia_receita(st_div):
         s = str(st_div).lower().strip()
         if "diverg" not in s and "erro" not in s:
             return False
         s_sem_diverg = s.replace("divergência", "").replace("divergencia", "").strip()
         return "receita" in s_sem_diverg and not any(x in s_sem_diverg for x in ["tarifa", "taxa", "cia", "companhia"])
-
-    # 1. Sem Divergência / Conciliados (Tela 6)
     mask_valores_corretos = df_master["Status_Geral"].astype(str).str.lower().str.contains("já lançado|conciliado|valores corretos|regularizado") | \
                             df_master["Status_Divergencia"].astype(str).str.lower().str.contains("valores corretos")
     mask_so_receita = df_master["Status_Divergencia"].apply(e_apenas_divergencia_receita)
     mask_ok = mask_valores_corretos | mask_so_receita
-
     df_ok = df_master[mask_ok].copy()
     df_rest = df_master[~mask_ok].copy()
-
-    # 2. Suporte Backoffice (Tela 3)
+    
     def e_bo_flexivel(r):
         ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
         obs_val = str(r.get("Obs. Operação", "")).strip().lower()
@@ -493,39 +482,32 @@ def rotear_bases_mestra(df_master):
         origem_val = str(r.get("Aba_Origem", "")).strip().lower()
         return any(k in ar_val or k in ger_val or k in setor_val or k in origem_val or k in obs_val or k in st_val
                    for k in ["katia", "kátia", "backoffice", "suporte"])
-
     mask_bo = df_rest.apply(e_bo_flexivel, axis=1)
     df_bo = df_rest[mask_bo].copy()
     df_rest = df_rest[~mask_bo].copy()
-
-    # 3. Central de Eventos (Tela 4)
+    
     mask_evt = df_rest["Setor"].astype(str).str.lower().str.contains("eventos") | \
                df_rest["Área Resp. Operação"].astype(str).str.lower().str.contains("eventos") | \
                df_rest["Gerentes"].astype(str).str.lower().str.contains("eventos")
     df_eventos = df_rest[mask_evt].copy()
     df_rest = df_rest[~mask_evt].copy()
-
-    # 4. Emissor Virtual Lemontech (Tela 5)
+    
     def e_emissor_virtual(r):
         for col in ["Emissor", "Emissor_Reserva_Lemon", "Consultor_Lemon", "Consultor"]:
             val = str(r.get(col, "")).lower().strip()
             if "virtual" in val or "lemontech" in val:
                 return True
         return False
-
     mask_lemon = df_rest.apply(e_emissor_virtual, axis=1)
     df_lemon_virt = df_rest[mask_lemon].copy()
     df_rest = df_rest[~mask_lemon].copy()
-
-    # 5. Erros de Valores & CIA (Tela 2)
+    
     mask_consta_benner = ~df_rest["Status_Sistema"].astype(str).str.upper().str.contains("NAO_CONSTA|NÃO_CONSTA")
     mask_tem_divergencia = df_rest["Status_Divergencia"].astype(str).str.lower().str.contains("divergência|divergencia|erro")
     mask_erros = mask_consta_benner | mask_tem_divergencia
     df_erros = df_rest[mask_erros].copy()
     
-    # 6. Falta de Lançamento (Tela 1)
     df_falta = df_rest[~mask_erros].copy()
-
     return df_falta, df_erros, df_bo, df_eventos, df_lemon_virt, df_ok
 
 @st.cache_data(ttl=30)
@@ -535,7 +517,7 @@ def carregar_bases():
     - 99_Base_Divergencias_Geral
     - 98_OK_Divergencia_Operacao
     - 98_OK_Sem_Divergencia_Concil
-    Aplica trava de antiduplicidade mantendo os 1.323 bilhetes únicos.
+    Aplica trava de antiduplicidade mantendo a integridade dos bilhetes únicos.
     """
     if not os.path.exists(ARQUIVO_DASHBOARD):
         vazio = padronizar_df(None)
@@ -545,7 +527,6 @@ def carregar_bases():
         xls = pd.ExcelFile(ARQUIVO_DASHBOARD, engine="openpyxl")
         frames = []
         
-        # Carrega todas as abas operacionais ativas (99_ e 98_)
         for sheet in xls.sheet_names:
             if sheet.startswith("99_") or sheet.startswith("98_"):
                 df_sheet = pd.read_excel(xls, sheet_name=sheet)
@@ -558,17 +539,13 @@ def carregar_bases():
             vazio = padronizar_df(None)
             return vazio, vazio, vazio, vazio, vazio, vazio, df_log_arq
             
-        # Unificação e Trava Antiduplicidade por Bilhete Único
         df_m = pd.concat(frames, ignore_index=True)
         
         if "Bilhetes" in df_m.columns:
             df_m["Bilhete_Clean"] = df_m["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
             df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
             
-        # Alimenta exclusivamente os 4 campos autorizados via Supabase
         df_m = mesclar_com_supabase(df_m)
-        
-        # Roteamento direto sem descartar bilhetes
         f_falta, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
         return f_falta, f_erros, f_bo, f_evt, f_lem, f_ok, df_log_arq
     except Exception as e:
@@ -576,7 +553,6 @@ def carregar_bases():
         vazio = padronizar_df(None)
         return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
 
-# Gerador de Relatório Estilizado em Excel
 def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     buffer = io.BytesIO()
     if df_export is None or df_export.empty:
@@ -665,16 +641,13 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("🔍 Filtros Operacionais")
 d_inicio = st.sidebar.date_input("Data Inicial:", value=datetime.date(2024, 1, 1), format="DD/MM/YYYY")
 d_fim = st.sidebar.date_input("Data Final:", value=datetime.date(2026, 12, 31), format="DD/MM/YYYY")
-
 df_todos = pd.concat([df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 filtro_gerente = st.sidebar.multiselect("Gerente / Área Resp.:", options=sorted(df_todos["Área Resp. Operação"].dropna().unique()))
 filtro_setor = st.sidebar.multiselect("Setor:", options=sorted(df_todos["Setor"].dropna().unique()))
 filtro_cia = st.sidebar.multiselect("Companhia Aérea:", options=sorted(df_todos["CIA"].dropna().unique()))
 
 def aplicar_filtros(df):
-    """
-    Aplica os filtros de data e seleção de forma protegida contra valores nulos (NaT).
-    """
+    """Aplica os filtros de data e seleção de forma protegida contra valores nulos (NaT)."""
     if df is None or df.empty:
         return df
     m = pd.Series(True, index=df.index)
@@ -686,7 +659,6 @@ def aplicar_filtros(df):
             dt_dates = df.loc[has_dt, "Dt_Parsed"].dt.date
             m_dt.loc[has_dt] = (dt_dates >= d_inicio) & (dt_dates <= d_fim)
         m = m & m_dt
-
     if filtro_gerente:
         m = m & df["Área Resp. Operação"].isin(filtro_gerente)
     if filtro_setor:
@@ -870,21 +842,21 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
                 usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
                 agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 df_up = pd.DataFrame({
-                    "Bilhetes": bilhet_sel,
-                    "Status_Geral": [n_status] * len(bilhet_sel),
-                    "Área Resp. Operação": [n_area] * len(bilhet_sel),
-                    "Obs. Operação": [n_obs] * len(bilhet_sel),
-                    "Setor": [df_primeiro.get("Setor", "-")] * len(bilhet_sel),
-                    "Gerentes": [df_primeiro.get("Gerentes", "-")] * len(bilhet_sel)
+                    "Bilhetes": df_sel_cards["Bilhetes"].values,
+                    "Status_Geral": [n_status] * len(df_sel_cards),
+                    "Área Resp. Operação": [n_area] * len(df_sel_cards),
+                    "Obs. Operação": [n_obs] * len(df_sel_cards),
+                    "Setor": df_sel_cards["Setor"].values,
+                    "Gerentes": df_sel_cards["Gerentes"].values
                 })
                 ok, msg = salvar_tratativas_lote_supabase(df_up, usuario=usr_str)
                 if ok:
                     logs_lote = []
-                    for b_s in bilhet_sel:
+                    for _, row_b in df_sel_cards.iterrows():
                         logs_lote.append({
-                            "Data_Hora": agora_str, "Bilhete": b_s, "Usuario_Acao": usr_str,
-                            "Status_Anterior": df_primeiro.get("Status_Geral", "-"), "Novo_Status": n_status,
-                            "Area_Anterior": df_primeiro.get("Área Resp. Operação", "-"), "Nova_Area": n_area,
+                            "Data_Hora": agora_str, "Bilhete": row_b.get("Bilhetes"), "Usuario_Acao": usr_str,
+                            "Status_Anterior": row_b.get("Status_Geral", "-"), "Novo_Status": n_status,
+                            "Area_Anterior": row_b.get("Área Resp. Operação", "-"), "Nova_Area": n_area,
                             "Observacao": n_obs, "Tipo_Interacao": f"Tratativa Web ({nome_base})"
                         })
                     registrar_log_supabase(logs_lote)
