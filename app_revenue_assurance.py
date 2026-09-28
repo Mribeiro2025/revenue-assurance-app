@@ -97,12 +97,14 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
     engine = get_db_engine()
     if not engine or df_lote.empty:
         return False, "Conexão com o banco de dados indisponível."
+    
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS setor VARCHAR(255);"))
             conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS gerentes VARCHAR(255);"))
     except Exception:
         pass
+        
     upsert_sql = text("""
         INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
         VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW())
@@ -120,7 +122,6 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
         b_clean = re.sub(r"\.0$", "", str(r.get("Bilhetes", "")).strip())
         if b_clean and b_clean.lower() not in ["nan", "none", ""]:
             obs_limpa = str(r.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
-            
             st_val = str(r.get("Status_Geral", "")).strip()
             ar_val = str(r.get("Área Resp. Operação", "")).strip()
             setor_val = str(r.get("Setor", "-")).strip()
@@ -179,8 +180,6 @@ def registrar_log_supabase(logs_list):
 def carregar_usuarios_supabase():
     """Busca os usuários cadastrados no Supabase integrando com o arquivo usuarios_autorizados.json local."""
     dict_u = {}
-    
-    # 1. Carrega dados do arquivo local se existir
     if os.path.exists("usuarios_autorizados.json"):
         try:
             with open("usuarios_autorizados.json", "r", encoding="utf-8") as f:
@@ -195,8 +194,7 @@ def carregar_usuarios_supabase():
                     }
         except Exception:
             pass
-
-    # 2. Sobrescreve com as informações atualizadas do Supabase
+            
     engine = get_db_engine()
     if engine:
         query = "SELECT usuario, senha, nome, perfil, status, data_solicitacao FROM usuarios"
@@ -217,7 +215,6 @@ def carregar_usuarios_supabase():
     return dict_u
 
 def salvar_usuario_supabase(u_id, senha, nome, perfil, status="PENDENTE"):
-    """Insere ou atualiza um usuário no Supabase."""
     engine = get_db_engine()
     if not engine:
         return False, "Conexão com o banco indisponível."
@@ -239,7 +236,6 @@ def salvar_usuario_supabase(u_id, senha, nome, perfil, status="PENDENTE"):
         return False, f"Erro no banco: {e}"
 
 def atualizar_senha_supabase(u_id, nova_senha):
-    """Atualiza a senha de um usuário no Supabase."""
     engine = get_db_engine()
     if not engine:
         return False, "Conexão com o banco indisponível."
@@ -253,7 +249,6 @@ def atualizar_senha_supabase(u_id, nova_senha):
         return False, f"Erro no banco: {e}"
 
 def atualizar_status_usuario_supabase(u_id, novo_status):
-    """Atualiza o status (APROVADO/REJEITADO) de um usuário no Supabase."""
     engine = get_db_engine()
     if not engine:
         return False
@@ -294,7 +289,6 @@ if not st.session_state["autenticado"]:
             if st.button("Acessar Portal", type="primary"):
                 usuarios_db = carregar_usuarios_supabase()
                 
-                # 1. VALIDAÇÃO PADRÃO
                 if u_input in usuarios_db and usuarios_db[u_input]["senha"] == p_input:
                     if usuarios_db[u_input].get("status") == "APROVADO":
                         st.session_state["autenticado"] = True
@@ -304,8 +298,6 @@ if not st.session_state["autenticado"]:
                         st.rerun()
                     else:
                         st.warning("⏳ Seu usuário está aguardando aprovação do Gestor Master.")
-                
-                # 2. REGRAS DE FALLBACK/CONTINGÊNCIA PARA MASTER E COMPLIANCE
                 elif u_input == "mribeiro" and p_input in ["14052013", "123"]:
                     st.session_state["autenticado"] = True
                     st.session_state["usuario_atual"] = "Marcos Ribeiro"
@@ -338,7 +330,6 @@ if not st.session_state["autenticado"]:
                     st.rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
-
         with tab_pwd:
             u_reset = st.text_input("Usuário cadastrado:").strip().lower()
             n_pass = str(st.text_input("Nova Senha Alfanumérica:", type="password")).strip()
@@ -353,7 +344,6 @@ if not st.session_state["autenticado"]:
                         st.error(f"Erro ao atualizar: {msg}")
                 else:
                     st.error("Verifique se o usuário existe e se as senhas coincidem.")
-
         with tab_req:
             r_nome = st.text_input("Nome Completo:")
             r_user = st.text_input("Usuário Desejado:").strip().lower()
@@ -399,26 +389,24 @@ def padronizar_df(df):
     
     if "Obs. Operação" in df_out.columns:
         df_out["Obs. Operação"] = df_out["Obs. Operação"].fillna("").astype(str).str.replace("Sem tratativa na operação", "", regex=False).str.strip()
-
+        
     for c in ["Ponto de venda", "Área Resp. Operação", "Obs. Operação", "Setor", "Status_Geral", "CIA", "Data Emissão", "Emissor", "Emissor_Reserva_Lemon", "Consultor_Lemon", "Consultor", "Status_Sistema", "Status_Divergencia", "Gerentes"]:
         if c not in df_out.columns:
             df_out[c] = "-"
         else:
             df_out[c] = df_out[c].fillna("-").astype(str).str.strip()
-
+            
     status_map = ["nao_consta", "não_consta", "nan", "-", "", "none"]
     df_out["Status_Geral"] = df_out["Status_Geral"].apply(
         lambda x: "Pendente de Lançamento (Não Consta)" if str(x).lower().strip() in status_map else str(x)
     )
-
     for c in ["Taxa", "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita", "Tarifa_Total"]:
         if c in df_out.columns: 
             df_out[c] = pd.to_numeric(df_out[c], errors="coerce").fillna(0.0)
-
     for c in ["Data_Modificacao", "Usuario_Modificacao", "Ultima_Alteracao"]:
         if c not in df_out.columns: 
             df_out[c] = "-"
-
+            
     df_out["Dt_Parsed"] = pd.to_datetime(df_out["Data Emissão"], format="mixed", dayfirst=True, errors="coerce")
     df_out["Dt_Mod_Parsed"] = pd.to_datetime(df_out["Data_Modificacao"], format="mixed", dayfirst=True, errors="coerce")
     
@@ -432,25 +420,23 @@ def mesclar_com_supabase(df_excel):
     """
     if df_excel is None or df_excel.empty:
         return df_excel
-
     df_db = carregar_tratativas_db()
     if df_db.empty:
         return df_excel
-
     df_excel["Bilhete_Clean"] = df_excel["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
     df_db["Bilhete_Clean"] = df_db["bilhete"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
-
+    
     # Apenas as 4 colunas permitidas do Supabase
     cols_sup_desejadas = ["area_resp", "obs_operacao", "setor", "gerentes"]
     cols_presentes = [c for c in cols_sup_desejadas if c in df_db.columns]
-
+    
     df_merged = pd.merge(
         df_excel,
         df_db[["Bilhete_Clean"] + cols_presentes].drop_duplicates("Bilhete_Clean"),
         on="Bilhete_Clean",
         how="left"
     )
-
+    
     # Mapeamento para atualizar EXCLUSIVAMENTE os 4 campos autorizados
     muta_map = [
         ("Área Resp. Operação", "area_resp"),
@@ -458,27 +444,23 @@ def mesclar_com_supabase(df_excel):
         ("Setor", "setor"),
         ("Gerentes", "gerentes")
     ]
-
     for col_excel, col_sb in muta_map:
         if col_sb in df_merged.columns and col_excel in df_merged.columns:
-            # Substitui apenas se houver valor válido gravado no Supabase
             df_merged[col_excel] = df_merged[col_sb].where(
                 df_merged[col_sb].notna() & ~df_merged[col_sb].astype(str).str.strip().isin(["-", "", "None", "nan", "NULL", "EMPTY"]),
                 df_merged[col_excel]
             )
-
+            
     cols_drop = [c for c in ["Bilhete_Clean"] + cols_presentes if c in df_merged.columns and c != "Bilhete_Clean"]
     df_merged.drop(columns=cols_drop, inplace=True, errors="ignore")
     return df_merged
 
-
-
 # ==============================================================================
-# ROTEAMENTO ESTRITO - DEVE FICAR ACIMA DE CARREGAR_BASES()
+# ROTEAMENTO ESTRITO - DECLARADO ANTES DE CARREGAR_BASES()
 # ==============================================================================
 def rotear_bases_mestra(df_master):
     """
-    Roteia os bilhetes para as 6 telas operacionais mantendo 100% dos dados.
+    Roteia a base mestra soberana para as 6 telas operacionais sem descartar nenhum bilhete.
     """
     if df_master is None or df_master.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
@@ -546,10 +528,12 @@ def rotear_bases_mestra(df_master):
 
     return df_falta, df_erros, df_bo, df_eventos, df_lemon_virt, df_ok
 
-
 @st.cache_data(ttl=30)
 def carregar_bases():
-    """Carrega o Dashboard e executa o roteamento (agora sem erros)."""
+    """
+    Carrega as vendas exclusivamente da aba mestra '99_Base_Divergencias_Geral' do Dashboard Excel.
+    Garante que 100% dos bilhetes sejam mantidos.
+    """
     if not os.path.exists(ARQUIVO_DASHBOARD):
         vazio = padronizar_df(None)
         return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
@@ -569,12 +553,12 @@ def carregar_bases():
             df_m["Bilhete_Clean"] = df_m["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
             df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
             
+        # Alimenta exclusivamente os 4 campos autorizados via Supabase
         df_m = mesclar_com_supabase(df_m)
         
-        # Agora a chamada funcionará perfeitamente pois a função já foi declarada acima!
+        # Roteamento direto sem descartar bilhetes
         f_falta, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
         return f_falta, f_erros, f_bo, f_evt, f_lem, f_ok, df_log_arq
-
     except Exception as e:
         st.error(f"⚠️ Erro ao carregar as bases do Dashboard: {e}")
         vazio = padronizar_df(None)
@@ -588,7 +572,6 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     
     cols_remover = [c for c in ["Dt_Parsed", "Dt_Mod_Parsed", "Aba_Origem", "Bilhete_Clean"] if c in df_export.columns]
     df_clean = df_export.drop(columns=cols_remover) if cols_remover else df_export.copy()
-
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df_clean.to_excel(writer, sheet_name=nome_aba[:30], index=False)
     
@@ -596,7 +579,6 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     wb = openpyxl.load_workbook(buffer)
     ws = wb.active
     ws.views.sheetView[0].showGridLines = True
-
     header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True, size=11)
     thin_border = Border(
@@ -607,27 +589,22 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     )
     fill_alerta = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
     font_alerta = Font(color="9C0006", bold=True)
-
     currency_cols = ["A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa", "Taxa_Sistema", "Dif_Taxa", "Comissão", "Taxa DU", "Desc.", "Incentivo", "Receita_Sistema", "Dif_Receita", "VL. Líquido", "Tarifa_Total"]
-
     for cell in ws[1]:
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = thin_border
-
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
         for cell in row:
             cell.border = thin_border
             col_name = str(ws.cell(row=1, column=cell.column).value or "")
-
             if col_name in currency_cols and cell.value not in ["-", None, ""]:
                 try:
                     cell.value = float(cell.value)
                     cell.number_format = "R$ #,##0.00"
                 except (ValueError, TypeError):
                     pass
-
             if col_name.startswith("Dif_") and cell.value not in ["-", None, ""]:
                 try:
                     if abs(float(cell.value)) >= 0.01:
@@ -635,13 +612,11 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
                         cell.font = font_alerta
                 except (ValueError, TypeError):
                     pass
-
     for col_idx in range(1, ws.max_column + 1):
         col_letter = get_column_letter(col_idx)
         len_vals = [len(str(ws.cell(row=r, column=col_idx).value or "")) for r in range(1, min(ws.max_row + 1, 100))]
         max_len = max(len_vals) if len_vals else 10
         ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
-
     output_buffer = io.BytesIO()
     wb.save(output_buffer)
     output_buffer.seek(0)
@@ -655,7 +630,6 @@ with st.spinner("🔄 Carregando bases de dados do painel e conectando ao Supaba
 # ==============================================================================
 st.sidebar.title("Navegação")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
-
 with st.sidebar.expander("🔑 Alterar Minha Senha"):
     with st.form("form_pwd_side"):
         s_atu = str(st.text_input("Senha Atual:", type="password")).strip()
@@ -671,32 +645,44 @@ with st.sidebar.expander("🔑 Alterar Minha Senha"):
                     st.error(f"Erro ao salvar senha: {msg}")
             else:
                 st.error("Senha atual incorreta.")
-
 if st.sidebar.button("🔒 Sair"):
     st.session_state["autenticado"] = False
     st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔍 Filtros Operacionais")
-
 d_inicio = st.sidebar.date_input("Data Inicial:", value=datetime.date(2024, 1, 1), format="DD/MM/YYYY")
 d_fim = st.sidebar.date_input("Data Final:", value=datetime.date(2026, 12, 31), format="DD/MM/YYYY")
 
 df_todos = pd.concat([df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
-
 filtro_gerente = st.sidebar.multiselect("Gerente / Área Resp.:", options=sorted(df_todos["Área Resp. Operação"].dropna().unique()))
 filtro_setor = st.sidebar.multiselect("Setor:", options=sorted(df_todos["Setor"].dropna().unique()))
 filtro_cia = st.sidebar.multiselect("Companhia Aérea:", options=sorted(df_todos["CIA"].dropna().unique()))
 
 def aplicar_filtros(df):
-    if df.empty: return df
+    """
+    Aplica os filtros de data e seleção de forma protegida contra valores nulos (NaT).
+    """
+    if df is None or df.empty:
+        return df
     m = pd.Series(True, index=df.index)
-    if "Dt_Parsed" in df.columns:
-        m = m & (df["Dt_Parsed"].dt.date >= d_inicio) & (df["Dt_Parsed"].dt.date <= d_fim)
-    if filtro_gerente: m = m & df["Área Resp. Operação"].isin(filtro_gerente)
-    if filtro_setor: m = m & df["Setor"].isin(filtro_setor)
-    if filtro_cia: m = m & df["CIA"].isin(filtro_cia)
-    return df[m]
+    
+    if "Dt_Parsed" in df.columns and d_inicio and d_fim:
+        has_dt = df["Dt_Parsed"].notna()
+        m_dt = pd.Series(True, index=df.index)
+        if has_dt.any():
+            dt_dates = df.loc[has_dt, "Dt_Parsed"].dt.date
+            m_dt.loc[has_dt] = (dt_dates >= d_inicio) & (dt_dates <= d_fim)
+        m = m & m_dt
+
+    if filtro_gerente:
+        m = m & df["Área Resp. Operação"].isin(filtro_gerente)
+    if filtro_setor:
+        m = m & df["Setor"].isin(filtro_setor)
+    if filtro_cia:
+        m = m & df["CIA"].isin(filtro_cia)
+        
+    return df[m].reset_index(drop=True)
 
 f_falta = aplicar_filtros(df_falta)
 f_erros = aplicar_filtros(df_erros)
@@ -709,7 +695,6 @@ f_sem_div = aplicar_filtros(df_sem_div)
 # 5. HEADER PRINCIPAL E CARDS DE KPIS
 # ==============================================================================
 st.markdown("<div class='main-header'><h1>✈️ Garantia de Receita do Portal | Auditoria de Bilhetes</h1></div>", unsafe_allow_html=True)
-
 c1, c2, c3, c4, c5, c6 = st.columns(6)
 c1.metric("Pendentes de ERP", f"{len(f_falta):,}")
 c2.metric("Erros Valores/CIA", f"{len(f_erros):,}")
@@ -717,7 +702,6 @@ c3.metric("Backoffice", f"{len(f_backoffice):,}")
 c4.metric("Central de Eventos", f"{len(f_eventos):,}")
 c5.metric("Emissor Virtual", f"{len(f_lemon_virt):,}")
 c6.metric("Sem Divergência (OK)", f"{len(f_sem_div):,}")
-
 st.markdown("---")
 
 # ==============================================================================
@@ -732,10 +716,8 @@ abas = [
     "🤖 5. Emissor Virtual Lemontech",
     "✅ 6. Sem Divergência (OK)"
 ]
-
 if e_master():
     abas.extend(["⚙️ Gestão de Acessos", "📜 Log de Auditoria", "📥 Carga de Relatórios (Lotes)"])
-
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
@@ -750,7 +732,6 @@ with aba_sel[0]:
     total_auditado = len(df_todas_casos)
     total_resolvido = len(f_sem_div)
     taxa_resolucao = (total_resolvido / total_auditado * 100) if total_auditado > 0 else 0.0
-
     df_sla = f_sem_div.copy()
     tempo_medio_dias = 0.0
     if not df_sla.empty and "Dt_Parsed" in df_sla.columns and "Dt_Mod_Parsed" in df_sla.columns:
@@ -758,15 +739,12 @@ with aba_sel[0]:
         df_sla_valido = df_sla[df_sla["Dias_Resolucao"] >= 0]
         if not df_sla_valido.empty:
             tempo_medio_dias = df_sla_valido["Dias_Resolucao"].mean()
-
     m_exec1, m_exec2, m_exec3, m_exec4 = st.columns(4)
     m_exec1.metric("Total de Bilhetes Auditados", f"{total_auditado:,}")
     m_exec2.metric("Total Resolvido / Lançado", f"{total_resolvido:,}")
     m_exec3.metric("Taxa de Resolução (%)", f"{taxa_resolucao:.1f}%")
     m_exec4.metric("SLA Médio de Solução", f"{tempo_medio_dias:.1f} dias")
-
     st.markdown("---")
-
     col_d1, col_d2 = st.columns(2)
     
     with col_d1:
@@ -779,7 +757,6 @@ with aba_sel[0]:
             st.plotly_chart(fig_pie, use_container_width=True)
         else:
             st.info("Nenhuma pendência registrada.")
-
     with col_d2:
         st.markdown("##### 👤 Top 8 Gerentes por Volume de Pendências")
         if not df_pendentes_todas.empty and "Área Resp. Operação" in df_pendentes_todas.columns:
@@ -788,7 +765,6 @@ with aba_sel[0]:
             fig_ger = px.bar(df_ger_chart, x="Gerente", y="Quantidade", text="Quantidade", color_discrete_sequence=["#002060"])
             fig_ger.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=320)
             st.plotly_chart(fig_ger, use_container_width=True)
-
     col_d3, col_d4 = st.columns(2)
     with col_d3:
         st.markdown("##### 🏢 Volume de Pendências por Setor")
@@ -798,7 +774,6 @@ with aba_sel[0]:
             fig_set = px.bar(df_set, x="Setor", y="Quantidade", color="Setor", text_auto=True)
             fig_set.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=300, showlegend=False)
             st.plotly_chart(fig_set, use_container_width=True)
-
     with col_d4:
         st.markdown("##### ⏱️ SLA Médio de Tratativa por Gerente (Dias)")
         if not df_sla.empty and "Dias_Resolucao" in df_sla.columns and "Área Resp. Operação" in df_sla.columns:
@@ -818,7 +793,6 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     if df_filtrado.empty:
         st.info("Nenhum bilhete pendente nesta categoria.")
         return
-
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
         termo_busca = st.text_input(f"🔍 Buscar nesta tela (por Bilhete, LOC, Cliente, Passageiro ou Gerente):", key=f"src_{key_prefix}")
@@ -831,7 +805,6 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
             file_name=f"{nome_base}_Filtrado.xlsx",
             key=f"btn_dl_{key_prefix}"
         )
-
     df_exib = df_filtrado.copy()
     if termo_busca.strip():
         term = termo_busca.strip().lower()
@@ -840,12 +813,9 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
         for col in cols_search:
             mask_src |= df_exib[col].astype(str).str.lower().str.contains(term, na=False)
         df_exib = df_exib[mask_src]
-
     st.markdown(f"**Registros Visíveis:** {len(df_exib)}")
-
     bilhetes_lista = df_exib["Bilhetes"].tolist() if "Bilhetes" in df_exib.columns else []
     bilhet_sel = st.multiselect("Selecione um ou mais Bilhetes para Tratativa:", options=bilhetes_lista, key=f"ms_{key_prefix}")
-
     if bilhet_sel:
         df_sel_cards = df_exib[df_exib["Bilhetes"].isin(bilhet_sel)]
         st.markdown('<div class="highlight-card">', unsafe_allow_html=True)
@@ -858,7 +828,6 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
             * **Obs. Atual:** {obs_card}
             """)
         st.markdown('</div>', unsafe_allow_html=True)
-
         df_primeiro = df_sel_cards.iloc[0]
         with st.form(f"form_trat_{key_prefix}"):
             c_s1, c_s2 = st.columns(2)
@@ -888,7 +857,6 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
             if st.form_submit_button("💾 Salvar e Atualizar Bilhetes"):
                 usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
                 agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
                 df_up = pd.DataFrame({
                     "Bilhetes": bilhet_sel,
                     "Status_Geral": [n_status] * len(bilhet_sel),
@@ -897,7 +865,6 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
                     "Setor": [df_primeiro.get("Setor", "-")] * len(bilhet_sel),
                     "Gerentes": [df_primeiro.get("Gerentes", "-")] * len(bilhet_sel)
                 })
-
                 ok, msg = salvar_tratativas_lote_supabase(df_up, usuario=usr_str)
                 if ok:
                     logs_lote = []
@@ -913,13 +880,11 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
                     st.rerun()
                 else:
                     st.error(msg)
-
     df_tbl_final = df_exib.copy()
     if bilhet_sel:
         df_tbl_final["🎯 Destaque"] = df_tbl_final["Bilhetes"].isin(bilhet_sel).map({True: "⭐ SELECIONADO", False: ""})
         cols_order = ["🎯 Destaque"] + [c for c in df_tbl_final.columns if c != "🎯 Destaque"]
         df_tbl_final = df_tbl_final[cols_order].sort_values("🎯 Destaque", ascending=False)
-
     st.markdown("---")
     st.dataframe(df_tbl_final, use_container_width=True, hide_index=True)
 
@@ -929,23 +894,18 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
 with aba_sel[1]:
     st.subheader("📋 1. Pendências de Lançamento no ERP")
     renderizar_modulo_tratativa(f_falta, "Falta_de_Lancamento", "fl")
-
 with aba_sel[2]:
     st.subheader("⚠️ 2. Divergências de Valores e Companhias Aéreas")
     renderizar_modulo_tratativa(f_erros, "Erros_Valores_CIA", "ev")
-
 with aba_sel[3]:
     st.subheader("🎧 3. Chamados em Análise no Suporte Backoffice")
     renderizar_modulo_tratativa(f_backoffice, "Suporte_Backoffice", "sb")
-
 with aba_sel[4]:
     st.subheader("🎪 4. Central de Eventos")
     renderizar_modulo_tratativa(f_eventos, "Central_de_Eventos", "ce")
-
 with aba_sel[5]:
     st.subheader("🤖 5. Emissor Virtual Lemontech")
     renderizar_modulo_tratativa(f_lemon_virt, "Emissor_Virtual_Lemontech", "evl")
-
 with aba_sel[6]:
     st.subheader("✅ 6. Bilhetes Conciliados e Lançados")
     col_ok1, col_ok2 = st.columns([3, 1])
@@ -991,7 +951,6 @@ if e_master():
                         st.error("Erro ao rejeitar no banco de dados.")
         else:
             st.info("Nenhuma solicitação de acesso pendente.")
-
     with aba_sel[8]:
         st.subheader("📜 Trilha de Auditoria do Supabase")
         engine_sb = get_db_engine()
@@ -1001,12 +960,10 @@ if e_master():
                 st.dataframe(df_log_db, use_container_width=True, hide_index=True)
             except Exception:
                 st.info("Nenhum registro de log encontrado na tabela log_auditoria do Supabase.")
-
     with aba_sel[9]:
         st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Protegido)")
         st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização em massa no Supabase.")
         st.warning("🔒 **Proteção de Escopo Ativa:** Somente bilhetes pertencentes à base auditada original serão atualizados.")
-
         arq_upload = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "xls", "csv"])
         if arq_upload:
             try:
@@ -1014,10 +971,8 @@ if e_master():
                     df_up_raw = pd.read_csv(arq_upload, dtype=str)
                 else:
                     df_up_raw = pd.read_excel(arq_upload, dtype=str)
-
                 cols_up = df_up_raw.columns.tolist()
                 
-                # Identificação das colunas da planilha enviada
                 col_b = next((c for c in cols_up if c in ["Bilhetes", "Bilhete"] or any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
                 
                 col_st = next((c for c in cols_up if c == "Status_Geral"), None)
@@ -1031,17 +986,15 @@ if e_master():
                     col_ar = next((c for c in cols_up if any(x in str(c).lower() for x in ["área resp", "area resp", "responsavel"])), None)
                 if not col_ar:
                     col_ar = next((c for c in cols_up if "gerente" in str(c).lower()), None)
-
                 col_obs = next((c for c in cols_up if any(x in str(c).lower() for x in ["obs", "observação", "observacao"])), None)
                 col_setor = next((c for c in cols_up if str(c).lower() == "setor"), None)
                 col_gerentes = next((c for c in cols_up if str(c).lower() in ["gerentes", "gerente"]), None)
-
+                
                 if not col_b or not col_st:
                     st.error("⚠️ O arquivo precisa conter ao menos uma coluna de 'Bilhete' e uma de 'Status_Geral'.")
                 else:
                     df_up_raw["Bilhete_Clean"] = df_up_raw[col_b].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
                     df_todos["Bilhete_Clean"] = df_todos["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
-
                     df_validos = pd.merge(
                         df_up_raw,
                         df_todos[["Bilhete_Clean", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Gerentes"]].drop_duplicates("Bilhete_Clean"),
@@ -1049,34 +1002,28 @@ if e_master():
                         how="inner",
                         suffixes=("_Novo", "_Atual")
                     )
-
                     qtd_total_arq = len(df_up_raw)
                     qtd_validos = len(df_validos)
                     qtd_fora = qtd_total_arq - qtd_validos
-
                     novos_logs = []
                     lote_alteracoes = []
                     qtd_iguais = 0
-
                     agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
-
                     for _, r_v in df_validos.iterrows():
                         b_code = r_v["Bilhete_Clean"]
                         
-                        # Resgate inteligente dos valores novos capturando com ou sem sufixo '_Novo'
                         st_novo = str(r_v.get(f"{col_st}_Novo", r_v.get(col_st, ""))).strip()
                         ar_novo = str(r_v.get(f"{col_ar}_Novo", r_v.get(col_ar, r_v.get("Área Resp. Operação_Novo", r_v.get("Área Resp. Operação", ""))))).strip()
                         obs_novo = str(r_v.get(f"{col_obs}_Novo" if col_obs else "Obs. Operação_Novo", r_v.get(col_obs or "Obs. Operação", ""))).strip()
                         setor_novo = str(r_v.get(f"{col_setor}_Novo" if col_setor else "Setor_Novo", r_v.get(col_setor or "Setor", ""))).strip()
                         gerentes_novo = str(r_v.get(f"{col_gerentes}_Novo" if col_gerentes else "Gerentes_Novo", r_v.get(col_gerentes or "Gerentes", ""))).strip()
-
                         st_atual = str(r_v.get("Status_Geral_Atual", r_v.get("Status_Geral", ""))).strip()
                         ar_atual = str(r_v.get("Área Resp. Operação_Atual", r_v.get("Área Resp. Operação", ""))).strip()
                         obs_atual = str(r_v.get("Obs. Operação_Atual", r_v.get("Obs. Operação", ""))).strip()
                         setor_atual = str(r_v.get("Setor_Atual", r_v.get("Setor", ""))).strip()
                         gerentes_atual = str(r_v.get("Gerentes_Atual", r_v.get("Gerentes", ""))).strip()
-
+                        
                         if st_novo in ["-", "", "None", "nan"]:
                             st_novo = st_atual or "Pendente de Lançamento (Não Consta)"
                         if ar_novo in ["-", "", "None", "nan"]:
@@ -1085,7 +1032,7 @@ if e_master():
                             setor_novo = setor_atual or "-"
                         if gerentes_novo in ["-", "", "None", "nan"]:
                             gerentes_novo = gerentes_atual or "-"
-
+                            
                         if st_novo == st_atual and ar_novo == ar_atual and obs_novo == obs_atual and setor_novo == setor_atual and gerentes_novo == gerentes_atual:
                             qtd_iguais += 1
                         else:
@@ -1108,32 +1055,25 @@ if e_master():
                                 "Observacao": obs_novo,
                                 "Tipo_Interacao": "Carga em Lote (Excel)"
                             })
-
                     st.markdown("### 📊 Relatório de Pré-Validação da Carga em Lote")
                     m1, m2, m3, m4 = st.columns(4)
                     m1.metric("Linhas na Planilha", qtd_total_arq)
                     m2.metric("🟢 Com Alteração", len(lote_alteracoes))
                     m3.metric("🟡 Sem Alteração (Mantidos)", qtd_iguais)
                     m4.metric("🔴 Ignorados (Fora da Base)", qtd_fora)
-
                     if len(lote_alteracoes) > 0:
                         st.markdown("**Amostra de Bilhetes que Serão Atualizados:**")
                         st.dataframe(pd.DataFrame(lote_alteracoes).head(10), use_container_width=True)
-
                         if st.button("🚀 Confirmar e Processar Atualizações no Supabase"):
                             bar_prog = st.progress(0, text="Sincronizando com o banco de dados...")
-                            
                             df_lote_final = pd.DataFrame(lote_alteracoes)
                             ok, msg = salvar_tratativas_lote_supabase(df_lote_final, usuario=f"Carga_Lote_{usr_str}")
-                            
                             bar_prog.progress(50, text="Gravando trilha de auditoria...")
                             registrar_log_supabase(novos_logs)
-                            
                             bar_prog.progress(100, text="Concluído!")
                             st.success(f"✅ Processamento concluído! {len(lote_alteracoes)} bilhetes foram atualizados no Supabase e registrados na Trilha de Auditoria.")
                             st.rerun()
                     else:
                         st.info("ℹ️ Nenhuma alteração pendente. Todos os bilhetes válidos da planilha já possuem exatamente as mesmas tratativas registradas.")
-
             except Exception as e:
                 st.error(f"Erro ao processar o arquivo: {e}")
