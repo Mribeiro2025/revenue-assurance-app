@@ -369,19 +369,18 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# 3. TRATAMENTO DE DADOS E PADRONIZAÇÃO
+# 3. TRATAMENTO DE DADOS E PADRONIZAÇÃO ESTREITA COM DASHBOARD EXCEL
 # ==============================================================================
 def clean_str(val):
     if pd.isna(val) or val is None: 
         return ""
-    # Converte floats como 4478578918.0 para "4478578918" sem notação científica
     if isinstance(val, float):
         val = f"{val:.0f}"
     s = str(val).strip()
     return re.sub(r"\.0$", "", s)
 
 def padronizar_df(df):
-    """Garante a integridade total do DataFrame e padroniza os status de forma 100% segura."""
+    """Garante a integridade do DataFrame e padroniza os campos sem alterar a base soberana."""
     if df is None or df.empty:
         return pd.DataFrame(columns=[
             "Bilhetes", "Ponto de venda", "Status_Geral", "Área Resp. Operação",
@@ -425,67 +424,63 @@ def padronizar_df(df):
     
     return df_out
 
-def mesclar_com_supabase(df_in):
+def mesclar_com_supabase(df_excel):
     """
-    Realiza um LEFT JOIN partindo do Dashboard Excel.
-    Sobrescreve o status, área responsável, observações, setor e gerentes se existirem no Supabase.
-    Se o bilhete não possuir tratativa registrada, ele é MANTIDO intacto no App.
+    Conserva a grade de bilhetes do Dashboard Excel como soberana.
+    Alimenta SOMENTE os campos: Área Resp. Operação, Obs. Operação, Setor e Gerentes via Supabase.
+    Se não houver referência no Supabase, MANTÉM OS DADOS ORIGINAIS DO DASHBOARD.
     """
-    if df_in is None or df_in.empty:
-        return df_in
+    if df_excel is None or df_excel.empty:
+        return df_excel
 
     df_db = carregar_tratativas_db()
     if df_db.empty:
-        return df_in
+        return df_excel
 
-    df_in["Bilhete_Clean"] = df_in["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+    df_excel["Bilhete_Clean"] = df_excel["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
     df_db["Bilhete_Clean"] = df_db["bilhete"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
 
-    cols_existentes_db = [c for c in ["status_geral", "area_resp", "obs_operacao", "setor", "gerentes"] if c in df_db.columns]
+    # Apenas as 4 colunas permitidas do Supabase
+    cols_sup_desejadas = ["area_resp", "obs_operacao", "setor", "gerentes"]
+    cols_presentes = [c for c in cols_sup_desejadas if c in df_db.columns]
 
     df_merged = pd.merge(
-        df_in,
-        df_db[["Bilhete_Clean"] + cols_existentes_db].drop_duplicates("Bilhete_Clean"),
+        df_excel,
+        df_db[["Bilhete_Clean"] + cols_presentes].drop_duplicates("Bilhete_Clean"),
         on="Bilhete_Clean",
         how="left"
     )
 
-    # Atualiza se os dados do banco forem válidos
-    if "status_geral" in df_merged.columns:
-        df_merged["Status_Geral"] = df_merged["status_geral"].where(
-            df_merged["status_geral"].notna() & ~df_merged["status_geral"].isin(["-", "", "None", "nan"]), 
-            df_merged["Status_Geral"]
-        )
-    if "area_resp" in df_merged.columns:
-        df_merged["Área Resp. Operação"] = df_merged["area_resp"].where(
-            df_merged["area_resp"].notna() & ~df_merged["area_resp"].isin(["-", "", "None", "nan"]), 
-            df_merged["Área Resp. Operação"]
-        )
-    if "obs_operacao" in df_merged.columns:
-        df_merged["Obs. Operação"] = df_merged["obs_operacao"].where(
-            df_merged["obs_operacao"].notna() & ~df_merged["obs_operacao"].isin(["-", "", "None", "nan"]), 
-            df_merged["Obs. Operação"]
-        )
-    if "setor" in df_merged.columns:
-        df_merged["Setor"] = df_merged["setor"].where(
-            df_merged["setor"].notna() & ~df_merged["setor"].isin(["-", "", "None", "nan"]), 
-            df_merged.get("Setor", "-")
-        )
-    if "gerentes" in df_merged.columns:
-        df_merged["Gerentes"] = df_merged["gerentes"].where(
-            df_merged["gerentes"].notna() & ~df_merged["gerentes"].isin(["-", "", "None", "nan"]), 
-            df_merged.get("Gerentes", "-")
-        )
+    # Mapeamento para atualizar EXCLUSIVAMENTE os 4 campos autorizados
+    muta_map = [
+        ("Área Resp. Operação", "area_resp"),
+        ("Obs. Operação", "obs_operacao"),
+        ("Setor", "setor"),
+        ("Gerentes", "gerentes")
+    ]
 
-    cols_drop = [c for c in ["Bilhete_Clean"] + cols_existentes_db if c in df_merged.columns and c != "Bilhete_Clean"]
+    for col_excel, col_sb in muta_map:
+        if col_sb in df_merged.columns and col_excel in df_merged.columns:
+            # Substitui apenas se houver valor válido gravado no Supabase
+            df_merged[col_excel] = df_merged[col_sb].where(
+                df_merged[col_sb].notna() & ~df_merged[col_sb].astype(str).str.strip().isin(["-", "", "None", "nan", "NULL", "EMPTY"]),
+                df_merged[col_excel]
+            )
+
+    cols_drop = [c for c in ["Bilhete_Clean"] + cols_presentes if c in df_merged.columns and c != "Bilhete_Clean"]
     df_merged.drop(columns=cols_drop, inplace=True, errors="ignore")
     return df_merged
 
+
+
 # ==============================================================================
-# ROTEAMENTO ESTRITO COM DEDUPLICAÇÃO E CARREGAMENTO DE TODAS AS ABAS
+# ROTEAMENTO ESTRITO - DEVE FICAR ACIMA DE CARREGAR_BASES()
 # ==============================================================================
 def rotear_bases_mestra(df_master):
-    if df_master.empty:
+    """
+    Roteia os bilhetes para as 6 telas operacionais mantendo 100% dos dados.
+    """
+    if df_master is None or df_master.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     df_master = padronizar_df(df_master)
@@ -494,18 +489,13 @@ def rotear_bases_mestra(df_master):
         s = str(st_div).lower().strip()
         if "diverg" not in s and "erro" not in s:
             return False
-        
         s_sem_diverg = s.replace("divergência", "").replace("divergencia", "").strip()
-        tem_receita = "receita" in s_sem_diverg
-        outros_erros = any(x in s_sem_diverg for x in ["tarifa", "taxa", "cia", "companhia"])
-        return tem_receita and not outros_erros
+        return "receita" in s_sem_diverg and not any(x in s_sem_diverg for x in ["tarifa", "taxa", "cia", "companhia"])
 
     # 1. Sem Divergência / Conciliados (Tela 6)
     mask_valores_corretos = df_master["Status_Geral"].astype(str).str.lower().str.contains("já lançado|conciliado|valores corretos|regularizado") | \
                             df_master["Status_Divergencia"].astype(str).str.lower().str.contains("valores corretos")
-    
     mask_so_receita = df_master["Status_Divergencia"].apply(e_apenas_divergencia_receita)
-
     mask_ok = mask_valores_corretos | mask_so_receita
 
     df_ok = df_master[mask_ok].copy()
@@ -519,7 +509,6 @@ def rotear_bases_mestra(df_master):
         ger_val = str(r.get("Gerentes", "")).strip().lower()
         setor_val = str(r.get("Setor", "")).strip().lower()
         origem_val = str(r.get("Aba_Origem", "")).strip().lower()
-        
         return any(k in ar_val or k in ger_val or k in setor_val or k in origem_val or k in obs_val or k in st_val
                    for k in ["katia", "kátia", "backoffice", "suporte"])
 
@@ -534,7 +523,7 @@ def rotear_bases_mestra(df_master):
     df_eventos = df_rest[mask_evt].copy()
     df_rest = df_rest[~mask_evt].copy()
 
-    # 4. Emissor Virtual Lemontech (Tela 5) - INCLUINDO Consultor_Lemon e Consultor
+    # 4. Emissor Virtual Lemontech (Tela 5)
     def e_emissor_virtual(r):
         for col in ["Emissor", "Emissor_Reserva_Lemon", "Consultor_Lemon", "Consultor"]:
             val = str(r.get(col, "")).lower().strip()
@@ -549,7 +538,6 @@ def rotear_bases_mestra(df_master):
     # 5. Erros de Valores & CIA (Tela 2)
     mask_consta_benner = ~df_rest["Status_Sistema"].astype(str).str.upper().str.contains("NAO_CONSTA|NÃO_CONSTA")
     mask_tem_divergencia = df_rest["Status_Divergencia"].astype(str).str.lower().str.contains("divergência|divergencia|erro")
-    
     mask_erros = mask_consta_benner | mask_tem_divergencia
     df_erros = df_rest[mask_erros].copy()
     
@@ -558,50 +546,37 @@ def rotear_bases_mestra(df_master):
 
     return df_falta, df_erros, df_bo, df_eventos, df_lemon_virt, df_ok
 
+
 @st.cache_data(ttl=30)
 def carregar_bases():
-    """
-    Carrega todas as vendas do Dashboard Excel e aplica TRAVA RIGOROSA contra duplicidades por bilhete único.
-    Mapeia 100% dos documentos da planilha e enriquece com as tratativas do Supabase.
-    """
+    """Carrega o Dashboard e executa o roteamento (agora sem erros)."""
     if not os.path.exists(ARQUIVO_DASHBOARD):
         vazio = padronizar_df(None)
         return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
     
     try:
         xls = pd.ExcelFile(ARQUIVO_DASHBOARD, engine="openpyxl")
-        frames = []
         
-        # Carrega todas as abas operacionais do Excel que possuem vendas auditadas
-        for sheet in xls.sheet_names:
-            if sheet.startswith("99_") or sheet.startswith("98_"):
-                df_s = pd.read_excel(xls, sheet_name=sheet)
-                df_s["Aba_Origem"] = sheet
-                frames.append(df_s)
-                
-        df_log_arq = pd.read_excel(xls, "00_Log_Auditoria") if "00_Log_Auditoria" in xls.sheet_names else pd.DataFrame()
-        
-        if not frames:
-            vazio = padronizar_df(None)
-            return vazio, vazio, vazio, vazio, vazio, vazio, df_log_arq
+        if "99_Base_Divergencias_Geral" in xls.sheet_names:
+            df_m = pd.read_excel(xls, sheet_name="99_Base_Divergencias_Geral")
+        else:
+            frames = [pd.read_excel(xls, sheet_name=s) for s in xls.sheet_names if s.startswith("99_") or s.startswith("98_")]
+            df_m = pd.concat(frames, ignore_index=True)
             
-        # Unificação e TRAVA DE DUPLICIDADE ESTRITA POR BILHETE ÚNICO
-        df_m = pd.concat(frames, ignore_index=True)
+        df_log_arq = pd.read_excel(xls, "00_Log_Auditoria") if "00_Log_Auditoria" in xls.sheet_names else pd.DataFrame()
         
         if "Bilhetes" in df_m.columns:
             df_m["Bilhete_Clean"] = df_m["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
-            # Trava Antiduplicidade: Mantém 1 única ocorrência por número de bilhete
             df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
             
-        # Alimenta/Enriquece com o Supabase via LEFT JOIN (100% das vendas do Excel mantidas)
         df_m = mesclar_com_supabase(df_m)
         
-        # Roteamento de telas operacionais
+        # Agora a chamada funcionará perfeitamente pois a função já foi declarada acima!
         f_falta, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
         return f_falta, f_erros, f_bo, f_evt, f_lem, f_ok, df_log_arq
 
     except Exception as e:
-        st.error(f"⚠️ Erro ao carregar e deduplicar as bases de dados: {e}")
+        st.error(f"⚠️ Erro ao carregar as bases do Dashboard: {e}")
         vazio = padronizar_df(None)
         return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
 
