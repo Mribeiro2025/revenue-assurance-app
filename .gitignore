@@ -1,17 +1,52 @@
+# ==========================================
+# 1. SEGURANÇA & SENHAS (NUNCA ENVIAR PRO GIT)
+# ==========================================
+.env
+.streamlit/secrets.toml
+secrets.toml
+usuarios_autorizados.json
+
+# ==========================================
+# 2. PLANILHAS E BANCOS DE DADOS LOCAIS
+# ==========================================
 Acumulado.xlsx
+Acumulado.parquet
 AZUL.XLSX
 BSP.XLSX
 HOT.XLSX
+GOL.XLSX
 Extrato_Bilhetes_lemontech.xlsx
 Relacao_*.xlsx
+Dashboard_Revenue_Assurance_Consolidado.xlsx
+Historico_Tratativas.csv
+tratativas_rows.csv
+*.db
+*.sqlite
+*.sqlite3
+
+# Backups e ficheiros temporários do Excel
+Backup_Dashboard_*.xlsx
+*.xlsx.bak
+~$*.xlsx
+*.tmp
+
+# ==========================================
+# 3. PASTAS E ARQUIVOS LOCAIS
+# ==========================================
 Central/
 MGA/
 Nova pasta/
-*.xlsx.bakBackup_Dashboard_*.xlsx
-Backup_Dashboard_*.xlsx
-.streamlit/secrets.toml
-.env
-.streamlit/secrets.toml
-usuarios_autorizados.json
+Envio/
+downloads/
+
+# ==========================================
+# 4. PYTHON, CACHE & SISTEMA OPERACIONAL
+# ==========================================
 __pycache__/
 *.pyc
+*.pyo
+.venv/
+venv/
+ENV/
+.DS_Store
+Thumbs.db

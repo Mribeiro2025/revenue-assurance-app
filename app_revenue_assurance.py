@@ -207,6 +207,7 @@ def carregar_usuarios_supabase():
     except Exception:
         return {}
 
+
 def salvar_usuario_supabase(u_id, senha, nome, perfil, status="PENDENTE"):
     """Insere ou atualiza um usuário no Supabase."""
     engine = get_db_engine()
@@ -229,6 +230,7 @@ def salvar_usuario_supabase(u_id, senha, nome, perfil, status="PENDENTE"):
     except Exception as e:
         return False, f"Erro no banco: {e}"
 
+
 def atualizar_senha_supabase(u_id, nova_senha):
     """Atualiza a senha de um usuário no Supabase."""
     engine = get_db_engine()
@@ -242,6 +244,7 @@ def atualizar_senha_supabase(u_id, nova_senha):
         return True, "Senha redefinida com sucesso."
     except Exception as e:
         return False, f"Erro no banco: {e}"
+
 
 def atualizar_status_usuario_supabase(u_id, novo_status):
     """Atualiza o status (APROVADO/REJEITADO) de um usuário no Supabase."""
@@ -257,6 +260,58 @@ def atualizar_status_usuario_supabase(u_id, novo_status):
     except Exception:
         return False
 
+
+def semear_usuarios_iniciais_supabase():
+    """Sincroniza automaticamente a lista padrão de usuários autorizados no Supabase."""
+    usuarios_padrao = {
+        "compliance1": {
+            "senha": "123",
+            "nome": "Compliance - Auditoria 01",
+            "perfil": "Compliance",
+            "status": "APROVADO"
+        },
+        "mribeiro": {
+            "senha": "123",
+            "nome": "Marcos Ribeiro",
+            "perfil": "Master",
+            "status": "APROVADO"
+        },
+        "ffernandes": {
+            "senha": "123",
+            "nome": "Felipe Fernandes",
+            "perfil": "Master",
+            "status": "APROVADO"
+        },
+        "operacao": {
+            "senha": "123",
+            "nome": "Equipe Operacional",
+            "perfil": "Operacao",
+            "status": "APROVADO"
+        },
+        "backoffice": {
+            "senha": "123",
+            "nome": "Atendimento Backoffice",
+            "perfil": "Operacao",
+            "status": "APROVADO"
+        }
+    }
+    
+    usuarios_existentes = carregar_usuarios_supabase()
+    
+    for u_id, dados in usuarios_padrao.items():
+        if u_id not in usuarios_existentes:
+            salvar_usuario_supabase(
+                u_id, 
+                dados["senha"], 
+                dados["nome"], 
+                dados["perfil"], 
+                status=dados["status"]
+            )
+
+# Executa o semeamento automático ao iniciar o app
+semear_usuarios_iniciais_supabase()
+
+
 # Inicialização de Sessão
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
@@ -267,10 +322,12 @@ if "perfil_atual" not in st.session_state:
 if "login_user_id" not in st.session_state:
     st.session_state["login_user_id"] = None
 
+
 def e_master():
     u_id = st.session_state.get("login_user_id", "")
     perfil = st.session_state.get("perfil_atual", "")
-    return u_id in ["mribeiro", "fellipe"] or perfil in ["Master", "Compliance"]
+    return u_id in ["mribeiro", "ffernandes"] or perfil in ["Master", "Compliance"]
+
 
 if not st.session_state["autenticado"]:
     col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
@@ -281,8 +338,11 @@ if not st.session_state["autenticado"]:
         with tab_log:
             u_input = st.text_input("Usuário:", key="l_user").strip().lower()
             p_input = str(st.text_input("Senha:", type="password", key="l_pass")).strip()
+            
             if st.button("Acessar Portal", type="primary"):
                 usuarios_db = carregar_usuarios_supabase()
+                
+                # Validação Padrão com busca direta no Supabase
                 if u_input in usuarios_db and usuarios_db[u_input]["senha"] == p_input:
                     if usuarios_db[u_input].get("status") == "APROVADO":
                         st.session_state["autenticado"] = True
