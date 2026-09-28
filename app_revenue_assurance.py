@@ -374,6 +374,9 @@ if not st.session_state["autenticado"]:
 def clean_str(val):
     if pd.isna(val) or val is None: 
         return ""
+    # Converte floats como 4478578918.0 para "4478578918" sem notação científica
+    if isinstance(val, float):
+        val = f"{val:.0f}"
     s = str(val).strip()
     return re.sub(r"\.0$", "", s)
 
