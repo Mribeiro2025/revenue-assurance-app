@@ -107,11 +107,12 @@ def carregar_tratativas_db():
             return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes"])
 
 def salvar_tratativas_lote_supabase(df_lote, usuario):
-    """Executa o UPSERT de um lote de tratativas no Supabase incluindo Setor e Gerentes."""
+    """Executa o UPSERT de um lote de tratativas no Supabase incluindo Setor, Gerentes e Observações."""
     engine = get_db_engine()
     if not engine or df_lote.empty:
         return False, "Conexão com o banco de dados indisponível."
     
+    # Garante que as colunas adicionais existam na tabela
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS setor VARCHAR(255);"))
@@ -126,11 +127,12 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
             status_geral = EXCLUDED.status_geral,
             area_resp = EXCLUDED.area_resp,
             obs_operacao = EXCLUDED.obs_operacao,
-            setor = COALESCE(EXCLUDED.setor, tratativas.setor),
-            gerentes = COALESCE(EXCLUDED.gerentes, tratativas.gerentes),
+            setor = COALESCE(NULLIF(EXCLUDED.setor, '-'), tratativas.setor),
+            gerentes = COALESCE(NULLIF(EXCLUDED.gerentes, '-'), tratativas.gerentes),
             usuario_modificacao = EXCLUDED.usuario_modificacao,
             data_modificacao = NOW();
     """)
+    
     dados_lote = []
     for _, r in df_lote.iterrows():
         b_clean = re.sub(r"\.0$", "", str(r.get("Bilhetes", "")).strip())
@@ -141,10 +143,12 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
             setor_val = str(r.get("Setor", "-")).strip()
             gerente_val = str(r.get("Gerentes", "-")).strip()
             
+            # Se vier vazio, mantém um fallback genérico seguro sem sobrescrever com Não Consta
             if st_val in ["-", "", "None", "nan"]:
                 st_val = "Pendente de Lançamento (Não Consta)"
             if ar_val in ["-", "", "None", "nan"]:
                 ar_val = "Operação"
+                
             dados_lote.append({
                 "bilhete": b_clean,
                 "status_geral": st_val,
@@ -154,13 +158,15 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 "gerentes": gerente_val,
                 "usuario": str(usuario)
             })
+            
     if not dados_lote:
         return False, "Nenhum bilhete válido para atualização."
+        
     try:
         with engine.begin() as conn:
             conn.execute(upsert_sql, dados_lote)
         st.cache_data.clear()
-        return True, f"✅ {len(dados_lote)} bilhete(s) atualizados com sucesso no Supabase!"
+        return True, f"✅ {len(dados_lote)} bilhete(s) atualizado(s) com sucesso no Supabase!"
     except Exception as e:
         return False, f"⚠️ Erro ao salvar no banco: {e}"
 
@@ -1028,52 +1034,101 @@ if e_master():
             except Exception:
                 st.info("Nenhum registro de log encontrado na tabela log_auditoria do Supabase.")
                 
-    with aba_sel[9]:
-        st.subheader("📥 Carga em Lote (Processamento Protegido)")
-        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização em massa no Supabase.")
-        arq_upload = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "xls", "csv"])
-        if arq_upload:
-            try:
-                if arq_upload.name.endswith(".csv"):
-                    df_up_raw = pd.read_csv(arq_upload, dtype=str)
-                else:
-                    df_up_raw = pd.read_excel(arq_upload, dtype=str)
-                cols_up = df_up_raw.columns.tolist()
-                
-                col_b = next((c for c in cols_up if c in ["Bilhetes", "Bilhete"] or any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
-                col_st = next((c for c in cols_up if c == "Status_Geral" or "status" in str(c).lower()), None)
-                col_ar = next((c for c in cols_up if c == "Área Resp. Operação" or "resp" in str(c).lower() or "gerente" in str(c).lower()), None)
-                col_obs = next((c for c in cols_up if any(x in str(c).lower() for x in ["obs", "observação", "observacao"])), None)
-                col_setor = next((c for c in cols_up if str(c).lower() == "setor"), None)
-                col_gerentes = next((c for c in cols_up if str(c).lower() in ["gerentes", "gerente"]), None)
-                
-                if not col_b or not col_st:
-                    st.error("⚠️ O arquivo precisa conter ao menos uma coluna de 'Bilhete' e uma de 'Status_Geral'.")
-                else:
-                    df_up_raw["Bilhete_Clean"] = df_up_raw[col_b].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
-                    df_todos["Bilhete_Clean"] = df_todos["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
-                    df_validos = pd.merge(
-                        df_up_raw,
-                        df_todos[["Bilhete_Clean", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Gerentes"]].drop_duplicates("Bilhete_Clean"),
-                        on="Bilhete_Clean",
-                        how="inner",
-                        suffixes=("_Novo", "_Atual")
-                    )
-                    qtd_total_arq = len(df_up_raw)
-                    qtd_validos = len(df_validos)
-                    lote_alteracoes = []
-                    novos_logs = []
-                    agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
+    import time  # Garantir que o import time esteja no início do seu arquivo
+
+with aba_sel[9]:
+    st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Protegido)")
+    st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização em massa no Supabase.")
+    st.warning("🔒 **Proteção de Escopo Ativa:** Somente bilhetes pertencentes à base auditada original serão atualizados.")
+
+    arq_upload = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "xls", "csv"], key="uploader_lote")
+    if arq_upload:
+        try:
+            if arq_upload.name.endswith(".csv"):
+                df_up_raw = pd.read_csv(arq_upload, dtype=str)
+            else:
+                df_up_raw = pd.read_excel(arq_upload, dtype=str)
+
+            cols_up = df_up_raw.columns.tolist()
+            
+            # 1. Identificação inteligente das colunas da planilha enviada
+            col_b = next((c for c in cols_up if c in ["Bilhetes", "Bilhete"] or any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
+            
+            col_st = next((c for c in cols_up if c == "Status_Geral"), None)
+            if not col_st:
+                col_st = next((c for c in cols_up if any(x in str(c).lower() for x in ["novo status", "status_geral"])), None)
+            if not col_st:
+                col_st = next((c for c in cols_up if "status" in str(c).lower() and "cia" not in str(c).lower() and "sistema" not in str(c).lower()), None)
+            
+            col_ar = next((c for c in cols_up if c in ["Área Resp. Operação", "Área Resp", "Area Resp"]), None)
+            if not col_ar:
+                col_ar = next((c for c in cols_up if any(x in str(c).lower() for x in ["área resp", "area resp", "responsavel"])), None)
+            if not col_ar:
+                col_ar = next((c for c in cols_up if "gerente" in str(c).lower()), None)
+
+            col_obs = next((c for c in cols_up if any(x in str(c).lower() for x in ["obs", "observação", "observacao"])), None)
+            col_setor = next((c for c in cols_up if str(c).lower() == "setor"), None)
+            col_gerentes = next((c for c in cols_up if str(c).lower() in ["gerentes", "gerente"]), None)
+
+            # Apenas a coluna do Bilhete é obrigatória; o Status torna-se opcional
+            if not col_b:
+                st.error("⚠️ O arquivo precisa conter ao menos uma coluna identificadora de 'Bilhete'.")
+            else:
+                df_up_raw["Bilhete_Clean"] = df_up_raw[col_b].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+                df_todos["Bilhete_Clean"] = df_todos["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+
+                df_validos = pd.merge(
+                    df_up_raw,
+                    df_todos[["Bilhete_Clean", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Gerentes"]].drop_duplicates("Bilhete_Clean"),
+                    on="Bilhete_Clean",
+                    how="inner",
+                    suffixes=("_Novo", "_Atual")
+                )
+
+                qtd_total_arq = len(df_up_raw)
+                qtd_validos = len(df_validos)
+                qtd_fora = qtd_total_arq - qtd_validos
+
+                novos_logs = []
+                lote_alteracoes = []
+                qtd_iguais = 0
+
+                agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
+
+                for _, r_v in df_validos.iterrows():
+                    b_code = r_v["Bilhete_Clean"]
                     
-                    for _, r_v in df_validos.iterrows():
-                        b_code = r_v["Bilhete_Clean"]
-                        st_novo = str(r_v.get(f"{col_st}_Novo", r_v.get(col_st, ""))).strip()
-                        ar_novo = str(r_v.get(f"{col_ar}_Novo", r_v.get(col_ar, ""))).strip()
-                        obs_novo = str(r_v.get(f"{col_obs}_Novo" if col_obs else "Obs. Operação_Novo", r_v.get(col_obs or "Obs. Operação", ""))).strip()
-                        setor_novo = str(r_v.get(f"{col_setor}_Novo" if col_setor else "Setor_Novo", r_v.get(col_setor or "Setor", ""))).strip()
-                        gerentes_novo = str(r_v.get(f"{col_gerentes}_Novo" if col_gerentes else "Gerentes_Novo", r_v.get(col_gerentes or "Gerentes", ""))).strip()
-                        
+                    # Valores atuais no sistema
+                    st_atual = str(r_v.get("Status_Geral_Atual", r_v.get("Status_Geral", ""))).strip()
+                    ar_atual = str(r_v.get("Área Resp. Operação_Atual", r_v.get("Área Resp. Operação", ""))).strip()
+                    obs_atual = str(r_v.get("Obs. Operação_Atual", r_v.get("Obs. Operação", ""))).strip()
+                    setor_atual = str(r_v.get("Setor_Atual", r_v.get("Setor", ""))).strip()
+                    gerentes_atual = str(r_v.get("Gerentes_Atual", r_v.get("Gerentes", ""))).strip()
+
+                    # Resgate dos novos valores (mantém o atual se a coluna não veio na planilha ou estiver vazia)
+                    val_st_excel = str(r_v.get(f"{col_st}_Novo" if col_st else "Status_Geral_Novo", r_v.get(col_st or "Status_Geral", ""))).strip()
+                    st_novo = val_st_excel if val_st_excel and val_st_excel.lower() not in ["nan", "none", "", "-"] else st_atual
+
+                    val_ar_excel = str(r_v.get(f"{col_ar}_Novo" if col_ar else "Área Resp. Operação_Novo", r_v.get(col_ar or "Área Resp. Operação", ""))).strip()
+                    ar_novo = val_ar_excel if val_ar_excel and val_ar_excel.lower() not in ["nan", "none", "", "-"] else ar_atual
+
+                    if col_obs:
+                        val_obs_excel = str(r_v.get(f"{col_obs}_Novo", r_v.get(col_obs, ""))).replace("Sem tratativa na operação", "").strip()
+                        obs_novo = val_obs_excel if val_obs_excel.lower() not in ["nan", "none"] else ""
+                    else:
+                        obs_novo = obs_atual
+
+                    val_setor_excel = str(r_v.get(f"{col_setor}_Novo" if col_setor else "Setor_Novo", r_v.get(col_setor or "Setor", ""))).strip()
+                    setor_novo = val_setor_excel if val_setor_excel and val_setor_excel.lower() not in ["nan", "none", "", "-"] else setor_atual
+
+                    val_ger_excel = str(r_v.get(f"{col_gerentes}_Novo" if col_gerentes else "Gerentes_Novo", r_v.get(col_gerentes or "Gerentes", ""))).strip()
+                    gerentes_novo = val_ger_excel if val_ger_excel and val_ger_excel.lower() not in ["nan", "none", "", "-"] else gerentes_atual
+
+                    # Verifica se HOUVE alteração em qualquer um dos campos (Status, Gerente ou Observação)
+                    if (st_novo == st_atual and ar_novo == ar_atual and obs_novo == obs_atual and setor_novo == setor_atual and gerentes_novo == gerentes_atual):
+                        qtd_iguais += 1
+                    else:
                         lote_alteracoes.append({
                             "Bilhetes": b_code,
                             "Status_Geral": st_novo,
@@ -1086,26 +1141,42 @@ if e_master():
                             "Data_Hora": agora_str,
                             "Bilhete": b_code,
                             "Usuario_Acao": usr_str,
-                            "Status_Anterior": "-",
+                            "Status_Anterior": st_atual,
                             "Novo_Status": st_novo,
-                            "Area_Anterior": "-",
+                            "Area_Anterior": ar_atual,
                             "Nova_Area": ar_novo,
                             "Observacao": obs_novo,
-                            "Tipo_Interacao": "Carga em Lote"
+                            "Tipo_Interacao": "Carga em Lote (Excel)"
                         })
+
+                st.markdown("### 📊 Relatório de Pré-Validação da Carga em Lote")
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Linhas na Planilha", qtd_total_arq)
+                m2.metric("🟢 Com Alteração", len(lote_alteracoes))
+                m3.metric("🟡 Sem Alteração (Mantidos)", qtd_iguais)
+                m4.metric("🔴 Ignorados (Fora da Base)", qtd_fora)
+
+                if len(lote_alteracoes) > 0:
+                    st.markdown("**Amostra de Bilhetes que Serão Atualizados no Supabase:**")
+                    st.dataframe(pd.DataFrame(lote_alteracoes).head(10), use_container_width=True)
+
+                    if st.button("🚀 Confirmar e Processar Atualizações no Supabase", key="btn_confirmar_lote"):
+                        bar_prog = st.progress(0, text="Sincronizando com o banco de dados Supabase...")
                         
-                    st.markdown("### 📊 Pré-Validação da Carga em Lote")
-                    m1, m2 = st.columns(2)
-                    m1.metric("Linhas no Arquivo", qtd_total_arq)
-                    m2.metric("🟢 Bilhetes Válidos Identificados", len(lote_alteracoes))
-                    
-                    if len(lote_alteracoes) > 0:
-                        st.dataframe(pd.DataFrame(lote_alteracoes).head(10), use_container_width=True)
-                        if st.button("🚀 Confirmar e Processar no Supabase"):
-                            df_lote_final = pd.DataFrame(lote_alteracoes)
-                            ok, msg = salvar_tratativas_lote_supabase(df_lote_final, usuario=f"Carga_Lote_{usr_str}")
-                            registrar_log_supabase(novos_logs)
-                            st.success(f"✅ Processamento concluído! {len(lote_alteracoes)} bilhetes atualizados no Supabase.")
-                            st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao processar o arquivo: {e}")
+                        df_lote_final = pd.DataFrame(lote_alteracoes)
+                        ok, msg = salvar_tratativas_lote_supabase(df_lote_final, usuario=f"Carga_Lote_{usr_str}")
+                        
+                        bar_prog.progress(50, text="Gravando trilha de auditoria...")
+                        registrar_log_supabase(novos_logs)
+                        
+                        bar_prog.progress(100, text="Concluído!")
+                        st.success(f"✅ Processamento concluído! {len(lote_alteracoes)} bilhete(s) foram atualizados no Supabase e registrados na Trilha de Auditoria.")
+                        
+                        # Pausa de 2 segundos para o usuário ver a barra de progresso a 100%
+                        time.sleep(2)
+                        st.rerun()
+                else:
+                    st.info("ℹ️ Nenhuma alteração detectada. As observações, gerentes e status da planilha já coincidem com os registros atuais.")
+
+        except Exception as e:
+            st.error(f"Erro ao processar o arquivo: {e}")
