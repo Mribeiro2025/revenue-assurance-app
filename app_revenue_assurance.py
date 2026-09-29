@@ -109,7 +109,7 @@ def carregar_tratativas_db():
 def salvar_tratativas_lote_supabase(df_lote, usuario):
     """
     Executa a atualização/inserção garantida no Supabase independentemente da alteração do status.
-    Utiliza um padrão robusto de UPDATE com fallback para INSERT para dispensar constraints específicas.
+    Garante a sincronização uniforme entre gerentes e área responsável.
     """
     engine = get_db_engine()
     if not engine or df_lote.empty:
@@ -150,6 +150,8 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 st_val = "Pendente de Lançamento (Não Consta)"
             if ar_val in ["-", "", "None", "nan"]:
                 ar_val = "Operação"
+            if gerente_val in ["-", "", "None", "nan"]:
+                gerente_val = ar_val
                 
             dados_lote.append({
                 "bilhete": b_clean,
@@ -169,13 +171,12 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
         SET status_geral = :status_geral,
             area_resp = :area_resp,
             obs_operacao = :obs_operacao,
-            setor = COALESCE(NULLIF(:setor, '-'), tratativas.setor),
-            gerentes = COALESCE(NULLIF(:gerentes, '-'), tratativas.gerentes),
+            setor = :setor,
+            gerentes = :gerentes,
             usuario_modificacao = :usuario,
             data_modificacao = NOW()
         WHERE bilhete = :bilhete;
     """)
-
     insert_sql = text("""
         INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
         VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW());
@@ -188,7 +189,7 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 if res.rowcount == 0:
                     conn.execute(insert_sql, item)
                     
-        st.cache_data.clear()
+        st.cache_data.clear()  # Limpa o cache para refletir no app imediatamente
         return True, f"✅ {len(dados_lote)} bilhete(s) atualizado(s) com sucesso no Supabase!"
     except Exception as e:
         return False, f"⚠️ Erro ao salvar no banco: {e}"
@@ -213,6 +214,21 @@ def registrar_log_supabase(logs_list):
     }, inplace=True)
     
     try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS log_auditoria (
+                    id SERIAL PRIMARY KEY,
+                    data_hora TIMESTAMP,
+                    bilhete VARCHAR(255),
+                    usuario_acao VARCHAR(255),
+                    status_anterior VARCHAR(255),
+                    novo_status VARCHAR(255),
+                    area_anterior VARCHAR(255),
+                    nova_area VARCHAR(255),
+                    observacao TEXT,
+                    tipo_interacao VARCHAR(255)
+                );
+            """))
         df_logs.to_sql("log_auditoria", engine, if_exists="append", index=False)
     except Exception:
         pass
@@ -472,11 +488,9 @@ def mesclar_com_supabase(df_excel):
     df_excel["Bilhete_Clean"] = df_excel["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
     df_db["Bilhete_Clean"] = df_db["bilhete"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
     
-    # Mantém apenas a alteração mais recente registrada no banco
     if "data_modificacao" in df_db.columns:
         df_db = df_db.sort_values("data_modificacao", ascending=False)
     df_db = df_db.drop_duplicates("Bilhete_Clean", keep="first")
-
     cols_sup_desejadas = ["status_geral", "area_resp", "obs_operacao", "setor", "gerentes"]
     cols_presentes = [c for c in cols_sup_desejadas if c in df_db.columns]
     
@@ -504,9 +518,7 @@ def mesclar_com_supabase(df_excel):
     return df_merged
 
 def rotear_bases_mestra(df_master):
-    """
-    Classifica e roteia os bilhetes da base mestra para as abas operacionais correspondentes.
-    """
+    """Classifica e roteia os bilhetes da base mestra para as abas operacionais correspondentes."""
     if df_master is None or df_master.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
         
@@ -543,7 +555,7 @@ def rotear_bases_mestra(df_master):
         origem_val = str(r.get("Aba_Origem", "")).strip().lower()
         return any(k in ar_val or k in ger_val or k in setor_val or k in origem_val or k in obs_val or k in st_val
                    for k in ["katia", "kátia", "backoffice", "suporte"])
-                   
+                    
     mask_bo = df_rest.apply(e_bo_flexivel, axis=1)
     df_bo = df_rest[mask_bo].copy()
     df_rest = df_rest[~mask_bo].copy()
@@ -678,6 +690,7 @@ with st.spinner("🔄 Conectando ao Supabase e carregando bases..."):
 st.sidebar.title("Grupo Arbaitman")
 st.sidebar.caption("Revenue Assurance Platform v3.2")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
+
 with st.sidebar.expander("🔑 Alterar Minha Senha"):
     with st.form("form_pwd_side"):
         s_atu = str(st.text_input("Senha Atual:", type="password")).strip()
@@ -693,6 +706,7 @@ with st.sidebar.expander("🔑 Alterar Minha Senha"):
                     st.error(f"Erro ao salvar senha: {msg}")
             else:
                 st.error("Senha atual incorreta.")
+
 if st.sidebar.button("🔒 Sair"):
     st.session_state["autenticado"] = False
     st.rerun()
@@ -703,7 +717,6 @@ d_inicio = st.sidebar.date_input("Data Inicial:", value=datetime.date(2024, 1, 1
 d_fim = st.sidebar.date_input("Data Final:", value=datetime.date(2026, 12, 31), format="DD/MM/YYYY")
 
 df_todos = pd.concat([df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
-
 filtro_gerente = st.sidebar.multiselect("Gerente / Área Resp.:", options=sorted(df_todos["Área Resp. Operação"].dropna().unique()), placeholder="Todos")
 filtro_setor = st.sidebar.multiselect("Setor:", options=sorted(df_todos["Setor"].dropna().unique()), placeholder="Todos")
 filtro_cia = st.sidebar.multiselect("Companhia Aérea:", options=sorted(df_todos["CIA"].dropna().unique()), placeholder="Todas")
@@ -756,7 +769,6 @@ c3.metric("Backoffice", f"{len(f_backoffice):,}")
 c4.metric("Central de Eventos", f"{len(f_eventos):,}")
 c5.metric("Emissor Virtual", f"{len(f_lemon_virt):,}")
 c6.metric("Sem Divergência (OK)", f"{len(f_sem_div):,}")
-
 st.markdown("---")
 
 # ==============================================================================
@@ -937,7 +949,6 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
                 usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
                 agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                # Garante que Gerentes e Área Resp. Operação recebam simultaneamente o novo valor selecionado
                 df_up = pd.DataFrame({
                     "Bilhetes": df_sel_cards["Bilhetes"].values,
                     "Status_Geral": [n_status] * len(df_sel_cards),
