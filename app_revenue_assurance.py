@@ -88,60 +88,46 @@ def get_db_engine():
     return None
 
 def carregar_tratativas_db():
-    """Busca as tratativas ativas diretamente no Supabase, ordenadas pela alteração mais recente."""
+    """Busca apenas a última tratativa ativa de cada bilhete no Supabase."""
     engine = get_db_engine()
     if not engine:
         return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "data_modificacao"])
     
-    query = "SELECT bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, data_modificacao FROM tratativas ORDER BY data_modificacao DESC NULLS LAST"
+    # Query garantindo a linha mais recente via DISTINCT ON / Window Function
+    query = """
+        SELECT DISTINCT ON (TRIM(bilhete)) 
+            TRIM(bilhete) AS bilhete, 
+            status_geral, 
+            area_resp, 
+            obs_operacao, 
+            setor, 
+            gerentes, 
+            data_modificacao 
+        FROM tratativas 
+        ORDER BY TRIM(bilhete), data_modificacao DESC NULLS LAST
+    """
     try:
         return pd.read_sql(query, engine)
     except Exception:
-        try:
-            df_fallback = pd.read_sql("SELECT bilhete, status_geral, area_resp, obs_operacao FROM tratativas", engine)
-            df_fallback["setor"] = "-"
-            df_fallback["gerentes"] = "-"
-            df_fallback["data_modificacao"] = None
-            return df_fallback
-        except Exception:
-            return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "data_modificacao"])
+        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "data_modificacao"])
+
 
 def salvar_tratativas_lote_supabase(df_lote, usuario):
     """
-    Executa UPSERT incondicional no Supabase baseado na chave primária 'bilhete'.
-    Qualquer campo enviado (Status_Geral, Área Resp, Obs, Setor, Gerentes) será atualizado diretamente.
+    Executa UPSERT no Supabase e identifica a contagem exata de bilhetes inseridos vs atualizados.
     """
     engine = get_db_engine()
     if not engine or df_lote.empty:
-        return False, "Conexão com o banco de dados indisponível."
+        return False, "Conexão com o banco de dados indisponível.", 0, 0
     
-    # 1. Prepara a estrutura no Supabase com PRIMARY KEY em bilhete para permitir UPSERT nativo
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS tratativas (
-                    bilhete VARCHAR(255) PRIMARY KEY,
-                    status_geral VARCHAR(255),
-                    area_resp VARCHAR(255),
-                    obs_operacao TEXT,
-                    setor VARCHAR(255),
-                    gerentes VARCHAR(255),
-                    usuario_modificacao VARCHAR(255),
-                    data_modificacao TIMESTAMP DEFAULT NOW()
-                );
-            """))
-            conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS setor VARCHAR(255);"))
-            conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS gerentes VARCHAR(255);"))
-            conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS data_modificacao TIMESTAMP DEFAULT NOW();"))
-            # Tenta garantir a Primary Key se não tiver sido criada anteriormente
-            try:
-                conn.execute(text("ALTER TABLE tratativas ADD CONSTRAINT tratativas_pkey PRIMARY KEY (bilhete);"))
-            except Exception:
-                pass
-    except Exception:
-        pass
+    # Busca bilhetes já existentes no banco para calcular a métrica de alteração
+    df_existentes = carregar_tratativas_db()
+    set_existentes = set(df_existentes["bilhete"].astype(str).str.strip().tolist()) if not df_existentes.empty else set()
 
     dados_lote = []
+    qtd_atualizados = 0
+    qtd_novos = 0
+
     for _, r in df_lote.iterrows():
         b_clean = re.sub(r"\.0$", "", str(r.get("Bilhetes", r.get("bilhete", ""))).strip())
         if b_clean and b_clean.lower() not in ["nan", "none", "", "-"]:
@@ -157,7 +143,12 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 ar_val = "Operação"
             if gerente_val in ["-", "", "None", "nan"]:
                 gerente_val = ar_val
-                
+
+            if b_clean in set_existentes:
+                qtd_atualizados += 1
+            else:
+                qtd_novos += 1
+
             dados_lote.append({
                 "bilhete": b_clean,
                 "status_geral": st_val,
@@ -167,11 +158,10 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 "gerentes": gerente_val,
                 "usuario": str(usuario)
             })
-            
-    if not dados_lote:
-        return False, "Nenhum bilhete válido para atualização."
 
-    # 2. Comando UPSERT Incondicional
+    if not dados_lote:
+        return False, "Nenhum bilhete válido para atualização.", 0, 0
+
     upsert_sql = text("""
         INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
         VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW())
@@ -185,37 +175,16 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
             data_modificacao = NOW();
     """)
 
-    # Fallback UPDATE/INSERT seguro caso o banco ainda não aceite ON CONFLICT por falta de PK
-    update_fallback = text("""
-        UPDATE tratativas
-        SET status_geral = :status_geral,
-            area_resp = :area_resp,
-            obs_operacao = :obs_operacao,
-            setor = :setor,
-            gerentes = :gerentes,
-            usuario_modificacao = :usuario,
-            data_modificacao = NOW()
-        WHERE TRIM(bilhete) = TRIM(:bilhete);
-    """)
-    insert_fallback = text("""
-        INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
-        VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW());
-    """)
-        
     try:
         with engine.begin() as conn:
             for item in dados_lote:
-                try:
-                    conn.execute(upsert_sql, item)
-                except Exception:
-                    res = conn.execute(update_fallback, item)
-                    if res.rowcount == 0:
-                        conn.execute(insert_fallback, item)
+                conn.execute(upsert_sql, item)
                     
-        st.cache_data.clear()  # Força limpeza de cache para atualização instantânea do app
-        return True, f"✅ {len(dados_lote)} bilhete(s) atualizado(s) e sincronizado(s) no Supabase!"
+        st.cache_data.clear()
+        msg = f"✅ Sincronização concluída: {qtd_atualizados} bilhete(s) atualizados e {qtd_novos} novo(s) inserido(s)."
+        return True, msg, qtd_atualizados, qtd_novos
     except Exception as e:
-        return False, f"⚠️ Erro ao salvar no banco: {e}"
+        return False, f"⚠️ Erro ao salvar no banco: {e}", 0, 0
 
 def registrar_log_supabase(logs_list):
     """Persiste a trilha de auditoria na tabela log_auditoria do Supabase."""
@@ -1136,88 +1105,112 @@ if e_master():
             except Exception:
                 st.info("Nenhum registro de log encontrado na tabela log_auditoria do Supabase.")
                 
-    with aba_sel[9]:
-        st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Protegido)")
-        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização em massa no Supabase.")
-        st.warning("🔒 **Sincronização em Lote Ativa:** Os bilhetes e seus respectivos campos atualizados serão gravados diretamente no Supabase.")
-        arq_upload = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "xls", "csv"], key="uploader_lote")
-        if arq_upload:
-            try:
-                if arq_upload.name.endswith(".csv"):
-                    df_up_raw = pd.read_csv(arq_upload, dtype=str)
-                else:
-                    df_up_raw = pd.read_excel(arq_upload, dtype=str)
-                cols_up = df_up_raw.columns.tolist()
+    # MÓDULO ABA 9: CARGA EM LOTE COM DEMONSTRATIVO DE ATUALIZAÇÕES
+with aba_sel[9]:
+    st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Protegido)")
+    st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização em massa no Supabase.")
+    st.warning("🔒 **Sincronização em Lote Ativa:** Os bilhetes e seus respectivos campos atualizados serão gravados diretamente no Supabase.")
+    
+    arq_upload = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "xls", "csv"], key="uploader_lote")
+    if arq_upload:
+        try:
+            if arq_upload.name.endswith(".csv"):
+                df_up_raw = pd.read_csv(arq_upload, dtype=str)
+            else:
+                df_up_raw = pd.read_excel(arq_upload, dtype=str)
+            cols_up = df_up_raw.columns.tolist()
+            
+            col_b = next((c for c in cols_up if c in ["Bilhetes", "Bilhete"] or any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
+            col_st = next((c for c in cols_up if str(c).strip().lower() in ["status_geral", "status geral", "status", "novo status"]), None)
+            col_ar = next((c for c in cols_up if any(x in str(c).lower() for x in ["área resp", "area resp", "responsavel", "gerente", "área"])), None)
+            col_obs = next((c for c in cols_up if any(x in str(c).lower() for x in ["obs", "observação", "observacao", "justificativa"])), None)
+            col_setor = next((c for c in cols_up if str(c).lower() == "setor"), None)
+            col_gerentes = next((c for c in cols_up if str(c).lower() in ["gerentes", "gerente"]), None)
+            
+            if not col_b:
+                st.error("⚠️ O arquivo precisa conter ao menos uma coluna identificadora de 'Bilhete'.")
+            else:
+                df_up_raw["Bilhete_Clean"] = df_up_raw[col_b].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
                 
-                # Mapeamento flexível das colunas da planilha enviada
-                col_b = next((c for c in cols_up if c in ["Bilhetes", "Bilhete"] or any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
-                col_st = next((c for c in cols_up if str(c).strip().lower() in ["status_geral", "status geral", "status", "novo status"]), None)
-                col_ar = next((c for c in cols_up if any(x in str(c).lower() for x in ["área resp", "area resp", "responsavel", "gerente", "área"])), None)
-                col_obs = next((c for c in cols_up if any(x in str(c).lower() for x in ["obs", "observação", "observacao", "justificativa"])), None)
-                col_setor = next((c for c in cols_up if str(c).lower() == "setor"), None)
-                col_gerentes = next((c for c in cols_up if str(c).lower() in ["gerentes", "gerente"]), None)
+                # Identifica a situação atual no Supabase antes da confirmação
+                df_existentes = carregar_tratativas_db()
+                set_existentes = set(df_existentes["bilhete"].astype(str).str.strip().tolist()) if not df_existentes.empty else set()
+
+                lote_alteracoes = []
+                novos_logs = []
+                agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
                 
-                if not col_b:
-                    st.error("⚠️ O arquivo precisa conter ao menos uma coluna identificadora de 'Bilhete'.")
-                else:
-                    df_up_raw["Bilhete_Clean"] = df_up_raw[col_b].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
-                    
-                    lote_alteracoes = []
-                    novos_logs = []
-                    agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
-                    
-                    for _, r_v in df_up_raw.iterrows():
-                        b_code = r_v["Bilhete_Clean"]
-                        if not b_code or b_code.lower() in ["nan", "none", "-", ""]:
-                            continue
-                            
-                        st_novo = str(r_v.get(col_st, "Pendente de Lançamento (Não Consta)")).strip() if col_st else "Pendente de Lançamento (Não Consta)"
-                        ar_novo = str(r_v.get(col_ar, "Operação")).strip() if col_ar else "Operação"
-                        obs_novo = str(r_v.get(col_obs, "")).replace("Sem tratativa na operação", "").strip() if col_obs else ""
-                        setor_novo = str(r_v.get(col_setor, "-")).strip() if col_setor else "-"
-                        gerentes_novo = str(r_v.get(col_gerentes, ar_novo)).strip() if col_gerentes else ar_novo
+                tot_lote = 0
+                tot_para_atualizar = 0
+                tot_novos = 0
+
+                for _, r_v in df_up_raw.iterrows():
+                    b_code = r_v["Bilhete_Clean"]
+                    if not b_code or b_code.lower() in ["nan", "none", "-", ""]:
+                        continue
                         
-                        lote_alteracoes.append({
-                            "Bilhetes": b_code,
-                            "Status_Geral": st_novo,
-                            "Área Resp. Operação": ar_novo,
-                            "Obs. Operação": obs_novo,
-                            "Setor": setor_novo,
-                            "Gerentes": gerentes_novo
-                        })
-                        novos_logs.append({
-                            "Data_Hora": agora_str,
-                            "Bilhete": b_code,
-                            "Usuario_Acao": usr_str,
-                            "Status_Anterior": "-",
-                            "Novo_Status": st_novo,
-                            "Area_Anterior": "-",
-                            "Nova_Area": ar_novo,
-                            "Observacao": obs_novo,
-                            "Tipo_Interacao": "Carga em Lote (Excel)"
-                        })
-                            
-                    st.markdown("### 📊 Relatório de Preparação de Carga em Lote")
-                    st.metric("Total de Bilhetes Identificados", len(lote_alteracoes))
+                    tot_lote += 1
+                    if b_code in set_existentes:
+                        tot_para_atualizar += 1
+                        tipo_registro = "Atualização de Existente"
+                    else:
+                        tot_novos += 1
+                        tipo_registro = "Novo Bilhete"
+
+                    st_novo = str(r_v.get(col_st, "Pendente de Lançamento (Não Consta)")).strip() if col_st else "Pendente de Lançamento (Não Consta)"
+                    ar_novo = str(r_v.get(col_ar, "Operação")).strip() if col_ar else "Operação"
+                    obs_novo = str(r_v.get(col_obs, "")).replace("Sem tratativa na operação", "").strip() if col_obs else ""
+                    setor_novo = str(r_v.get(col_setor, "-")).strip() if col_setor else "-"
+                    gerentes_novo = str(r_v.get(col_gerentes, ar_novo)).strip() if col_gerentes else ar_novo
                     
-                    if len(lote_alteracoes) > 0:
-                        st.markdown("**Amostra dos Dados a Serem Atualizados/Sincronizados no Supabase:**")
-                        st.dataframe(pd.DataFrame(lote_alteracoes).head(10), use_container_width=True)
+                    lote_alteracoes.append({
+                        "Bilhetes": b_code,
+                        "Status_Geral": st_novo,
+                        "Área Resp. Operação": ar_novo,
+                        "Obs. Operação": obs_novo,
+                        "Setor": setor_novo,
+                        "Gerentes": gerentes_novo,
+                        "Ação no Supabase": tipo_registro
+                    })
+                    
+                    novos_logs.append({
+                        "Data_Hora": agora_str,
+                        "Bilhete": b_code,
+                        "Usuario_Acao": usr_str,
+                        "Status_Anterior": "-",
+                        "Novo_Status": st_novo,
+                        "Area_Anterior": "-",
+                        "Nova_Area": ar_novo,
+                        "Observacao": obs_novo,
+                        "Tipo_Interacao": f"Carga em Lote ({tipo_registro})"
+                    })
                         
-                        if st.button("🚀 Confirmar e Enviar Atualizações para o Supabase", key="btn_confirmar_lote"):
-                            bar_prog = st.progress(0, text="Sincronizando com o banco de dados Supabase...")
-                            
-                            df_lote_final = pd.DataFrame(lote_alteracoes)
-                            ok, msg = salvar_tratativas_lote_supabase(df_lote_final, usuario=f"Carga_Lote_{usr_str}")
-                            
-                            bar_prog.progress(50, text="Gravando trilha de auditoria...")
-                            registrar_log_supabase(novos_logs)
-                            
-                            bar_prog.progress(100, text="Concluído!")
-                            st.success(f"✅ Processamento concluído! {len(lote_alteracoes)} bilhete(s) foram atualizados no Supabase e refletidos no aplicativo.")
-                            
-                            time.sleep(1.5)
-                            st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao processar o arquivo: {e}")
+                st.markdown("### 📊 Relatório de Preparação de Carga em Lote")
+                
+                # Exibição dos KPIs detalhados solicitados
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Total Identificados", tot_lote)
+                m2.metric("Bilhetes a Atualizar", tot_para_atualizar)
+                m3.metric("Novos Bilhetes", tot_novos)
+                
+                if len(lote_alteracoes) > 0:
+                    st.markdown("**Amostra dos Dados a Serem Atualizados/Sincronizados no Supabase:**")
+                    st.dataframe(pd.DataFrame(lote_alteracoes).head(10), use_container_width=True)
+                    
+                    if st.button("🚀 Confirmar e Enviar Atualizações para o Supabase", key="btn_confirmar_lote"):
+                        bar_prog = st.progress(0, text="Sincronizando com o banco de dados Supabase...")
+                        
+                        df_lote_final = pd.DataFrame(lote_alteracoes)
+                        ok, msg, n_at, n_nv = salvar_tratativas_lote_supabase(df_lote_final, usuario=f"Carga_Lote_{usr_str}")
+                        
+                        bar_prog.progress(50, text="Gravando trilha de auditoria...")
+                        registrar_log_supabase(novos_logs)
+                        
+                        bar_prog.progress(100, text="Concluído!")
+                        st.success(f"✅ Processamento concluído! {n_at} bilhete(s) atualizados e {n_nv} novos cadastrados no Supabase.")
+                        
+                        time.sleep(1.5)
+                        st.rerun()
+        except Exception as e:
+            st.error(f"Erro ao processar o arquivo: {e}")
