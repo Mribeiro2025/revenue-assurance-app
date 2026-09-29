@@ -78,7 +78,7 @@ st.markdown(
 # FUNÇÃO DE SANITIZAÇÃO DE BILHETES
 # ==============================================================================
 def sanitizar_bilhete(val):
-    """Remove decimais (.0), espaços extras e converte para texto limpo."""
+    """Garante que o bilhete seja convertido para texto limpo, sem espaços e sem sufixo .0."""
     if pd.isna(val) or val is None:
         return ""
     s = str(val).strip()
@@ -99,34 +99,43 @@ def get_db_engine():
     return None
 
 def carregar_tratativas_db():
-    """Busca as tratativas no Supabase e deduplica com segurança via Pandas."""
+    """Busca as tratativas no Supabase sem cláusulas frágeis no SQL e deduplica via Pandas."""
     engine = get_db_engine()
     if not engine:
+        st.warning("⚠️ Conexão com a base de dados do Supabase não configurada.")
         return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "data_modificacao"])
     
+    # Query SQL simples e direta para evitar erros de dialeto PostgreSQL
     query = "SELECT bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, data_modificacao FROM tratativas"
     try:
         df_db = pd.read_sql(query, engine)
         if not df_db.empty and "bilhete" in df_db.columns:
+            # Sanitiza a coluna bilhete no Pandas
             df_db["bilhete_clean"] = df_db["bilhete"].apply(sanitizar_bilhete)
+            
+            # Ordena por data_modificacao mais recente se existir
             if "data_modificacao" in df_db.columns:
                 df_db["data_modificacao"] = pd.to_datetime(df_db["data_modificacao"], errors="coerce")
                 df_db = df_db.sort_values("data_modificacao", ascending=False)
+                
+            # Mantém apenas o registro mais recente de cada bilhete
             df_db = df_db.drop_duplicates("bilhete_clean", keep="first").reset_index(drop=True)
             df_db["bilhete"] = df_db["bilhete_clean"]
             df_db.drop(columns=["bilhete_clean"], inplace=True, errors="ignore")
+            
         return df_db
-    except Exception:
+    except Exception as e:
+        st.error(f"⚠️ Erro ao consultar a tabela 'tratativas' no Supabase: {e}")
         return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "data_modificacao"])
 
 def salvar_tratativas_lote_supabase(df_lote, usuario):
     """
-    Executa UPSERT nativo no Supabase baseado na chave primária 'bilhete'.
-    Garante que atualizações em bilhetes existentes assumam no banco e na interface.
+    Executa UPSERT direto na base de dados do Supabase.
+    Força a atualização de bilhetes existentes e a inserção de novos.
     """
     engine = get_db_engine()
     if not engine or df_lote.empty:
-        return False, "Conexão com o banco de dados indisponível.", 0, 0, 0
+        return False, "Conexão com a base de dados indisponível.", 0, 0, 0
 
     df_existentes = carregar_tratativas_db()
     set_existentes = set(df_existentes["bilhete"].apply(sanitizar_bilhete).tolist()) if not df_existentes.empty else set()
@@ -169,7 +178,7 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
     if not dados_lote:
         return False, "Nenhum bilhete válido para atualização.", 0, 0, 0
 
-    # Comando UPSERT Nativo no PostgreSQL (Insere ou Atualiza se houver conflito de chave)
+    # Comando UPSERT Nativo no PostgreSQL (Sempre atualiza bilhetes existentes)
     sql_upsert = text("""
         INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
         VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW())
@@ -183,42 +192,21 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
             data_modificacao = NOW();
     """)
 
-    # Fallback seguro com UPDATE simples por TRIM(bilhete)
-    sql_update_fallback = text("""
-        UPDATE tratativas
-        SET status_geral = :status_geral,
-            area_resp = :area_resp,
-            obs_operacao = :obs_operacao,
-            setor = :setor,
-            gerentes = :gerentes,
-            usuario_modificacao = :usuario,
-            data_modificacao = NOW()
-        WHERE TRIM(bilhete) = TRIM(:bilhete);
-    """)
-
-    sql_insert_fallback = text("""
-        INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
-        VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW());
-    """)
-
+    sucessos = 0
     erros = 0
+
     for item in dados_lote:
         try:
             with engine.connect() as conn:
-                try:
-                    conn.execute(sql_upsert, item)
-                    conn.commit()
-                except Exception:
-                    res = conn.execute(sql_update_fallback, item)
-                    conn.commit()
-                    if res.rowcount == 0:
-                        conn.execute(sql_insert_fallback, item)
-                        conn.commit()
+                conn.execute(sql_upsert, item)
+                conn.commit()
+                sucessos += 1
         except Exception:
             erros += 1
 
-    st.cache_data.clear()  # Limpa o cache para forçar a releitura imediata dos dados
-    msg = f"✅ Sincronização concluída! {qtd_atualizados} bilhete(s) atualizado(s) e {qtd_novos} novo(s) inserido(s) no Supabase."
+    st.cache_data.clear() # Invalida o cache para recarregar o painel com os dados novos do Supabase
+    
+    msg = f"✅ Sincronização concluída! {qtd_atualizados} bilhete(s) reconhecido(s)/atualizado(s) e {qtd_novos} novo(s) inserido(s)."
     return True, msg, qtd_atualizados, qtd_novos, erros
 
 def registrar_log_supabase(logs_list):
