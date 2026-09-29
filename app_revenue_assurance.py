@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from sqlalchemy import create_engine, text
 
+
 # ==============================================================================
 # 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS COM IDENTIFICAÇÃO DE MARCA
 # ==============================================================================
@@ -87,57 +88,104 @@ def get_db_engine():
         pass
     return None
 
+
 def carregar_tratativas_db():
-    """Busca as tratativas ativas no Supabase garantindo apenas a linha mais recente por bilhete."""
+    """Busca as tratativas ativas no Supabase e deduplica com segurança via Pandas."""
     engine = get_db_engine()
     if not engine:
-        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "data_modificacao"])
-    
-    query = """
-        SELECT DISTINCT ON (TRIM(bilhete)) 
-            TRIM(bilhete) AS bilhete, 
-            status_geral, 
-            area_resp, 
-            obs_operacao, 
-            setor, 
-            gerentes, 
-            data_modificacao 
-        FROM tratativas 
-        ORDER BY TRIM(bilhete), data_modificacao DESC NULLS LAST
-    """
+        return pd.DataFrame(
+            columns=[
+                "bilhete",
+                "status_geral",
+                "area_resp",
+                "obs_operacao",
+                "setor",
+                "gerentes",
+                "data_modificacao",
+            ]
+        )
+
+    query = "SELECT bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, data_modificacao FROM tratativas"
     try:
-        return pd.read_sql(query, engine)
+        df_db = pd.read_sql(query, engine)
+        if not df_db.empty and "bilhete" in df_db.columns:
+            # Sanitiza o identificador do bilhete (remove espaços e sufixo .0 de conversões para float)
+            df_db["bilhete_clean"] = (
+                df_db["bilhete"]
+                .astype(str)
+                .str.strip()
+                .str.replace(r"\.0$", "", regex=True)
+            )
+
+            # Ordena pela data de modificação mais recente e remove duplicatas do mesmo bilhete
+            if "data_modificacao" in df_db.columns:
+                df_db["data_modificacao"] = pd.to_datetime(
+                    df_db["data_modificacao"], errors="coerce"
+                )
+                df_db = df_db.sort_values("data_modificacao", ascending=False)
+
+            df_db = df_db.drop_duplicates("bilhete_clean", keep="first").reset_index(
+                drop=True
+            )
+            df_db["bilhete"] = df_db["bilhete_clean"]
+            df_db.drop(columns=["bilhete_clean"], inplace=True, errors="ignore")
+
+        return df_db
     except Exception:
-        try:
-            return pd.read_sql("SELECT bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, data_modificacao FROM tratativas ORDER BY data_modificacao DESC NULLS LAST", engine)
-        except Exception:
-            return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "data_modificacao"])
+        return pd.DataFrame(
+            columns=[
+                "bilhete",
+                "status_geral",
+                "area_resp",
+                "obs_operacao",
+                "setor",
+                "gerentes",
+                "data_modificacao",
+            ]
+        )
+
 
 def salvar_tratativas_lote_supabase(df_lote, usuario):
-    """
-    Executa UPDATE/INSERT direto registro por registro com COMMIT explícito no Supabase.
-    Retorna o status, mensagem detalhada, quantidade de atualizados e quantidade de novos.
+    """Executa UPDATE/INSERT direto registro por registro com COMMIT explícito no Supabase.
+
+    Retorna o status, mensagem detalhada, quantidade de atualizados, novos e
+    erros.
     """
     engine = get_db_engine()
     if not engine or df_lote.empty:
         return False, "Conexão com o banco de dados indisponível.", 0, 0, 0
 
+    # Obtém bilhetes conhecidos do banco para cálculo prévio de métricas
     df_existentes = carregar_tratativas_db()
-    set_existentes = set(df_existentes["bilhete"].astype(str).str.strip().tolist()) if not df_existentes.empty else set()
+    set_existentes = (
+        set(df_existentes["bilhete"].astype(str).str.strip().tolist())
+        if not df_existentes.empty
+        else set()
+    )
 
     dados_lote = []
-    qtd_atualizados = 0
-    qtd_novos = 0
+    qtd_prev_atualizados = 0
+    qtd_prev_novos = 0
 
     for _, r in df_lote.iterrows():
-        b_clean = re.sub(r"\.0$", "", str(r.get("Bilhetes", r.get("bilhete", ""))).strip())
+        b_clean = re.sub(
+            r"\.0$", "", str(r.get("Bilhetes", r.get("bilhete", ""))).strip()
+        )
         if b_clean and b_clean.lower() not in ["nan", "none", "", "-"]:
-            obs_limpa = str(r.get("Obs. Operação", r.get("obs_operacao", ""))).replace("Sem tratativa na operação", "").strip()
+            obs_limpa = (
+                str(r.get("Obs. Operação", r.get("obs_operacao", "")))
+                .replace("Sem tratativa na operação", "")
+                .strip()
+            )
             st_val = str(r.get("Status_Geral", r.get("status_geral", ""))).strip()
-            ar_val = str(r.get("Área Resp. Operação", r.get("area_resp", ""))).strip()
+            ar_val = str(
+                r.get("Área Resp. Operação", r.get("area_resp", ""))
+            ).strip()
             setor_val = str(r.get("Setor", r.get("setor", "-"))).strip()
-            gerente_val = str(r.get("Gerentes", r.get("gerentes", ar_val))).strip()
-            
+            gerente_val = str(
+                r.get("Gerentes", r.get("gerentes", ar_val))
+            ).strip()
+
             if st_val in ["-", "", "None", "nan"]:
                 st_val = "Pendente de Lançamento (Não Consta)"
             if ar_val in ["-", "", "None", "nan"]:
@@ -146,9 +194,9 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 gerente_val = ar_val
 
             if b_clean in set_existentes:
-                qtd_atualizados += 1
+                qtd_prev_atualizados += 1
             else:
-                qtd_novos += 1
+                qtd_prev_novos += 1
 
             dados_lote.append({
                 "bilhete": b_clean,
@@ -157,7 +205,7 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 "obs_operacao": obs_limpa,
                 "setor": setor_val,
                 "gerentes": gerente_val,
-                "usuario": str(usuario)
+                "usuario": str(usuario),
             })
 
     if not dados_lote:
@@ -180,44 +228,60 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
         VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW());
     """)
 
+    sucessos_at = 0
+    sucessos_in = 0
     erros = 0
+
     for item in dados_lote:
         try:
             with engine.connect() as conn:
                 res = conn.execute(sql_update, item)
                 conn.commit()
-                if res.rowcount == 0:
+
+                # Se o UPDATE encontrou e alterou o bilhete
+                if res.rowcount > 0:
+                    sucessos_at += 1
+                else:
+                    # Se o bilhete não existia no Supabase, realiza o INSERT
                     conn.execute(sql_insert, item)
                     conn.commit()
+                    sucessos_in += 1
         except Exception:
             erros += 1
 
+    # Invalida o cache do Streamlit para sincronização instantânea dos dados na tela
     st.cache_data.clear()
-    msg = f"✅ Sincronização concluída! {qtd_atualizados} bilhete(s) atualizados e {qtd_novos} novo(s) inserido(s)."
-    return True, msg, qtd_atualizados, qtd_novos, erros
+
+    msg = f"✅ Sincronização concluída! {sucessos_at} bilhete(s) atualizado(s) e {sucessos_in} novo(s) inserido(s) no Supabase."
+    return True, msg, sucessos_at, sucessos_in, erros
+
 
 def registrar_log_supabase(logs_list):
     """Persiste a trilha de auditoria na tabela log_auditoria do Supabase."""
     engine = get_db_engine()
     if not engine or not logs_list:
         return
-    
+
     df_logs = pd.DataFrame(logs_list)
-    df_logs.rename(columns={
-        "Data_Hora": "data_hora",
-        "Bilhete": "bilhete",
-        "Usuario_Acao": "usuario_acao",
-        "Status_Anterior": "status_anterior",
-        "Novo_Status": "novo_status",
-        "Area_Anterior": "area_anterior",
-        "Nova_Area": "nova_area",
-        "Observacao": "observacao",
-        "Tipo_Interacao": "tipo_interacao"
-    }, inplace=True)
-    
+    df_logs.rename(
+        columns={
+            "Data_Hora": "data_hora",
+            "Bilhete": "bilhete",
+            "Usuario_Acao": "usuario_acao",
+            "Status_Anterior": "status_anterior",
+            "Novo_Status": "novo_status",
+            "Area_Anterior": "area_anterior",
+            "Nova_Area": "nova_area",
+            "Observacao": "observacao",
+            "Tipo_Interacao": "tipo_interacao",
+        },
+        inplace=True,
+    )
+
     try:
         with engine.begin() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 CREATE TABLE IF NOT EXISTS log_auditoria (
                     id SERIAL PRIMARY KEY,
                     data_hora TIMESTAMP,
@@ -230,8 +294,11 @@ def registrar_log_supabase(logs_list):
                     observacao TEXT,
                     tipo_interacao VARCHAR(255)
                 );
-            """))
-        df_logs.to_sql("log_auditoria", engine, if_exists="append", index=False)
+            """)
+            )
+        df_logs.to_sql(
+            "log_auditoria", engine, if_exists="append", index=False
+        )
     except Exception:
         pass
 
