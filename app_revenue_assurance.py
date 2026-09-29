@@ -14,7 +14,7 @@ import streamlit as st
 from sqlalchemy import create_engine, text
 
 # ==============================================================================
-# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS
+# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS COM IDENTIFICAÇÃO DE MARCA
 # ==============================================================================
 st.set_page_config(
     page_title="Grupo Arbaitman | Revenue Assurance & Auditoria FP&A",
@@ -75,6 +75,17 @@ st.markdown(
 )
 
 # ==============================================================================
+# FUNÇÃO DE SANITIZAÇÃO DE BILHETES
+# ==============================================================================
+def sanitizar_bilhete(val):
+    """Remove decimais (.0), espaços extras e converte para texto limpo."""
+    if pd.isna(val) or val is None:
+        return ""
+    s = str(val).strip()
+    s = re.sub(r"\.0$", "", s)
+    return s
+
+# ==============================================================================
 # 2. CONEXÃO E PERSISTÊNCIA DIRETA NO SUPABASE
 # ==============================================================================
 def get_db_engine():
@@ -97,7 +108,7 @@ def carregar_tratativas_db():
     try:
         df_db = pd.read_sql(query, engine)
         if not df_db.empty and "bilhete" in df_db.columns:
-            df_db["bilhete_clean"] = df_db["bilhete"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+            df_db["bilhete_clean"] = df_db["bilhete"].apply(sanitizar_bilhete)
             if "data_modificacao" in df_db.columns:
                 df_db["data_modificacao"] = pd.to_datetime(df_db["data_modificacao"], errors="coerce")
                 df_db = df_db.sort_values("data_modificacao", ascending=False)
@@ -110,19 +121,22 @@ def carregar_tratativas_db():
 
 def salvar_tratativas_lote_supabase(df_lote, usuario):
     """
-    Executa UPDATE/INSERT direto registro por registro com COMMIT explícito no Supabase.
-    Garante que atualizações assumam no banco e na interface.
+    Executa UPSERT nativo no Supabase baseado na chave primária 'bilhete'.
+    Garante que atualizações em bilhetes existentes assumam no banco e na interface.
     """
     engine = get_db_engine()
     if not engine or df_lote.empty:
         return False, "Conexão com o banco de dados indisponível.", 0, 0, 0
 
     df_existentes = carregar_tratativas_db()
-    set_existentes = set(df_existentes["bilhete"].astype(str).str.strip().tolist()) if not df_existentes.empty else set()
+    set_existentes = set(df_existentes["bilhete"].apply(sanitizar_bilhete).tolist()) if not df_existentes.empty else set()
 
     dados_lote = []
+    qtd_atualizados = 0
+    qtd_novos = 0
+
     for _, r in df_lote.iterrows():
-        b_clean = re.sub(r"\.0$", "", str(r.get("Bilhetes", r.get("bilhete", ""))).strip())
+        b_clean = sanitizar_bilhete(r.get("Bilhetes", r.get("bilhete", "")))
         if b_clean and b_clean.lower() not in ["nan", "none", "", "-"]:
             obs_limpa = str(r.get("Obs. Operação", r.get("obs_operacao", ""))).replace("Sem tratativa na operação", "").strip()
             st_val = str(r.get("Status_Geral", r.get("status_geral", ""))).strip()
@@ -137,6 +151,11 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
             if gerente_val in ["-", "", "None", "nan"]:
                 gerente_val = ar_val
 
+            if b_clean in set_existentes:
+                qtd_atualizados += 1
+            else:
+                qtd_novos += 1
+
             dados_lote.append({
                 "bilhete": b_clean,
                 "status_geral": st_val,
@@ -150,7 +169,22 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
     if not dados_lote:
         return False, "Nenhum bilhete válido para atualização.", 0, 0, 0
 
-    sql_update = text("""
+    # Comando UPSERT Nativo no PostgreSQL (Insere ou Atualiza se houver conflito de chave)
+    sql_upsert = text("""
+        INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
+        VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW())
+        ON CONFLICT (bilhete) DO UPDATE SET
+            status_geral = EXCLUDED.status_geral,
+            area_resp = EXCLUDED.area_resp,
+            obs_operacao = EXCLUDED.obs_operacao,
+            setor = EXCLUDED.setor,
+            gerentes = EXCLUDED.gerentes,
+            usuario_modificacao = EXCLUDED.usuario_modificacao,
+            data_modificacao = NOW();
+    """)
+
+    # Fallback seguro com UPDATE simples por TRIM(bilhete)
+    sql_update_fallback = text("""
         UPDATE tratativas
         SET status_geral = :status_geral,
             area_resp = :area_resp,
@@ -162,32 +196,30 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
         WHERE TRIM(bilhete) = TRIM(:bilhete);
     """)
 
-    sql_insert = text("""
+    sql_insert_fallback = text("""
         INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
         VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW());
     """)
 
-    sucessos_at = 0
-    sucessos_in = 0
     erros = 0
-
     for item in dados_lote:
         try:
             with engine.connect() as conn:
-                res = conn.execute(sql_update, item)
-                conn.commit()
-                if res.rowcount > 0:
-                    sucessos_at += 1
-                else:
-                    conn.execute(sql_insert, item)
+                try:
+                    conn.execute(sql_upsert, item)
                     conn.commit()
-                    sucessos_in += 1
+                except Exception:
+                    res = conn.execute(sql_update_fallback, item)
+                    conn.commit()
+                    if res.rowcount == 0:
+                        conn.execute(sql_insert_fallback, item)
+                        conn.commit()
         except Exception:
             erros += 1
 
-    st.cache_data.clear() # Limpa o cache do Streamlit para forçar releitura instantânea
-    msg = f"✅ Sincronização concluída! {sucessos_at} bilhete(s) atualizados e {sucessos_in} novo(s) inseridos no Supabase."
-    return True, msg, sucessos_at, sucessos_in, erros
+    st.cache_data.clear()  # Limpa o cache para forçar a releitura imediata dos dados
+    msg = f"✅ Sincronização concluída! {qtd_atualizados} bilhete(s) atualizado(s) e {qtd_novos} novo(s) inserido(s) no Supabase."
+    return True, msg, qtd_atualizados, qtd_novos, erros
 
 def registrar_log_supabase(logs_list):
     """Persiste a trilha de auditoria na tabela log_auditoria do Supabase."""
@@ -420,7 +452,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# 4. TRATAMENTO DE DADOS E SANITIZAÇÃO DE STRINGS
+# 4. TRATAMENTO DE DADOS E SANITIZAÇÃO DE STRINGS ("None", "nan")
 # ==============================================================================
 def clean_str(val):
     if pd.isna(val) or val is None: 
@@ -471,7 +503,8 @@ def padronizar_df(df):
 def mesclar_com_supabase(df_excel):
     """
     Conserva a grade de bilhetes do Dashboard Excel como soberana.
-    Substitui INCONDICIONALMENTE pelos valores salvos no Supabase.
+    Substitui INCONDICIONALMENTE pelos valores salvos no Supabase: Status_Geral, Área Resp. Operação,
+    Obs. Operação, Setor e Gerentes.
     """
     if df_excel is None or df_excel.empty:
         return df_excel
@@ -479,9 +512,10 @@ def mesclar_com_supabase(df_excel):
     if df_db.empty:
         return df_excel
     
-    df_excel["Bilhete_Clean"] = df_excel["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
-    df_db["Bilhete_Clean"] = df_db["bilhete"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+    df_excel["Bilhete_Clean"] = df_excel["Bilhetes"].apply(sanitizar_bilhete)
+    df_db["Bilhete_Clean"] = df_db["bilhete"].apply(sanitizar_bilhete)
     
+    # Mantém apenas a alteração mais recente cadastrada no Supabase
     if "data_modificacao" in df_db.columns:
         df_db = df_db.sort_values("data_modificacao", ascending=False)
     df_db = df_db.drop_duplicates("Bilhete_Clean", keep="first")
@@ -608,7 +642,7 @@ def carregar_bases():
         df_m = pd.concat(frames, ignore_index=True)
         
         if "Bilhetes" in df_m.columns:
-            df_m["Bilhete_Clean"] = df_m["Bilhetes"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+            df_m["Bilhete_Clean"] = df_m["Bilhetes"].apply(sanitizar_bilhete)
             df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
             
         df_m = mesclar_com_supabase(df_m)
@@ -741,7 +775,7 @@ f_lemon_virt = aplicar_filtros(df_lemon_virt)
 f_sem_div = aplicar_filtros(df_sem_div)
 
 # ==============================================================================
-# 6. HEADER PRINCIPAL
+# 6. HEADER PRINCIPAL COM NOME E IDENTIFICAÇÃO DA PLATAFORMA
 # ==============================================================================
 st.markdown(
     """
@@ -762,7 +796,7 @@ c6.metric("Sem Divergência (OK)", f"{len(f_sem_div):,}")
 st.markdown("---")
 
 # ==============================================================================
-# 7. ESTRUTURA DE ABAS
+# 7. ESTRUTURA DE ABAS COM IDENTIFICAÇÃO CLARA
 # ==============================================================================
 abas = [
     "📊 Dashboard Executivo",
@@ -947,7 +981,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
                     "Gerentes": [n_area] * len(df_sel_cards)
                 })
                 
-                ok, msg, n_at, n_nv, n_err = salvar_tratativas_lote_supabase(df_up, usuario=usr_str)
+                ok, msg, _, _, _ = salvar_tratativas_lote_supabase(df_up, usuario=usr_str)
                 if ok:
                     logs_lote = []
                     for _, row_b in df_sel_cards.iterrows():
@@ -1104,7 +1138,6 @@ if e_master():
         st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Protegido)")
         st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização em massa no Supabase.")
         st.warning("🔒 **Sincronização em Lote Ativa:** Os bilhetes e seus respectivos campos atualizados serão gravados diretamente no Supabase.")
-        
         arq_upload = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "xls", "csv"], key="uploader_lote")
         if arq_upload:
             try:
@@ -1114,6 +1147,7 @@ if e_master():
                     df_up_raw = pd.read_excel(arq_upload, dtype=str)
                 cols_up = df_up_raw.columns.tolist()
                 
+                # Mapeamento flexível das colunas da planilha enviada
                 col_b = next((c for c in cols_up if c in ["Bilhetes", "Bilhete"] or any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
                 col_st = next((c for c in cols_up if str(c).strip().lower() in ["status_geral", "status geral", "status", "novo status"]), None)
                 col_ar = next((c for c in cols_up if any(x in str(c).lower() for x in ["área resp", "area resp", "responsavel", "gerente", "área"])), None)
@@ -1124,10 +1158,10 @@ if e_master():
                 if not col_b:
                     st.error("⚠️ O arquivo precisa conter ao menos uma coluna identificadora de 'Bilhete'.")
                 else:
-                    df_up_raw["Bilhete_Clean"] = df_up_raw[col_b].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+                    df_up_raw["Bilhete_Clean"] = df_up_raw[col_b].apply(sanitizar_bilhete)
                     
                     df_existentes = carregar_tratativas_db()
-                    set_existentes = set(df_existentes["bilhete"].astype(str).str.strip().tolist()) if not df_existentes.empty else set()
+                    set_existentes = set(df_existentes["bilhete"].apply(sanitizar_bilhete).tolist()) if not df_existentes.empty else set()
 
                     lote_alteracoes = []
                     novos_logs = []
@@ -1166,7 +1200,6 @@ if e_master():
                             "Gerentes": gerentes_novo,
                             "Ação no Supabase": tipo_registro
                         })
-                        
                         novos_logs.append({
                             "Data_Hora": agora_str,
                             "Bilhete": b_code,
@@ -1187,8 +1220,8 @@ if e_master():
                     m3.metric("Novos Bilhetes a Inserir", tot_novos)
                     
                     if len(lote_alteracoes) > 0:
-                        st.markdown("**Amostra dos Dados a Serem Atualizados/Sincronizados no Supabase:**")
-                        st.dataframe(pd.DataFrame(lote_alteracoes).head(10), use_container_width=True)
+                        st.markdown("**Amostra dos Dados a Serem Sincronizados no Supabase:**")
+                        st.dataframe(pd.DataFrame(lote_alteracoes), use_container_width=True)
                         
                         if st.button("🚀 Confirmar e Enviar Atualizações para o Supabase", key="btn_confirmar_lote"):
                             bar_prog = st.progress(0, text="Sincronizando com o banco de dados Supabase...")
@@ -1196,11 +1229,11 @@ if e_master():
                             df_lote_final = pd.DataFrame(lote_alteracoes)
                             ok, msg, n_at, n_nv, n_err = salvar_tratativas_lote_supabase(df_lote_final, usuario=f"Carga_Lote_{usr_str}")
                             
-                            bar_prog.progress(60, text="Gravando trilha de auditoria...")
+                            bar_prog.progress(50, text="Gravando trilha de auditoria...")
                             registrar_log_supabase(novos_logs)
                             
                             bar_prog.progress(100, text="Concluído!")
-                            st.success(f"✅ Processamento concluído no Supabase! {n_at} bilhete(s) atualizados e {n_nv} novos inseridos com sucesso!")
+                            st.success(msg)
                             
                             time.sleep(1.5)
                             st.rerun()
