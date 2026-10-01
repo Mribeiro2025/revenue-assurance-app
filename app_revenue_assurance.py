@@ -801,13 +801,49 @@ with aba_sel[0]:
     total_conciliado = len(f_sem_div)
     total_pendente = len(df_pendentes_todas)
     taxa_resolucao = (total_conciliado / total_casos * 100) if total_casos > 0 else 0.0
-    
-    # Cálculo do Montante Financeiro Pendente (Tarifa + Taxas)
-    val_pendente_total = 0.0
-    for col_v in ["Tarifa_Total", "A vista", "A credito", "Tarifa_Sistema"]:
-        if col_v in df_pendentes_todas.columns:
-            val_pendente_total += df_pendentes_todas[col_v].sum()
-            break
+
+    # ==============================================================================
+# CÁLCULO FINANCEIRO EXECUTIVO PRECISO (TARIFA, TAXAS E RECEITA)
+# ==============================================================================
+# Garantia de conversão numérica para evitar falhas de soma de strings
+    for col_fin in ["A vista", "A credito", "Taxa", "Comissão", "Taxa DU", "Incentivo"]:
+        if col_fin in df_pendentes_todas.columns:
+            df_pendentes_todas[col_fin] = pd.to_numeric(df_pendentes_todas[col_fin], errors="coerce").fillna(0.0)
+
+    # 1. Soma da Tarifa (A vista + A credito)
+    val_a_vista = df_pendentes_todas["A vista"].sum() if "A vista" in df_pendentes_todas.columns else 0.0
+    val_a_credito = df_pendentes_todas["A credito"].sum() if "A credito" in df_pendentes_todas.columns else 0.0
+    total_tarifa_pendente = val_a_vista + val_a_credito
+
+    # 2. Soma de Taxas
+    total_taxa_pendente = df_pendentes_todas["Taxa"].sum() if "Taxa" in df_pendentes_todas.columns else 0.0
+
+    # 3. Soma da Receita (Comissão + Taxa DU + Incentivo)
+    val_comissao = df_pendentes_todas["Comissão"].sum() if "Comissão" in df_pendentes_todas.columns else 0.0
+    val_du = df_pendentes_todas["Taxa DU"].sum() if "Taxa DU" in df_pendentes_todas.columns else 0.0
+    val_incentivo = df_pendentes_todas["Incentivo"].sum() if "Incentivo" in df_pendentes_todas.columns else 0.0
+    total_receita_pendente = val_comissao + val_du + val_incentivo
+
+    # 4. Valor Total Financeiro Pendente em Aberto
+    val_pendente_total = total_tarifa_pendente + total_taxa_pendente + total_receita_pendente
+
+    # ==============================================================================
+    # EXIBIÇÃO DOS KPIS EXECUTIVOS NO STREAMLIT
+    # ==============================================================================
+    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+    kpi1.metric("Total Bilhetes Processados", f"{total_casos:,}")
+    kpi2.metric("Bilhetes Conciliados (OK)", f"{total_conciliado:,}")
+    kpi3.metric("Bilhetes Pendentes", f"{total_pendente:,}")
+    kpi4.metric("Índice de Conciliação (%)", f"{taxa_resolucao:.1f}%")
+    kpi5.metric("Valor Total Pendente (R$)", f"R$ {val_pendente_total:,.2f}")
+
+    # Detalhamento Financeiro Executivo Adicional
+    with st.expander("🔍 Ver Detalhamento Financeiro dos Bilhetes Pendentes"):
+        m_f1, m_f2, m_f3 = st.columns(3)
+        m_f1.metric("Tarifa Total Pendente (À Vista + Crédito)", f"R$ {total_tarifa_pendente:,.2f}")
+        m_f2.metric("Total de Taxas Pendentes", f"R$ {total_taxa_pendente:,.2f}")
+        m_f3.metric("Receita Total Pendente (Comissão + DU + Incentivo)", f"R$ {total_receita_pendente:,.2f}")
+  
             
     df_sla = f_sem_div.copy()
     tempo_medio_dias = 0.0
