@@ -853,13 +853,7 @@ with aba_sel[0]:
         if not df_sla_valido.empty:
             tempo_medio_dias = df_sla_valido["Dias_Resolucao"].mean()
             
-    # Linha 1 de KPIs Executivos
-    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
-    kpi1.metric("Total Bilhetes Processados", f"{total_casos:,}")
-    kpi2.metric("Bilhetes Conciliados (OK)", f"{total_conciliado:,}")
-    kpi3.metric("Bilhetes Pendentes", f"{total_pendente:,}")
-    kpi4.metric("Índice de Conciliação (%)", f"{taxa_resolucao:.1f}%")
-    kpi5.metric("Valor Total Pendente (R$)", f"R$ {val_pendente_total:,.2f}")
+        
     
     st.markdown("---")
     
