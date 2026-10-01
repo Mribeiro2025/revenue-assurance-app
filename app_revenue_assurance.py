@@ -14,7 +14,7 @@ import streamlit as st
 from sqlalchemy import create_engine, text
 
 # ==============================================================================
-# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS COM IDENTIFICAÇÃO DE MARCA
+# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS
 # ==============================================================================
 st.set_page_config(
     page_title="Grupo Arbaitman | Revenue Assurance & Auditoria FP&A",
@@ -75,54 +75,46 @@ st.markdown(
 )
 
 # ==============================================================================
-# FUNÇÃO DE SANITIZAÇÃO DE BILHETES
+# 2. FUNÇÃO DE SANITIZAÇÃO E CONEXÃO COM SUPABASE
 # ==============================================================================
 def sanitizar_bilhete(val):
-    """Garante que o bilhete seja convertido para texto limpo, sem espaços e sem sufixo .0."""
+    """Padroniza identificadores removendo parêntesis, decimais (.0) e espaços."""
     if pd.isna(val) or val is None:
         return ""
     s = str(val).strip()
+    s = re.sub(r"[\[\]]", "", s)
     s = re.sub(r"\.0$", "", s)
-    return s
+    return s.strip()
 
-# ==============================================================================
-# 2. CONEXÃO E PERSISTÊNCIA DIRETA NO SUPABASE
-# ==============================================================================
 def get_db_engine():
-    """Conecta ao Supabase buscando a URI configurada nos Secrets do Streamlit."""
+    """Conecta ao Supabase com fallback transparente de protocolo."""
     try:
         if "postgres" in st.secrets and "url" in st.secrets["postgres"]:
             db_url = st.secrets["postgres"]["url"]
+            if db_url.startswith("postgresql://"):
+                db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
             return create_engine(db_url, pool_pre_ping=True)
-    except Exception:
-        pass
+    except Exception as e:
+        st.error(f"Erro na ligação ao banco de dados: {e}")
     return None
 
 def carregar_tratativas_db():
-    """Busca as tratativas no Supabase sem cláusulas frágeis no SQL e deduplica via Pandas."""
+    """Lê do Supabase e mantém o estado mais recente por bilhete."""
     engine = get_db_engine()
     if not engine:
-        st.warning("⚠️ Conexão com a base de dados do Supabase não configurada.")
         return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "data_modificacao"])
     
-    # Query SQL simples e direta para evitar erros de dialeto PostgreSQL
     query = "SELECT bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, data_modificacao FROM tratativas"
     try:
         df_db = pd.read_sql(query, engine)
         if not df_db.empty and "bilhete" in df_db.columns:
-            # Sanitiza a coluna bilhete no Pandas
             df_db["bilhete_clean"] = df_db["bilhete"].apply(sanitizar_bilhete)
-            
-            # Ordena por data_modificacao mais recente se existir
             if "data_modificacao" in df_db.columns:
                 df_db["data_modificacao"] = pd.to_datetime(df_db["data_modificacao"], errors="coerce")
                 df_db = df_db.sort_values("data_modificacao", ascending=False)
-                
-            # Mantém apenas o registro mais recente de cada bilhete
             df_db = df_db.drop_duplicates("bilhete_clean", keep="first").reset_index(drop=True)
             df_db["bilhete"] = df_db["bilhete_clean"]
             df_db.drop(columns=["bilhete_clean"], inplace=True, errors="ignore")
-            
         return df_db
     except Exception as e:
         st.error(f"⚠️ Erro ao consultar a tabela 'tratativas' no Supabase: {e}")
@@ -130,8 +122,8 @@ def carregar_tratativas_db():
 
 def salvar_tratativas_lote_supabase(df_lote, usuario):
     """
-    Executa UPSERT direto na base de dados do Supabase.
-    Força a atualização de bilhetes existentes e a inserção de novos.
+    Executa UPSERT incondicional na tabela tratativas do Supabase.
+    Atualiza bilhetes existentes e insere novos registros.
     """
     engine = get_db_engine()
     if not engine or df_lote.empty:
@@ -178,7 +170,6 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
     if not dados_lote:
         return False, "Nenhum bilhete válido para atualização.", 0, 0, 0
 
-    # Comando UPSERT Nativo no PostgreSQL (Sempre atualiza bilhetes existentes)
     sql_upsert = text("""
         INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
         VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW())
@@ -204,13 +195,12 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
         except Exception:
             erros += 1
 
-    st.cache_data.clear() # Invalida o cache para recarregar o painel com os dados novos do Supabase
-    
-    msg = f"✅ Sincronização concluída! {qtd_atualizados} bilhete(s) reconhecido(s)/atualizado(s) e {qtd_novos} novo(s) inserido(s)."
+    st.cache_data.clear()
+    msg = f"✅ Sincronização concluída! {qtd_atualizados} bilhete(s) atualizado(s) e {qtd_novos} novo(s) inserido(s)."
     return True, msg, qtd_atualizados, qtd_novos, erros
 
 def registrar_log_supabase(logs_list):
-    """Persiste a trilha de auditoria na tabela log_auditoria do Supabase."""
+    """Grava o histórico imutável na tabela log_auditoria do Supabase."""
     engine = get_db_engine()
     if not engine or not logs_list:
         return
@@ -290,7 +280,7 @@ def carregar_usuarios_supabase():
 def salvar_usuario_supabase(u_id, senha, nome, perfil, status="PENDENTE"):
     engine = get_db_engine()
     if not engine:
-        return False, "Conexão com o banco indisponível."
+        return False, "Conexão com a base de dados indisponível."
     
     sql = text("""
         INSERT INTO usuarios (usuario, senha, nome, perfil, status, data_solicitacao)
@@ -311,7 +301,7 @@ def salvar_usuario_supabase(u_id, senha, nome, perfil, status="PENDENTE"):
 def atualizar_senha_supabase(u_id, nova_senha):
     engine = get_db_engine()
     if not engine:
-        return False, "Conexão com o banco indisponível."
+        return False, "Conexão com a base de dados indisponível."
     
     sql = text("UPDATE usuarios SET senha = :p WHERE usuario = :u;")
     try:
@@ -334,7 +324,6 @@ def atualizar_status_usuario_supabase(u_id, novo_status):
     except Exception:
         return False
 
-# Inicialização de Sessão
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
 if "usuario_atual" not in st.session_state:
@@ -440,7 +429,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# 4. TRATAMENTO DE DADOS E SANITIZAÇÃO DE STRINGS ("None", "nan")
+# 4. SOBREPOSIÇÃO DOS DADOS DO SUPABASE SOBRE O RELATÓRIO
 # ==============================================================================
 def clean_str(val):
     if pd.isna(val) or val is None: 
@@ -452,7 +441,6 @@ def clean_str(val):
     return s
 
 def padronizar_df(df):
-    """Garante a integridade do DataFrame, remove 'None' literais e padroniza os campos."""
     if df is None or df.empty:
         return pd.DataFrame(columns=[
             "Bilhetes", "Ponto de venda", "Status_Geral", "Área Resp. Operação",
@@ -490,9 +478,8 @@ def padronizar_df(df):
 
 def mesclar_com_supabase(df_excel):
     """
-    Conserva a grade de bilhetes do Dashboard Excel como soberana.
-    Substitui INCONDICIONALMENTE pelos valores salvos no Supabase: Status_Geral, Área Resp. Operação,
-    Obs. Operação, Setor e Gerentes.
+    Se o bilhete estiver no Supabase, substitui incondicionalmente os dados do relatório.
+    Caso contrário, preserva os dados originais do relatório.
     """
     if df_excel is None or df_excel.empty:
         return df_excel
@@ -503,7 +490,6 @@ def mesclar_com_supabase(df_excel):
     df_excel["Bilhete_Clean"] = df_excel["Bilhetes"].apply(sanitizar_bilhete)
     df_db["Bilhete_Clean"] = df_db["bilhete"].apply(sanitizar_bilhete)
     
-    # Mantém apenas a alteração mais recente cadastrada no Supabase
     if "data_modificacao" in df_db.columns:
         df_db = df_db.sort_values("data_modificacao", ascending=False)
     df_db = df_db.drop_duplicates("Bilhete_Clean", keep="first")
@@ -535,7 +521,6 @@ def mesclar_com_supabase(df_excel):
     return df_merged
 
 def rotear_bases_mestra(df_master):
-    """Classifica e roteia os bilhetes da base mestra para as abas operacionais correspondentes."""
     if df_master is None or df_master.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
         
@@ -763,12 +748,12 @@ f_lemon_virt = aplicar_filtros(df_lemon_virt)
 f_sem_div = aplicar_filtros(df_sem_div)
 
 # ==============================================================================
-# 6. HEADER PRINCIPAL COM NOME E IDENTIFICAÇÃO DA PLATAFORMA
+# 6. HEADER PRINCIPAL
 # ==============================================================================
 st.markdown(
     """
     <div class='main-header'>
-        <h1>✈️ Grupo Arbaitman | Portal de Revenue Assurance & Conciliação FP&A</h1>
+        <h1>✈️️ Grupo Arbaitman | Portal de Revenue Assurance & Conciliação FP&A</h1>
         <p>Motor Inteligente de Auditoria de Emissões, Conciliação de Cias Aéreas e Gestão de Divergências</p>
     </div>
     """,
@@ -784,7 +769,7 @@ c6.metric("Sem Divergência (OK)", f"{len(f_sem_div):,}")
 st.markdown("---")
 
 # ==============================================================================
-# 7. ESTRUTURA DE ABAS COM IDENTIFICAÇÃO CLARA
+# 7. ESTRUTURA DE ABAS E MÓDULOS OPERACIONAIS
 # ==============================================================================
 abas = [
     "📊 Dashboard Executivo",
@@ -799,9 +784,7 @@ if e_master():
     abas.extend(["⚙️ Gestão de Acessos", "📜 Log de Auditoria", "📥 Carga em Lote"])
 aba_sel = st.tabs(abas)
 
-# ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO
-# ------------------------------------------------------------------------------
+# DASHBOARD EXECUTIVO
 with aba_sel[0]:
     st.markdown(
         """
@@ -854,32 +837,8 @@ with aba_sel[0]:
             fig_ger = px.bar(df_ger_chart, x="Gerente", y="Quantidade", text="Quantidade", color_discrete_sequence=["#002060"])
             fig_ger.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=320)
             st.plotly_chart(fig_ger, use_container_width=True)
-            
-    col_d3, col_d4 = st.columns(2)
-    with col_d3:
-        st.markdown("##### 🏢 Volume de Pendências por Setor")
-        if not df_pendentes_todas.empty and "Setor" in df_pendentes_todas.columns:
-            df_set = df_pendentes_todas["Setor"].value_counts().reset_index()
-            df_set.columns = ["Setor", "Quantidade"]
-            fig_set = px.bar(df_set, x="Setor", y="Quantidade", color="Setor", text_auto=True)
-            fig_set.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=300, showlegend=False)
-            st.plotly_chart(fig_set, use_container_width=True)
-            
-    with col_d4:
-        st.markdown("##### ⏱️ SLA Médio de Tratativa por Gerente (Dias)")
-        if not df_sla.empty and "Dias_Resolucao" in df_sla.columns and "Área Resp. Operação" in df_sla.columns:
-            df_sla_ger = df_sla.groupby("Área Resp. Operação")["Dias_Resolucao"].mean().reset_index()
-            df_sla_ger.columns = ["Gerente", "Dias_Medios"]
-            df_sla_ger = df_sla_ger.sort_values("Dias_Medios", ascending=False).head(8)
-            fig_sla = px.bar(df_sla_ger, x="Gerente", y="Dias_Medios", text_auto=".1f", color_discrete_sequence=["#d90429"])
-            fig_sla.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=300)
-            st.plotly_chart(fig_sla, use_container_width=True)
-        else:
-            st.info("Aguardando mais tratativas salvas para consolidar o índice de tempo médio.")
 
-# ------------------------------------------------------------------------------
-# FUNÇÃO REUTILIZÁVEL DE TRATATIVA
-# ------------------------------------------------------------------------------
+# MÓDULO VIA 1: ALIMENTAÇÃO DIRETA LINHA A LINHA
 def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     if df_filtrado.empty:
         st.info("Nenhum bilhete pendente nesta categoria.")
@@ -911,7 +870,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     bilhetes_lista = df_exib["Bilhetes"].tolist() if "Bilhetes" in df_exib.columns else []
     
     bilhet_sel = st.multiselect(
-        "Selecione um ou mais Bilhetes para Tratativa:",
+        "Selecione um ou mais Bilhetes para Tratativa Linha a Linha:",
         options=bilhetes_lista,
         placeholder="Selecione um ou mais bilhetes para atualizar...",
         key=f"ms_{key_prefix}"
@@ -956,7 +915,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
             obs_init = str(df_primeiro.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
             n_obs = st.text_area("Observação / Justificativa Detalhada:", value=obs_init, key=f"obs_{key_prefix}")
             
-            if st.form_submit_button("💾 Salvar e Atualizar Bilhetes"):
+            if st.form_submit_button("💾 Salvar Tratativa no Supabase"):
                 usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
                 agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
@@ -977,7 +936,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
                             "Data_Hora": agora_str, "Bilhete": row_b.get("Bilhetes"), "Usuario_Acao": usr_str,
                             "Status_Anterior": row_b.get("Status_Geral", "-"), "Novo_Status": n_status,
                             "Area_Anterior": row_b.get("Área Resp. Operação", "-"), "Nova_Area": n_area,
-                            "Observacao": n_obs, "Tipo_Interacao": f"Tratativa Web ({nome_base})"
+                            "Observacao": n_obs, "Tipo_Interacao": f"Tratativa Direta ({nome_base})"
                         })
                     registrar_log_supabase(logs_lote)
                     st.success(msg)
@@ -995,99 +954,32 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     st.markdown("---")
     st.dataframe(df_tbl_final, use_container_width=True, hide_index=True)
 
-# ------------------------------------------------------------------------------
-# ABAS OPERACIONAIS
-# ------------------------------------------------------------------------------
 with aba_sel[1]:
-    st.markdown(
-        """
-        <div class='section-banner'>
-            <h3>📋 1. Módulo de Falta de Lançamento no ERP</h3>
-            <p>Bilhetes emitidos pelas companhias aéreas sem correspondência localizada no sistema ERP.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown("<div class='section-banner'><h3>📋 1. Falta de Lançamento no ERP</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_falta, "Falta_de_Lancamento", "fl")
 
 with aba_sel[2]:
-    st.markdown(
-        """
-        <div class='section-banner'>
-            <h3>⚠️ 2. Módulo de Divergências de Valores & CIA</h3>
-            <p>Bilhetes com diferenças de tarifa, taxas, comissão ou divergência no cadastro da companhia.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown("<div class='section-banner'><h3>⚠️ 2. Divergências de Valores & CIA</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_erros, "Erros_Valores_CIA", "ev")
 
 with aba_sel[3]:
-    st.markdown(
-        """
-        <div class='section-banner'>
-            <h3>🎧 3. Módulo de Suporte Backoffice</h3>
-            <p>Chamados e bilhetes em tratativa com a equipe de Suporte e Atendimento Backoffice.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown("<div class='section-banner'><h3>🎧 3. Suporte Backoffice</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_backoffice, "Suporte_Backoffice", "sb")
 
 with aba_sel[4]:
-    st.markdown(
-        """
-        <div class='section-banner'>
-            <h3>🎪 4. Módulo de Central de Eventos</h3>
-            <p>Atendimentos e conciliações vinculados a grupos e eventos corporativos.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown("<div class='section-banner'><h3>🎪 4. Central de Eventos</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_eventos, "Central_de_Eventos", "ce")
 
 with aba_sel[5]:
-    st.markdown(
-        """
-        <div class='section-banner'>
-            <h3>🤖 5. Módulo de Emissor Virtual Lemontech</h3>
-            <p>Emissões realizadas via automação OBT e integrações de autoatendimento.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown("<div class='section-banner'><h3>🤖 5. Emissor Virtual Lemontech</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_lemon_virt, "Emissor_Virtual_Lemontech", "evl")
 
 with aba_sel[6]:
-    st.markdown(
-        """
-        <div class='section-banner'>
-            <h3>✅ 6. Módulo de Bilhetes Conciliados (Sem Divergência)</h3>
-            <p>Base de bilhetes validados, sem diferenças pendentes e devidamente integrados no ERP.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-    col_ok1, col_ok2 = st.columns([3, 1])
-    with col_ok1:
-        s_ok = st.text_input("🔍 Buscar em Bilhetes Conciliados:", key="s_ok")
-    with col_ok2:
-        st.write("")
-        st.write("")
-        st.download_button(
-            "📥 Extrair Relatório (Sem Divergência)",
-            data=gerar_excel_estilizado(f_sem_div, "Sem_Divergencia"),
-            file_name="Sem_Divergencia_Filtrado.xlsx"
-        )
+    st.markdown("<div class='section-banner'><h3>✅ 6. Bilhetes Conciliados (Sem Divergência)</h3></div>", unsafe_allow_html=True)
     df_ok_view = f_sem_div.copy()
-    if s_ok.strip():
-        term = s_ok.strip().lower()
-        df_ok_view = df_ok_view[df_ok_view["Bilhetes"].astype(str).str.lower().str.contains(term, na=False)]
     st.dataframe(df_ok_view, use_container_width=True, hide_index=True)
 
-# ------------------------------------------------------------------------------
-# ABAS EXCLUSIVAS DO MASTER
-# ------------------------------------------------------------------------------
+# MÓDULO VIA 2: ATUALIZAÇÃO VIA CARGA EM LOTE
 if e_master():
     with aba_sel[7]:
         st.subheader("⚙️ Central de Aprovação de Acessos")
@@ -1101,14 +993,10 @@ if e_master():
                     if atualizar_status_usuario_supabase(u_k, "APROVADO"):
                         st.success(f"Usuário {u_k} aprovado!")
                         st.rerun()
-                    else:
-                        st.error("Erro ao aprovar no banco de dados.")
                 if ca2.button(f"❌ Rejeitar {u_k}"):
                     if atualizar_status_usuario_supabase(u_k, "REJEITADO"):
                         st.success(f"Usuário {u_k} rejeitado.")
                         st.rerun()
-                    else:
-                        st.error("Erro ao rejeitar no banco de dados.")
         else:
             st.info("Nenhuma solicitação de acesso pendente.")
             
@@ -1135,7 +1023,6 @@ if e_master():
                     df_up_raw = pd.read_excel(arq_upload, dtype=str)
                 cols_up = df_up_raw.columns.tolist()
                 
-                # Mapeamento flexível das colunas da planilha enviada
                 col_b = next((c for c in cols_up if c in ["Bilhetes", "Bilhete"] or any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
                 col_st = next((c for c in cols_up if str(c).strip().lower() in ["status_geral", "status geral", "status", "novo status"]), None)
                 col_ar = next((c for c in cols_up if any(x in str(c).lower() for x in ["área resp", "area resp", "responsavel", "gerente", "área"])), None)
