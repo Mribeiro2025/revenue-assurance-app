@@ -17,7 +17,7 @@ from sqlalchemy import create_engine, text
 # 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS
 # ==============================================================================
 st.set_page_config(
-    page_title="Grupo Arbaitman | Revenue Assurance & Auditoria FP&A",
+    page_title="Grupo Arbaitman | Portal de Conciliação Aérea & Bilhetes Pendentes",
     page_icon="✈️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -78,7 +78,7 @@ st.markdown(
 # 2. FUNÇÃO DE SANITIZAÇÃO E CONEXÃO COM SUPABASE
 # ==============================================================================
 def sanitizar_bilhete(val):
-    """Padroniza identificadores removendo parêntesis, decimais (.0) e espaços."""
+    """Padroniza identificadores removendo colchetes, decimais (.0) e espaços."""
     if pd.isna(val) or val is None:
         return ""
     s = str(val).strip()
@@ -87,7 +87,7 @@ def sanitizar_bilhete(val):
     return s.strip()
 
 def get_db_engine():
-    """Conecta ao Supabase com fallback transparente de protocolo."""
+    """Conecta ao Supabase com suporte aos Secrets e driver SQLAlchemy."""
     try:
         if "postgres" in st.secrets and "url" in st.secrets["postgres"]:
             db_url = st.secrets["postgres"]["url"]
@@ -122,7 +122,7 @@ def carregar_tratativas_db():
 
 def salvar_tratativas_lote_supabase(df_lote, usuario):
     """
-    Executa UPSERT incondicional na tabela tratativas do Supabase.
+    Executa UPSERT na tabela tratativas do Supabase.
     Atualiza bilhetes existentes e insere novos registros.
     """
     engine = get_db_engine()
@@ -200,7 +200,7 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
     return True, msg, qtd_atualizados, qtd_novos, erros
 
 def registrar_log_supabase(logs_list):
-    """Grava o histórico imutável na tabela log_auditoria do Supabase."""
+    """Grava o histórico na tabela log_auditoria do Supabase."""
     engine = get_db_engine()
     if not engine or not logs_list:
         return
@@ -345,7 +345,7 @@ if not st.session_state["autenticado"]:
             """
             <div class='main-header'>
                 <h1>✈️ Grupo Arbaitman</h1>
-                <p>Portal de Revenue Assurance & Auditoria FP&A</p>
+                <p>Portal de Conciliação Aérea & Gestão de Bilhetes Pendentes (FP&A)</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -382,7 +382,7 @@ if not st.session_state["autenticado"]:
                     st.rerun()
                 elif u_input == "compliance1" and p_input == "123":
                     st.session_state["autenticado"] = True
-                    st.session_state["usuario_atual"] = "Compliance - Auditoria 01"
+                    st.session_state["usuario_atual"] = "Compliance FP&A"
                     st.session_state["perfil_atual"] = "Compliance"
                     st.session_state["login_user_id"] = "compliance1"
                     st.rerun()
@@ -429,7 +429,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# 4. SOBREPOSIÇÃO DOS DADOS DO SUPABASE SOBRE O RELATÓRIO
+# 4. SOBREPOSIÇÃO DOS DADOS DO SUPABASE SOBRE O RELATÓRIO BRUTO
 # ==============================================================================
 def clean_str(val):
     if pd.isna(val) or val is None: 
@@ -477,10 +477,6 @@ def padronizar_df(df):
     return df_out
 
 def mesclar_com_supabase(df_excel):
-    """
-    Se o bilhete estiver no Supabase, substitui incondicionalmente os dados do relatório.
-    Caso contrário, preserva os dados originais do relatório.
-    """
     if df_excel is None or df_excel.empty:
         return df_excel
     df_db = carregar_tratativas_db()
@@ -683,14 +679,14 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     output_buffer.seek(0)
     return output_buffer.getvalue()
 
-with st.spinner("🔄 Conectando ao Supabase e carregando bases..."):
+with st.spinner("🔄 Conectando ao Supabase e recarregando o painel..."):
     df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div, df_log = carregar_bases()
 
 # ==============================================================================
 # 5. SIDEBAR E FILTROS OPERACIONAIS
 # ==============================================================================
 st.sidebar.title("Grupo Arbaitman")
-st.sidebar.caption("Revenue Assurance Platform v3.2")
+st.sidebar.caption("Conciliação Aérea FP&A v3.5")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 with st.sidebar.expander("🔑 Alterar Minha Senha"):
     with st.form("form_pwd_side"):
@@ -748,13 +744,13 @@ f_lemon_virt = aplicar_filtros(df_lemon_virt)
 f_sem_div = aplicar_filtros(df_sem_div)
 
 # ==============================================================================
-# 6. HEADER PRINCIPAL
+# 6. HEADER PRINCIPAL (COM MARCA ATUALIZADA)
 # ==============================================================================
 st.markdown(
     """
     <div class='main-header'>
-        <h1>✈️️ Grupo Arbaitman | Portal de Revenue Assurance & Conciliação FP&A</h1>
-        <p>Motor Inteligente de Auditoria de Emissões, Conciliação de Cias Aéreas e Gestão de Divergências</p>
+        <h1>✈️ Grupo Arbaitman | Portal de Conciliação Aérea & Gestão de Bilhetes Pendentes (FP&A)</h1>
+        <p>Plataforma Executiva para Gestão de Divergências, Lançamentos em ERP e Monitoramento de SLA de Resolução</p>
     </div>
     """,
     unsafe_allow_html=True
@@ -765,11 +761,11 @@ c2.metric("Erros Valores/CIA", f"{len(f_erros):,}")
 c3.metric("Backoffice", f"{len(f_backoffice):,}")
 c4.metric("Central de Eventos", f"{len(f_eventos):,}")
 c5.metric("Emissor Virtual", f"{len(f_lemon_virt):,}")
-c6.metric("Sem Divergência (OK)", f"{len(f_sem_div):,}")
+c6.metric("Conciliados (OK)", f"{len(f_sem_div):,}")
 st.markdown("---")
 
 # ==============================================================================
-# 7. ESTRUTURA DE ABAS E MÓDULOS OPERACIONAIS
+# 7. ESTRUTURA DE ABAS
 # ==============================================================================
 abas = [
     "📊 Dashboard Executivo",
@@ -778,19 +774,21 @@ abas = [
     "🎧 3. Suporte Backoffice",
     "🎪 4. Central de Eventos",
     "🤖 5. Emissor Virtual Lemontech",
-    "✅ 6. Sem Divergência (OK)"
+    "✅ 6. Bilhetes Conciliados (Sem Divergência)"
 ]
 if e_master():
-    abas.extend(["⚙️ Gestão de Acessos", "📜 Log de Auditoria", "📥 Carga em Lote"])
+    abas.extend(["⚙️ Gestão de Acessos", "📜 Log de Histórico", "📥 Carga em Lote Avançada"])
 aba_sel = st.tabs(abas)
 
-# DASHBOARD EXECUTIVO
+# ------------------------------------------------------------------------------
+# ABA 0: DASHBOARD EXECUTIVO EXPANDIDO COM MAIS KPIS
+# ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.markdown(
         """
         <div class='section-banner'>
-            <h3>📊 Painel Executivo C-Level & Desempenho de SLA</h3>
-            <p>Visão consolidada de resoluções, tempo médio de atendimento e distribuição de pendências operacionais.</p>
+            <h3>📊 Painel Executivo C-Level & Desempenho de Conciliação</h3>
+            <p>Visão estratégica do volume financeiro pendente, taxa de resolução, SLAs operacionais e pendências por companhia aérea.</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -799,9 +797,18 @@ with aba_sel[0]:
     df_pendentes_todas = pd.concat([f_falta, f_erros, f_backoffice, f_eventos, f_lemon_virt], ignore_index=True)
     df_todas_casos = pd.concat([df_pendentes_todas, f_sem_div], ignore_index=True)
     
-    total_auditado = len(df_todas_casos)
-    total_resolvido = len(f_sem_div)
-    taxa_resolucao = (total_resolvido / total_auditado * 100) if total_auditado > 0 else 0.0
+    total_casos = len(df_todas_casos)
+    total_conciliado = len(f_sem_div)
+    total_pendente = len(df_pendentes_todas)
+    taxa_resolucao = (total_conciliado / total_casos * 100) if total_casos > 0 else 0.0
+    
+    # Cálculo do Montante Financeiro Pendente (Tarifa + Taxas)
+    val_pendente_total = 0.0
+    for col_v in ["Tarifa_Total", "A vista", "A credito", "Tarifa_Sistema"]:
+        if col_v in df_pendentes_todas.columns:
+            val_pendente_total += df_pendentes_todas[col_v].sum()
+            break
+            
     df_sla = f_sem_div.copy()
     tempo_medio_dias = 0.0
     if not df_sla.empty and "Dt_Parsed" in df_sla.columns and "Dt_Mod_Parsed" in df_sla.columns:
@@ -810,16 +817,20 @@ with aba_sel[0]:
         if not df_sla_valido.empty:
             tempo_medio_dias = df_sla_valido["Dias_Resolucao"].mean()
             
-    m_exec1, m_exec2, m_exec3, m_exec4 = st.columns(4)
-    m_exec1.metric("Total de Bilhetes Auditados", f"{total_auditado:,}")
-    m_exec2.metric("Total Resolvido / Lançado", f"{total_resolvido:,}")
-    m_exec3.metric("Taxa de Resolução (%)", f"{taxa_resolucao:.1f}%")
-    m_exec4.metric("SLA Médio de Solução", f"{tempo_medio_dias:.1f} dias")
+    # Linha 1 de KPIs Executivos
+    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+    kpi1.metric("Total Bilhetes Processados", f"{total_casos:,}")
+    kpi2.metric("Bilhetes Conciliados (OK)", f"{total_conciliado:,}")
+    kpi3.metric("Bilhetes Pendentes", f"{total_pendente:,}")
+    kpi4.metric("Índice de Conciliação (%)", f"{taxa_resolucao:.1f}%")
+    kpi5.metric("Valor Total Pendente (R$)", f"R$ {val_pendente_total:,.2f}")
+    
     st.markdown("---")
     
+    # Linha de Gráficos Executivos
     col_d1, col_d2 = st.columns(2)
     with col_d1:
-        st.markdown("##### ⚠️ Distribuição de Pendências por Status")
+        st.markdown("##### ⚠️ Distribuição das Pendências por Status")
         if not df_pendentes_todas.empty and "Status_Geral" in df_pendentes_todas.columns:
             df_st_chart = df_pendentes_todas["Status_Geral"].value_counts().reset_index()
             df_st_chart.columns = ["Status", "Quantidade"]
@@ -827,18 +838,42 @@ with aba_sel[0]:
             fig_pie.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=320)
             st.plotly_chart(fig_pie, use_container_width=True)
         else:
-            st.info("Nenhuma pendência registrada.")
+            st.info("Nenhuma pendência registrada para os filtros selecionados.")
             
     with col_d2:
+        st.markdown("##### ✈️ Pendências por Companhia Aérea (Top 8)")
+        if not df_pendentes_todas.empty and "CIA" in df_pendentes_todas.columns:
+            df_cia_chart = df_pendentes_todas["CIA"].value_counts().head(8).reset_index()
+            df_cia_chart.columns = ["Companhia", "Bilhetes Pendentes"]
+            fig_cia = px.bar(df_cia_chart, x="Companhia", y="Bilhetes Pendentes", text="Bilhetes Pendentes", color_discrete_sequence=["#003366"])
+            fig_cia.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=320)
+            st.plotly_chart(fig_cia, use_container_width=True)
+            
+    col_d3, col_d4 = st.columns(2)
+    with col_d3:
         st.markdown("##### 👤 Top 8 Gerentes por Volume de Pendências")
         if not df_pendentes_todas.empty and "Área Resp. Operação" in df_pendentes_todas.columns:
             df_ger_chart = df_pendentes_todas["Área Resp. Operação"].value_counts().head(8).reset_index()
             df_ger_chart.columns = ["Gerente", "Quantidade"]
             fig_ger = px.bar(df_ger_chart, x="Gerente", y="Quantidade", text="Quantidade", color_discrete_sequence=["#002060"])
-            fig_ger.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=320)
+            fig_ger.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=300)
             st.plotly_chart(fig_ger, use_container_width=True)
+            
+    with col_d4:
+        st.markdown("##### ⏱️ SLA Médio de Solução por Gerente (Dias)")
+        if not df_sla.empty and "Dias_Resolucao" in df_sla.columns and "Área Resp. Operação" in df_sla.columns:
+            df_sla_ger = df_sla.groupby("Área Resp. Operação")["Dias_Resolucao"].mean().reset_index()
+            df_sla_ger.columns = ["Gerente", "Dias_Medios"]
+            df_sla_ger = df_sla_ger.sort_values("Dias_Medios", ascending=False).head(8)
+            fig_sla = px.bar(df_sla_ger, x="Gerente", y="Dias_Medios", text_auto=".1f", color_discrete_sequence=["#d90429"])
+            fig_sla.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=300)
+            st.plotly_chart(fig_sla, use_container_width=True)
+        else:
+            st.info("Aguardando mais atualizações salvas para calcular a média histórica de SLA.")
 
-# MÓDULO VIA 1: ALIMENTAÇÃO DIRETA LINHA A LINHA
+# ------------------------------------------------------------------------------
+# FUNÇÃO REUTILIZÁVEL DE TRATATIVA LINHA A LINHA
+# ------------------------------------------------------------------------------
 def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     if df_filtrado.empty:
         st.info("Nenhum bilhete pendente nesta categoria.")
@@ -954,6 +989,9 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     st.markdown("---")
     st.dataframe(df_tbl_final, use_container_width=True, hide_index=True)
 
+# ------------------------------------------------------------------------------
+# ABAS OPERACIONAIS
+# ------------------------------------------------------------------------------
 with aba_sel[1]:
     st.markdown("<div class='section-banner'><h3>📋 1. Falta de Lançamento no ERP</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_falta, "Falta_de_Lancamento", "fl")
@@ -974,12 +1012,67 @@ with aba_sel[5]:
     st.markdown("<div class='section-banner'><h3>🤖 5. Emissor Virtual Lemontech</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_lemon_virt, "Emissor_Virtual_Lemontech", "evl")
 
+# ------------------------------------------------------------------------------
+# ABA 6: BILHETES CONCILIADOS (SEM DIVERGÊNCIA) - APRIMORADA
+# ------------------------------------------------------------------------------
 with aba_sel[6]:
-    st.markdown("<div class='section-banner'><h3>✅ 6. Bilhetes Conciliados (Sem Divergência)</h3></div>", unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class='section-banner'>
+            <h3>✅ 6. Módulo de Bilhetes Conciliados (Sem Divergência)</h3>
+            <p>Base de bilhetes validados, sem divergências ativas e integrados no ERP. Utilize os filtros avançados abaixo para análises manuais e extração de relatórios.</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # Filtros para Análise Manual
+    f_c1, f_c2, f_c3 = st.columns(3)
+    with f_c1:
+        opts_ger = sorted(f_sem_div["Área Resp. Operação"].dropna().unique().tolist()) if "Área Resp. Operação" in f_sem_div.columns else []
+        filtro_ok_ger = st.multiselect("Filtrar por Gerente:", options=opts_ger, key="f_ok_ger")
+    with f_c2:
+        opts_cia = sorted(f_sem_div["CIA"].dropna().unique().tolist()) if "CIA" in f_sem_div.columns else []
+        filtro_ok_cia = st.multiselect("Filtrar por CIA Aérea:", options=opts_cia, key="f_ok_cia")
+    with f_c3:
+        opts_setor = sorted(f_sem_div["Setor"].dropna().unique().tolist()) if "Setor" in f_sem_div.columns else []
+        filtro_ok_setor = st.multiselect("Filtrar por Setor:", options=opts_setor, key="f_ok_setor")
+        
     df_ok_view = f_sem_div.copy()
+    if filtro_ok_ger:
+        df_ok_view = df_ok_view[df_ok_view["Área Resp. Operação"].isin(filtro_ok_ger)]
+    if filtro_ok_cia:
+        df_ok_view = df_ok_view[df_ok_view["CIA"].isin(filtro_ok_cia)]
+    if filtro_ok_setor:
+        df_ok_view = df_ok_view[df_ok_view["Setor"].isin(filtro_ok_setor)]
+        
+    col_ok1, col_ok2 = st.columns([3, 1])
+    with col_ok1:
+        s_ok = st.text_input("🔍 Buscar em Bilhetes Conciliados (por Bilhete, LOC ou Passageiro):", key="s_ok")
+    with col_ok2:
+        st.write("")
+        st.write("")
+        st.download_button(
+            "📥 Extrair Relatório Executivo (Sem Divergência)",
+            data=gerar_excel_estilizado(df_ok_view, "Bilhetes_Conciliados"),
+            file_name="Bilhetes_Conciliados_Filtrado.xlsx",
+            key="btn_dl_ok"
+        )
+        
+    if s_ok.strip():
+        term = s_ok.strip().lower()
+        cols_ok_s = [c for c in ["Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Ponto de venda", "Gerentes", "Consultor"] if c in df_ok_view.columns]
+        m_s_ok = pd.Series(False, index=df_ok_view.index)
+        for col in cols_ok_s:
+            m_s_ok |= df_ok_view[col].astype(str).str.lower().str.contains(term, na=False)
+        df_ok_view = df_ok_view[m_s_ok]
+
+    st.markdown(f"**Bilhetes Conciliados Exibidos:** {len(df_ok_view):,}")
     st.dataframe(df_ok_view, use_container_width=True, hide_index=True)
 
-# MÓDULO VIA 2: ATUALIZAÇÃO VIA CARGA EM LOTE
+# ------------------------------------------------------------------------------
+# ABAS EXCLUSIVAS DO MASTER
+# ------------------------------------------------------------------------------
 if e_master():
     with aba_sel[7]:
         st.subheader("⚙️ Central de Aprovação de Acessos")
@@ -1001,19 +1094,23 @@ if e_master():
             st.info("Nenhuma solicitação de acesso pendente.")
             
     with aba_sel[8]:
-        st.subheader("📜 Trilha de Auditoria do Supabase")
+        st.subheader("📜 Histórico de Modificações no Supabase")
         engine_sb = get_db_engine()
         if engine_sb:
             try:
                 df_log_db = pd.read_sql("SELECT * FROM log_auditoria ORDER BY id DESC LIMIT 500", engine_sb)
                 st.dataframe(df_log_db, use_container_width=True, hide_index=True)
             except Exception:
-                st.info("Nenhum registro de log encontrado na tabela log_auditoria do Supabase.")
+                st.info("Nenhum registro de histórico encontrado na tabela log_auditoria do Supabase.")
                 
+    # --------------------------------------------------------------------------
+    # ABA 9: CARGA EM LOTE COM ESTATÍSTICAS AVANÇADAS
+    # --------------------------------------------------------------------------
     with aba_sel[9]:
-        st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Protegido)")
-        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização em massa no Supabase.")
-        st.warning("🔒 **Sincronização em Lote Ativa:** Os bilhetes e seus respectivos campos atualizados serão gravados diretamente no Supabase.")
+        st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Avançado)")
+        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização massiva no Supabase com análise estatística prévia.")
+        st.warning("🔒 **Sincronização em Lote Ativa:** Os bilhetes e seus campos serão atualizados diretamente no Supabase mantendo a última versão.")
+        
         arq_upload = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "xls", "csv"], key="uploader_lote")
         if arq_upload:
             try:
@@ -1087,24 +1184,41 @@ if e_master():
                             "Tipo_Interacao": f"Carga em Lote ({tipo_registro})"
                         })
                             
-                    st.markdown("### 📊 Relatório de Preparação de Carga em Lote")
+                    df_lote_prep = pd.DataFrame(lote_alteracoes)
                     
-                    m1, m2, m3 = st.columns(3)
-                    m1.metric("Total de Bilhetes no Arquivo", tot_lote)
+                    st.markdown("### 📊 Relatório Estatístico Pré-Carga")
+                    
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric("Total de Bilhetes", tot_lote)
                     m2.metric("Bilhetes a Atualizar no Supabase", tot_para_atualizar)
                     m3.metric("Novos Bilhetes a Inserir", tot_novos)
                     
-                    if len(lote_alteracoes) > 0:
+                    duplicados_arquivo = df_lote_prep.duplicated(subset=["Bilhetes"]).sum() if not df_lote_prep.empty else 0
+                    m4.metric("Duplicados no Arquivo", duplicados_arquivo)
+                    
+                    if not df_lote_prep.empty:
+                        st.markdown("#### 📈 Estatísticas do Arquivo Importado")
+                        col_e1, col_e2 = st.columns(2)
+                        with col_e1:
+                            st.markdown("**Distribuição por Status de Destino:**")
+                            df_st_lote = df_lote_prep["Status_Geral"].value_counts().reset_index()
+                            df_st_lote.columns = ["Status", "Quantidade"]
+                            st.dataframe(df_st_lote, use_container_width=True, hide_index=True)
+                        with col_e2:
+                            st.markdown("**Distribuição por Área Responsável / Gerente:**")
+                            df_ar_lote = df_lote_prep["Área Resp. Operação"].value_counts().reset_index()
+                            df_ar_lote.columns = ["Gerente", "Quantidade"]
+                            st.dataframe(df_ar_lote, use_container_width=True, hide_index=True)
+
                         st.markdown("**Amostra dos Dados a Serem Sincronizados no Supabase:**")
-                        st.dataframe(pd.DataFrame(lote_alteracoes), use_container_width=True)
+                        st.dataframe(df_lote_prep, use_container_width=True)
                         
                         if st.button("🚀 Confirmar e Enviar Atualizações para o Supabase", key="btn_confirmar_lote"):
                             bar_prog = st.progress(0, text="Sincronizando com o banco de dados Supabase...")
                             
-                            df_lote_final = pd.DataFrame(lote_alteracoes)
-                            ok, msg, n_at, n_nv, n_err = salvar_tratativas_lote_supabase(df_lote_final, usuario=f"Carga_Lote_{usr_str}")
+                            ok, msg, n_at, n_nv, n_err = salvar_tratativas_lote_supabase(df_lote_prep, usuario=f"Carga_Lote_{usr_str}")
                             
-                            bar_prog.progress(50, text="Gravando trilha de auditoria...")
+                            bar_prog.progress(50, text="Gravando trilha de histórico...")
                             registrar_log_supabase(novos_logs)
                             
                             bar_prog.progress(100, text="Concluído!")
