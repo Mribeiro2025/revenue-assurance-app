@@ -22,7 +22,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-ARQUIVO_DASHBOARD = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
+ARQUIVO_DASHBOARD_PADRAO = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 
 st.markdown(
     """
@@ -467,7 +467,7 @@ def padronizar_df(df):
     df_out["Status_Geral"] = df_out["Status_Geral"].apply(
         lambda x: "Pendente de Lançamento (Não Consta)" if str(x).lower().strip() in status_map else str(x)
     )
-    for c in ["Taxa", "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita", "Tarifa_Total"]:
+    for c in ["Taxa", "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita", "Tarifa_Total", "Comissão", "Taxa DU", "Incentivo"]:
         if c in df_out.columns: 
             df_out[c] = pd.to_numeric(df_out[c], errors="coerce").fillna(0.0)
             
@@ -586,14 +586,19 @@ def rotear_bases_mestra(df_master):
     
     return df_falta, df_erros, df_bo, df_eventos, df_lemon_virt, df_ok
 
-@st.cache_data(ttl=15)
-def carregar_bases():
-    if not os.path.exists(ARQUIVO_DASHBOARD):
+@st.cache_data(ttl=1)
+def carregar_bases(caminho_ou_buffer=None):
+    caminho = caminho_ou_buffer if caminho_ou_buffer is not None else ARQUIVO_DASHBOARD_PADRAO
+    if not isinstance(caminho, str) and not hasattr(caminho, "read"):
+        vazio = padronizar_df(None)
+        return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
+        
+    if isinstance(caminho, str) and not os.path.exists(caminho):
         vazio = padronizar_df(None)
         return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
     
     try:
-        xls = pd.ExcelFile(ARQUIVO_DASHBOARD, engine="openpyxl")
+        xls = pd.ExcelFile(caminho, engine="openpyxl")
         frames = []
         
         for sheet in xls.sheet_names:
@@ -679,15 +684,27 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     output_buffer.seek(0)
     return output_buffer.getvalue()
 
-with st.spinner("🔄 Conectando ao Supabase e recarregando o painel..."):
-    df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div, df_log = carregar_bases()
-
 # ==============================================================================
-# 5. SIDEBAR E FILTROS OPERACIONAIS
+# 5. SIDEBAR, UPLOAD DA PLANILHA ESPELHO E FILTROS OPERACIONAIS
 # ==============================================================================
 st.sidebar.title("Grupo Arbaitman")
-st.sidebar.caption("Conciliação Aérea FP&A v3.5")
+st.sidebar.caption("Conciliação Aérea FP&A v3.6 (Espelho Fiel)")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
+
+with st.sidebar.expander("📂 Atualizar Planilha Espelho Principal"):
+    arq_espelho = st.file_uploader("Subir Dashboard_Revenue_Assurance_Consolidado.xlsx:", type=["xlsx"], key="uploader_dash_espelho")
+    if arq_espelho:
+        with open(ARQUIVO_DASHBOARD_PADRAO, "wb") as f:
+            f.write(arq_espelho.getbuffer())
+        st.cache_data.clear()
+        st.success("✅ Planilha Espelho atualizada no servidor!")
+        time.sleep(1)
+        st.rerun()
+
+if st.sidebar.button("🔄 Recarregar e Limpar Cache"):
+    st.cache_data.clear()
+    st.rerun()
+
 with st.sidebar.expander("🔑 Alterar Minha Senha"):
     with st.form("form_pwd_side"):
         s_atu = str(st.text_input("Senha Atual:", type="password")).strip()
@@ -703,17 +720,36 @@ with st.sidebar.expander("🔑 Alterar Minha Senha"):
                     st.error(f"Erro ao salvar senha: {msg}")
             else:
                 st.error("Senha atual incorreta.")
+
 if st.sidebar.button("🔒 Sair"):
     st.session_state["autenticado"] = False
     st.rerun()
+
 st.sidebar.markdown("---")
+
+# Carregamento Inicial
+with st.spinner("🔄 Conectando ao Supabase e lendo planilha espelho..."):
+    df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div, df_log = carregar_bases()
+
+df_todos_unificados = pd.concat([df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
+
+# Cálculo Dinâmico do Período de Datas
+dt_min_default = datetime.date(2024, 1, 1)
+dt_max_default = datetime.date(2026, 12, 31)
+
+if not df_todos_unificados.empty and "Dt_Parsed" in df_todos_unificados.columns:
+    dts_validas = df_todos_unificados["Dt_Parsed"].dropna()
+    if not dts_validas.empty:
+        dt_min_default = dts_validas.min().date()
+        dt_max_default = dts_validas.max().date()
+
 st.sidebar.subheader("🔍 Filtros Operacionais")
-d_inicio = st.sidebar.date_input("Data Inicial:", value=datetime.date(2024, 1, 1), format="DD/MM/YYYY")
-d_fim = st.sidebar.date_input("Data Final:", value=datetime.date(2026, 12, 31), format="DD/MM/YYYY")
-df_todos = pd.concat([df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
-filtro_gerente = st.sidebar.multiselect("Gerente / Área Resp.:", options=sorted(df_todos["Área Resp. Operação"].dropna().unique()), placeholder="Todos")
-filtro_setor = st.sidebar.multiselect("Setor:", options=sorted(df_todos["Setor"].dropna().unique()), placeholder="Todos")
-filtro_cia = st.sidebar.multiselect("Companhia Aérea:", options=sorted(df_todos["CIA"].dropna().unique()), placeholder="Todas")
+d_inicio = st.sidebar.date_input("Data Inicial:", value=dt_min_default, format="DD/MM/YYYY")
+d_fim = st.sidebar.date_input("Data Final:", value=dt_max_default, format="DD/MM/YYYY")
+
+filtro_gerente = st.sidebar.multiselect("Gerente / Área Resp.:", options=sorted(df_todos_unificados["Área Resp. Operação"].dropna().unique()), placeholder="Todos")
+filtro_setor = st.sidebar.multiselect("Setor:", options=sorted(df_todos_unificados["Setor"].dropna().unique()), placeholder="Todos")
+filtro_cia = st.sidebar.multiselect("Companhia Aérea:", options=sorted(df_todos_unificados["CIA"].dropna().unique()), placeholder="Todas")
 
 def aplicar_filtros(df):
     if df is None or df.empty:
@@ -744,13 +780,13 @@ f_lemon_virt = aplicar_filtros(df_lemon_virt)
 f_sem_div = aplicar_filtros(df_sem_div)
 
 # ==============================================================================
-# 6. HEADER PRINCIPAL (COM MARCA ATUALIZADA)
+# 6. HEADER PRINCIPAL
 # ==============================================================================
 st.markdown(
     """
     <div class='main-header'>
         <h1>✈️ Grupo Arbaitman | Portal de Conciliação Aérea & Gestão de Bilhetes Pendentes (FP&A)</h1>
-        <p>Plataforma Executiva para Gestão de Divergências, Lançamentos em ERP e Monitoramento de SLA de Resolução</p>
+        <p>Plataforma Executiva Espelho da Planilha Mestra, Conciliação em ERP e Monitoramento de SLA</p>
     </div>
     """,
     unsafe_allow_html=True
@@ -781,7 +817,7 @@ if e_master():
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO EXPANDIDO COM MAIS KPIS
+# ABA 0: DASHBOARD EXECUTIVO EXPANDIDO COM CÁLCULO FINANCEIRO CORRETO
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.markdown(
@@ -801,50 +837,25 @@ with aba_sel[0]:
     total_conciliado = len(f_sem_div)
     total_pendente = len(df_pendentes_todas)
     taxa_resolucao = (total_conciliado / total_casos * 100) if total_casos > 0 else 0.0
-
-    # ==============================================================================
-# CÁLCULO FINANCEIRO EXECUTIVO PRECISO (TARIFA, TAXAS E RECEITA)
-# ==============================================================================
-# Garantia de conversão numérica para evitar falhas de soma de strings
+    
+    # Cálculo Financeiro Composto Executivo
     for col_fin in ["A vista", "A credito", "Taxa", "Comissão", "Taxa DU", "Incentivo"]:
         if col_fin in df_pendentes_todas.columns:
             df_pendentes_todas[col_fin] = pd.to_numeric(df_pendentes_todas[col_fin], errors="coerce").fillna(0.0)
-
-    # 1. Soma da Tarifa (A vista + A credito)
+            
     val_a_vista = df_pendentes_todas["A vista"].sum() if "A vista" in df_pendentes_todas.columns else 0.0
     val_a_credito = df_pendentes_todas["A credito"].sum() if "A credito" in df_pendentes_todas.columns else 0.0
     total_tarifa_pendente = val_a_vista + val_a_credito
-
-    # 2. Soma de Taxas
+    
     total_taxa_pendente = df_pendentes_todas["Taxa"].sum() if "Taxa" in df_pendentes_todas.columns else 0.0
-
-    # 3. Soma da Receita (Comissão + Taxa DU + Incentivo)
+    
     val_comissao = df_pendentes_todas["Comissão"].sum() if "Comissão" in df_pendentes_todas.columns else 0.0
     val_du = df_pendentes_todas["Taxa DU"].sum() if "Taxa DU" in df_pendentes_todas.columns else 0.0
     val_incentivo = df_pendentes_todas["Incentivo"].sum() if "Incentivo" in df_pendentes_todas.columns else 0.0
     total_receita_pendente = val_comissao + val_du + val_incentivo
-
-    # 4. Valor Total Financeiro Pendente em Aberto
+    
     val_pendente_total = total_tarifa_pendente + total_taxa_pendente + total_receita_pendente
-
-    # ==============================================================================
-    # EXIBIÇÃO DOS KPIS EXECUTIVOS NO STREAMLIT
-    # ==============================================================================
-    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
-    kpi1.metric("Total Bilhetes Processados", f"{total_casos:,}")
-    kpi2.metric("Bilhetes Conciliados (OK)", f"{total_conciliado:,}")
-    kpi3.metric("Bilhetes Pendentes", f"{total_pendente:,}")
-    kpi4.metric("Índice de Conciliação (%)", f"{taxa_resolucao:.1f}%")
-    kpi5.metric("Valor Total Pendente (R$)", f"R$ {val_pendente_total:,.2f}")
-
-    # Detalhamento Financeiro Executivo Adicional
-    with st.expander("🔍 Ver Detalhamento Financeiro dos Bilhetes Pendentes"):
-        m_f1, m_f2, m_f3 = st.columns(3)
-        m_f1.metric("Tarifa Total Pendente (À Vista + Crédito)", f"R$ {total_tarifa_pendente:,.2f}")
-        m_f2.metric("Total de Taxas Pendentes", f"R$ {total_taxa_pendente:,.2f}")
-        m_f3.metric("Receita Total Pendente (Comissão + DU + Incentivo)", f"R$ {total_receita_pendente:,.2f}")
-  
-            
+    
     df_sla = f_sem_div.copy()
     tempo_medio_dias = 0.0
     if not df_sla.empty and "Dt_Parsed" in df_sla.columns and "Dt_Mod_Parsed" in df_sla.columns:
@@ -853,11 +864,21 @@ with aba_sel[0]:
         if not df_sla_valido.empty:
             tempo_medio_dias = df_sla_valido["Dias_Resolucao"].mean()
             
-        
+    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+    kpi1.metric("Total Bilhetes Processados", f"{total_casos:,}")
+    kpi2.metric("Bilhetes Conciliados (OK)", f"{total_conciliado:,}")
+    kpi3.metric("Bilhetes Pendentes", f"{total_pendente:,}")
+    kpi4.metric("Índice de Conciliação (%)", f"{taxa_resolucao:.1f}%")
+    kpi5.metric("Valor Total Pendente (R$)", f"R$ {val_pendente_total:,.2f}")
     
+    with st.expander("🔍 Ver Detalhamento Financeiro dos Bilhetes Pendentes"):
+        m_f1, m_f2, m_f3 = st.columns(3)
+        m_f1.metric("Tarifa Total Pendente (À Vista + Crédito)", f"R$ {total_tarifa_pendente:,.2f}")
+        m_f2.metric("Total de Taxas Pendentes", f"R$ {total_taxa_pendente:,.2f}")
+        m_f3.metric("Receita Total Pendente (Comissão + DU + Incentivo)", f"R$ {total_receita_pendente:,.2f}")
+
     st.markdown("---")
     
-    # Linha de Gráficos Executivos
     col_d1, col_d2 = st.columns(2)
     with col_d1:
         st.markdown("##### ⚠️ Distribuição das Pendências por Status")
@@ -973,7 +994,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
                 n_status = st.selectbox("Novo Status (Obrigatório):", options=opcoes_factiveis, index=idx_default, key=f"st_{key_prefix}")
             
             with c_s2:
-                lista_gerentes = sorted(list(set(df_todos["Área Resp. Operação"].dropna().unique()))) if "Área Resp. Operação" in df_todos.columns else ["Operação"]
+                lista_gerentes = sorted(list(set(df_todos_unificados["Área Resp. Operação"].dropna().unique()))) if "Área Resp. Operação" in df_todos_unificados.columns else ["Operação"]
                 idx_ger = lista_gerentes.index(df_primeiro.get("Área Resp. Operação")) if df_primeiro.get("Área Resp. Operação") in lista_gerentes else 0
                 n_area = st.selectbox("Nova Área Responsável / Gerente:", options=lista_gerentes, index=idx_ger, key=f"ar_{key_prefix}")
             
@@ -1043,7 +1064,7 @@ with aba_sel[5]:
     renderizar_modulo_tratativa(f_lemon_virt, "Emissor_Virtual_Lemontech", "evl")
 
 # ------------------------------------------------------------------------------
-# ABA 6: BILHETES CONCILIADOS (SEM DIVERGÊNCIA) - APRIMORADA
+# ABA 6: BILHETES CONCILIADOS (SEM DIVERGÊNCIA)
 # ------------------------------------------------------------------------------
 with aba_sel[6]:
     st.markdown(
@@ -1056,7 +1077,6 @@ with aba_sel[6]:
         unsafe_allow_html=True
     )
     
-    # Filtros para Análise Manual
     f_c1, f_c2, f_c3 = st.columns(3)
     with f_c1:
         opts_ger = sorted(f_sem_div["Área Resp. Operação"].dropna().unique().tolist()) if "Área Resp. Operação" in f_sem_div.columns else []
@@ -1133,9 +1153,6 @@ if e_master():
             except Exception:
                 st.info("Nenhum registro de histórico encontrado na tabela log_auditoria do Supabase.")
                 
-    # --------------------------------------------------------------------------
-    # ABA 9: CARGA EM LOTE COM ESTATÍSTICAS AVANÇADAS
-    # --------------------------------------------------------------------------
     with aba_sel[9]:
         st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Avançado)")
         st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização massiva no Supabase com análise estatística prévia.")
