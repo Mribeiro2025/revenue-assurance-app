@@ -53,7 +53,7 @@ DEPARA_CIAS = {
     "15": "15 - Outras CIAs"
 }
 
-# INJEÇÃO CSS DE ALTO PADRÃO PARA O STREAMLIT & TABELAS
+# INJEÇÃO CSS DE ALTO PADRÃO PARA O STREAMLIT, DASHBOARD E TABELAS
 st.markdown(
     """
     <style>
@@ -84,6 +84,26 @@ st.markdown(
         }
         .section-banner h3 { margin: 0; color: #002060; font-size: 19px; font-weight: 700; }
         .section-banner p { margin: 4px 0 0 0; color: #64748b; font-size: 13px; }
+
+        /* Card Container para os Gráficos do Dashboard */
+        .chart-card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+            margin-bottom: 20px;
+        }
+        .chart-card h5 {
+            color: #002060;
+            font-weight: 700;
+            font-size: 16px;
+            margin-top: 0;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
 
         /* Estilização Customizada do st.dataframe */
         div[data-testid="stDataFrame"] {
@@ -906,7 +926,7 @@ if e_master():
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO
+# ABA 0: DASHBOARD EXECUTIVO (CUSTOMIZADO E MAGNÍFICO)
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.markdown(
@@ -955,48 +975,158 @@ with aba_sel[0]:
     
     st.markdown("---")
     
+    # PALETA DE CORES EXECUTIVA DO GRUPO ARBAITMAN
+    cores_arbaitman = ["#002060", "#0050b3", "#0086c0", "#13c2c2", "#fa8c16", "#d90429", "#722ed1", "#faad14"]
+
     col_d1, col_d2 = st.columns(2)
+    
+    # 1. GRÁFICO DE ROSCA (DONUT CHART - STATUS DAS PENDÊNCIAS)
     with col_d1:
-        st.markdown("##### ⚠️ Distribuição das Pendências por Status")
+        st.markdown('<div class="chart-card"><h5>⚠️ Distribuição das Pendências por Status</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "Status_Geral" in df_pendentes_todas.columns:
             df_st_chart = df_pendentes_todas["Status_Geral"].value_counts().reset_index()
             df_st_chart.columns = ["Status", "Quantidade"]
-            fig_pie = px.pie(df_st_chart, values="Quantidade", names="Status", hole=0.4, color_discrete_sequence=px.colors.qualitative.Bold)
-            fig_pie.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=320)
+            
+            fig_pie = px.pie(
+                df_st_chart, 
+                values="Quantidade", 
+                names="Status", 
+                hole=0.55,
+                color_discrete_sequence=cores_arbaitman
+            )
+            fig_pie.update_traces(
+                textposition='inside',
+                textinfo='percent',
+                hovertemplate='<b>%{label}</b><br>Volume: %{value:,} bilhete(s)<br>Representação: %{percent}',
+                marker=dict(line=dict(color='#ffffff', width=2))
+            )
+            fig_pie.update_layout(
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=10, b=40),
+                height=340,
+                font=dict(family="Inter, sans-serif", size=12, color="#334155")
+            )
             st.plotly_chart(fig_pie, use_container_width=True)
         else:
             st.info("Nenhuma pendência registrada para os filtros selecionados.")
+        st.markdown('</div>', unsafe_allow_html=True)
             
+    # 2. GRÁFICO DE BARRAS (PENDÊNCIAS POR COMPANHIA AÉREA)
     with col_d2:
-        st.markdown("##### ✈️ Pendências por Companhia Aérea (Top 8)")
+        st.markdown('<div class="chart-card"><h5>✈️ Pendências por Companhia Aérea (Top 8)</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "CIA" in df_pendentes_todas.columns:
             df_cia_chart = df_pendentes_todas["CIA"].value_counts().head(8).reset_index()
             df_cia_chart.columns = ["Companhia", "Bilhetes Pendentes"]
-            fig_cia = px.bar(df_cia_chart, x="Companhia", y="Bilhetes Pendentes", text="Bilhetes Pendentes", color_discrete_sequence=["#003366"])
-            fig_cia.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=320)
+            
+            fig_cia = px.bar(
+                df_cia_chart, 
+                x="Companhia", 
+                y="Bilhetes Pendentes", 
+                text="Bilhetes Pendentes",
+                color="Bilhetes Pendentes",
+                color_continuous_scale=["#1890ff", "#002060"]
+            )
+            fig_cia.update_traces(
+                textposition="outside",
+                textfont=dict(size=12, color="#002060", family="Inter, sans-serif"),
+                marker_line_color='#002060',
+                marker_line_width=1,
+                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
+            )
+            fig_cia.update_layout(
+                coloraxis_showscale=False,
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=25, b=20),
+                height=340,
+                xaxis=dict(title="", showgrid=False, tickangle=-15),
+                yaxis=dict(title="Bilhetes", showgrid=True, gridcolor="#f0f0f0"),
+                font=dict(family="Inter, sans-serif", size=12, color="#334155")
+            )
             st.plotly_chart(fig_cia, use_container_width=True)
+        else:
+            st.info("Nenhuma companhia aérea registrada.")
+        st.markdown('</div>', unsafe_allow_html=True)
             
     col_d3, col_d4 = st.columns(2)
+    
+    # 3. GRÁFICO DE BARRAS (TOP 8 GERENTES)
     with col_d3:
-        st.markdown("##### 👤 Top 8 Gerentes por Volume de Pendências")
+        st.markdown('<div class="chart-card"><h5>👤 Top 8 Gerentes por Volume de Pendências</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "Área Resp. Operação" in df_pendentes_todas.columns:
             df_ger_chart = df_pendentes_todas["Área Resp. Operação"].value_counts().head(8).reset_index()
             df_ger_chart.columns = ["Gerente", "Quantidade"]
-            fig_ger = px.bar(df_ger_chart, x="Gerente", y="Quantidade", text="Quantidade", color_discrete_sequence=["#002060"])
-            fig_ger.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=300)
-            st.plotly_chart(fig_ger, use_container_width=True)
             
-    with col_d4:
-        st.markdown("##### ⏱️ SLA Médio de Solução por Gerente (Dias)")
-        if not df_sla.empty and "Dias_Resolucao" in df_sla.columns and "Área Resp. Operação" in df_sla.columns:
-            df_sla_ger = df_sla.groupby("Área Resp. Operação")["Dias_Resolucao"].mean().reset_index()
-            df_sla_ger.columns = ["Gerente", "Dias_Medios"]
-            df_sla_ger = df_sla_ger.sort_values("Dias_Medios", ascending=False).head(8)
-            fig_sla = px.bar(df_sla_ger, x="Gerente", y="Dias_Medios", text_auto=".1f", color_discrete_sequence=["#d90429"])
-            fig_sla.update_layout(margin=dict(l=10, r=10, t=20, b=20), height=300)
-            st.plotly_chart(fig_sla, use_container_width=True)
+            fig_ger = px.bar(
+                df_ger_chart, 
+                x="Gerente", 
+                y="Quantidade", 
+                text="Quantidade",
+                color="Quantidade",
+                color_continuous_scale=["#69c0ff", "#003366"]
+            )
+            fig_ger.update_traces(
+                textposition="outside",
+                textfont=dict(size=12, color="#002060", family="Inter, sans-serif"),
+                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
+            )
+            fig_ger.update_layout(
+                coloraxis_showscale=False,
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=25, b=20),
+                height=320,
+                xaxis=dict(title="", showgrid=False, tickangle=-15),
+                yaxis=dict(title="Quantidade", showgrid=True, gridcolor="#f0f0f0"),
+                font=dict(family="Inter, sans-serif", size=12, color="#334155")
+            )
+            st.plotly_chart(fig_ger, use_container_width=True)
         else:
-            st.info("Aguardando mais atualizações salvas para calcular a média histórica de SLA.")
+            st.info("Nenhum dado de gerente disponível.")
+        st.markdown('</div>', unsafe_allow_html=True)
+            
+    # 4. GRÁFICO DE SLA MÉDIO DE SOLUÇÃO (FILTRADO PARA APENAS VALORES VÁLIDOS >= 0 DIAS)
+    with col_d4:
+        st.markdown('<div class="chart-card"><h5>⏱️ SLA Médio de Solução por Gerente (Dias)</h5>', unsafe_allow_html=True)
+        if not df_sla.empty and "Dias_Resolucao" in df_sla.columns and "Área Resp. Operação" in df_sla.columns:
+            df_sla_validos = df_sla[df_sla["Dias_Resolucao"] >= 0]
+            if not df_sla_validos.empty:
+                df_sla_ger = df_sla_validos.groupby("Área Resp. Operação")["Dias_Resolucao"].mean().reset_index()
+                df_sla_ger.columns = ["Gerente", "Dias_Medios"]
+                df_sla_ger = df_sla_ger.sort_values("Dias_Medios", ascending=False).head(8)
+                
+                fig_sla = px.bar(
+                    df_sla_ger, 
+                    x="Gerente", 
+                    y="Dias_Medios", 
+                    text_auto=".1f",
+                    color="Dias_Medios",
+                    color_continuous_scale=["#ff7875", "#d90429"]
+                )
+                fig_sla.update_traces(
+                    textposition="outside",
+                    textfont=dict(size=12, color="#9c0006", family="Inter, sans-serif"),
+                    hovertemplate='<b>%{x}</b><br>SLA Médio: %{y:.1f} dia(s)'
+                )
+                fig_sla.update_layout(
+                    coloraxis_showscale=False,
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    margin=dict(l=10, r=10, t=25, b=20),
+                    height=320,
+                    xaxis=dict(title="", showgrid=False, tickangle=-15),
+                    yaxis=dict(title="Dias Médios", showgrid=True, gridcolor="#f0f0f0"),
+                    font=dict(family="Inter, sans-serif", size=12, color="#334155")
+                )
+                st.plotly_chart(fig_sla, use_container_width=True)
+            else:
+                st.info("Aguardando conciliação de bilhetes para exibir médias de SLA.")
+        else:
+            st.info("Aguardando conciliação de bilhetes para exibir médias de SLA.")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
 # FUNÇÃO REUTILIZÁVEL DE TRATATIVA E ESTILIZAÇÃO DE TABELAS
