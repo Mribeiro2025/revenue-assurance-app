@@ -14,7 +14,7 @@ import streamlit as st
 from sqlalchemy import create_engine, text
 
 # ==============================================================================
-# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS
+# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS EXECUTIVOS (MAGNÍFICO)
 # ==============================================================================
 st.set_page_config(
     page_title="Grupo Arbaitman | Portal de Conciliação Aérea & Bilhetes Pendentes",
@@ -53,50 +53,90 @@ DEPARA_CIAS = {
     "15": "15 - Outras CIAs"
 }
 
+# INJEÇÃO CSS DE ALTO PADRÃO PARA O STREAMLIT & TABELAS
 st.markdown(
     """
     <style>
-        .stApp { background-color: #f8f9fa; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        .stApp { background-color: #f4f6f9; }
+        
+        /* Banner do Topo Executivo */
         .main-header {
-            background: linear-gradient(135deg, #002060 0%, #003366 100%);
-            padding: 22px 28px;
-            border-radius: 12px;
+            background: linear-gradient(135deg, #001e4d 0%, #003366 50%, #004080 100%);
+            padding: 24px 32px;
+            border-radius: 14px;
             color: white;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            margin-bottom: 24px;
+            box-shadow: 0 10px 25px -5px rgba(0, 32, 96, 0.25);
         }
-        .main-header h1 { color: #ffffff !important; margin: 0; font-size: 24px; font-weight: 700; }
-        .main-header p { color: #d0e1fd !important; margin: 4px 0 0 0; font-size: 13px; }
+        .main-header h1 { color: #ffffff !important; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+        .main-header p { color: #b3d1ff !important; margin: 6px 0 0 0; font-size: 14px; font-weight: 400; }
         
         .section-banner {
-            background-color: #ffffff;
+            background: #ffffff;
             border-left: 6px solid #002060;
-            padding: 14px 20px;
-            border-radius: 8px;
-            margin-bottom: 18px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+            padding: 16px 24px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
         }
-        .section-banner h3 { margin: 0; color: #002060; font-size: 18px; font-weight: 600; }
-        .section-banner p { margin: 3px 0 0 0; color: #666; font-size: 12px; }
-        div[data-testid="stMetric"] {
+        .section-banner h3 { margin: 0; color: #002060; font-size: 19px; font-weight: 700; }
+        .section-banner p { margin: 4px 0 0 0; color: #64748b; font-size: 13px; }
+
+        /* Estilização Customizada do st.dataframe */
+        div[data-testid="stDataFrame"] {
             background-color: #ffffff;
-            border-radius: 8px;
-            padding: 12px 18px;
-            border-left: 5px solid #002060;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+            border-radius: 12px !important;
+            padding: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
         }
+
+        /* Customização dos Cabeçalhos da Tabela */
+        div[data-testid="stDataFrame"] iframe {
+            border-radius: 10px;
+        }
+
+        /* Estilização Geral de Cartões KPI */
+        div[data-testid="stMetric"] {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 16px;
+            border-top: 4px solid #002060;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        div[data-testid="stMetric"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        }
+
+        /* Botões Estilizados */
         div.stButton > button {
-            background-color: #002060 !important;
-            color: white !important;
-            border-radius: 6px !important;
+            background: linear-gradient(135deg, #002060 0%, #003366 100%) !important;
+            color: #ffffff !important;
+            border: none !important;
+            border-radius: 8px !important;
             font-weight: 600 !important;
+            padding: 8px 18px !important;
+            box-shadow: 0 4px 10px rgba(0,32,96,0.2) !important;
+            transition: all 0.2s ease-in-out !important;
         }
+        div.stButton > button:hover {
+            background: linear-gradient(135deg, #003366 0%, #004080 100%) !important;
+            box-shadow: 0 6px 14px rgba(0,32,96,0.3) !important;
+            transform: translateY(-1px);
+        }
+
         .highlight-card {
-            background-color: #eef6ff;
-            border: 2px solid #004080;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
+            background: #f0f7ff;
+            border: 1px solid #bae0ff;
+            border-left: 6px solid #0050b3;
+            border-radius: 10px;
+            padding: 18px;
+            margin-bottom: 20px;
         }
     </style>
 """,
@@ -1049,7 +1089,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
         
     st.markdown("---")
     
-    # Configuração de Estilização e Formatação R$ da Tabela Interativa
+    # ESTILIZAÇÃO AVANÇADA DAS COLUNAS DA TABELA (R$ E DESTAQUES DE ALERTA)
     config_colunas = {
         "A vista": st.column_config.NumberColumn("A vista", format="R$ %.2f"),
         "A credito": st.column_config.NumberColumn("A credito", format="R$ %.2f"),
@@ -1066,6 +1106,10 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
         "Dif_Receita": st.column_config.NumberColumn("⚠️ Dif. Receita", format="R$ %.2f"),
         "VL. Líquido": st.column_config.NumberColumn("VL. Líquido", format="R$ %.2f"),
         "Tarifa_Total": st.column_config.NumberColumn("Tarifa Total", format="R$ %.2f"),
+        "Bilhetes": st.column_config.TextColumn("Bilhetes"),
+        "CIA": st.column_config.TextColumn("CIA Aérea"),
+        "Status_Geral": st.column_config.TextColumn("Status Geral"),
+        "Área Resp. Operação": st.column_config.TextColumn("Área Resp."),
     }
     
     st.dataframe(
