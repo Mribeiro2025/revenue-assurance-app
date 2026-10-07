@@ -14,7 +14,7 @@ import streamlit as st
 from sqlalchemy import create_engine, text
 
 # ==============================================================================
-# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS EXECUTIVOS
+# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS EXECUTIVOS (CABEÇALHO PREMIUM)
 # ==============================================================================
 st.set_page_config(
     page_title="Grupo Arbaitman | Portal de Conciliação Aérea & Bilhetes Pendentes",
@@ -53,7 +53,7 @@ DEPARA_CIAS = {
     "15": "15 - Outras CIAs"
 }
 
-# INJEÇÃO CSS DE ALTO PADRÃO PARA O STREAMLIT, DASHBOARD E TABELAS
+# INJEÇÃO CSS COMPLETA PARA APLICAÇÃO E CABEÇALHOS DA TABELA
 st.markdown(
     """
     <style>
@@ -105,13 +105,29 @@ st.markdown(
             gap: 8px;
         }
 
-        /* Estilização Customizada do st.dataframe */
+        /* Container do st.dataframe */
         div[data-testid="stDataFrame"] {
             background-color: #ffffff;
             border-radius: 12px !important;
-            padding: 10px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-            border: 1px solid #e2e8f0;
+            padding: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+            border: 1px solid #cbd5e1;
+        }
+
+        /* ESTILIZAÇÃO DO CABEÇALHO DA TABELA STREAMLIT (GLIDE DATA GRID) */
+        div[data-testid="stDataFrame"] iframe {
+            border-radius: 10px;
+        }
+
+        /* Customização CSS para componentes nativos e tabelas */
+        .dgrid-header, [data-testid="stDataFrame"] th, div[role="columnheader"] {
+            background-color: #002060 !important;
+            color: #ffffff !important;
+            font-weight: 700 !important;
+            font-size: 13px !important;
+            letter-spacing: 0.3px !important;
+            text-transform: uppercase !important;
+            border-bottom: 3px solid #001030 !important;
         }
 
         /* Estilização Geral de Cartões KPI */
@@ -926,7 +942,7 @@ if e_master():
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO (CUSTOMIZADO E MAGNÍFICO)
+# ABA 0: DASHBOARD EXECUTIVO
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.markdown(
@@ -975,7 +991,6 @@ with aba_sel[0]:
     
     st.markdown("---")
     
-    # PALETA DE CORES EXECUTIVA DO GRUPO ARBAITMAN
     cores_arbaitman = ["#002060", "#0050b3", "#0086c0", "#13c2c2", "#fa8c16", "#d90429", "#722ed1", "#faad14"]
 
     col_d1, col_d2 = st.columns(2)
@@ -1088,7 +1103,7 @@ with aba_sel[0]:
             st.info("Nenhum dado de gerente disponível.")
         st.markdown('</div>', unsafe_allow_html=True)
             
-    # 4. GRÁFICO DE SLA MÉDIO DE SOLUÇÃO (FILTRADO PARA APENAS VALORES VÁLIDOS >= 0 DIAS)
+    # 4. GRÁFICO DE SLA MÉDIO DE SOLUÇÃO
     with col_d4:
         st.markdown('<div class="chart-card"><h5>⏱️ SLA Médio de Solução por Gerente (Dias)</h5>', unsafe_allow_html=True)
         if not df_sla.empty and "Dias_Resolucao" in df_sla.columns and "Área Resp. Operação" in df_sla.columns:
