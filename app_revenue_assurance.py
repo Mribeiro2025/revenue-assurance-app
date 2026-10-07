@@ -14,7 +14,7 @@ import streamlit as st
 from sqlalchemy import create_engine, text
 
 # ==============================================================================
-# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS EXECUTIVOS (MAGNÍFICO)
+# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS EXECUTIVOS
 # ==============================================================================
 st.set_page_config(
     page_title="Grupo Arbaitman | Portal de Conciliação Aérea & Bilhetes Pendentes",
@@ -92,11 +92,6 @@ st.markdown(
             padding: 10px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
             border: 1px solid #e2e8f0;
-        }
-
-        /* Customização dos Cabeçalhos da Tabela */
-        div[data-testid="stDataFrame"] iframe {
-            border-radius: 10px;
         }
 
         /* Estilização Geral de Cartões KPI */
@@ -277,7 +272,7 @@ def registrar_log_supabase(logs_list):
         "Nova_Area": "nova_area",
         "Observacao": "observacao",
         "Tipo_Interacao": "tipo_interacao"
-    }, inplace=True)
+    }, inplace=False)
     
     try:
         with engine.begin() as conn:
@@ -529,7 +524,7 @@ def padronizar_df(df):
         lambda x: "Pendente de Lançamento (Não Consta)" if str(x).lower().strip() in status_map else str(x)
     )
 
-    # DePara de Nomes de Companhias Aéreas (CORRIGIDO: .str.strip())
+    # DePara de Nomes de Companhias Aéreas
     if "CIA" in df_out.columns:
         df_out["CIA"] = df_out["CIA"].astype(str).str.upper().str.strip().replace(DEPARA_CIAS)
 
@@ -756,6 +751,37 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     wb.save(output_buffer)
     output_buffer.seek(0)
     return output_buffer.getvalue()
+
+# FUNÇÃO DE DESTAQUE DE CORES PARA SISTEMA E DIVERGÊNCIAS
+def aplicar_estilo_colunas_df(df_input):
+    if df_input.empty:
+        return df_input
+        
+    styles = pd.DataFrame('', index=df_input.index, columns=df_input.columns)
+    
+    # Colunas de Sistema (Azul Claro Executivo)
+    cols_sistema = [c for c in df_input.columns if 'sistema' in str(c).lower()]
+    for c in cols_sistema:
+        styles[c] = 'background-color: #e6f0fa; color: #002060; font-weight: 600;'
+        
+    # Colunas de Divergência (Alerta Vermelho quando houver valor)
+    cols_dif = [c for c in df_input.columns if str(c).startswith('Dif_') or 'divergencia' in str(c).lower()]
+    for c in cols_dif:
+        for idx in df_input.index:
+            val = df_input.loc[idx, c]
+            try:
+                val_num = float(val)
+                if abs(val_num) >= 0.01:
+                    styles.loc[idx, c] = 'background-color: #ffe6e6; color: #9c0006; font-weight: bold;'
+                else:
+                    styles.loc[idx, c] = 'background-color: #fff7f7; color: #666666;'
+            except:
+                if str(val).strip() and str(val).strip() not in ['-', '0', '0.0', 'R$ 0,00']:
+                    styles.loc[idx, c] = 'background-color: #ffe6e6; color: #9c0006; font-weight: bold;'
+                else:
+                    styles.loc[idx, c] = 'background-color: #fff7f7;'
+                    
+    return df_input.style.apply(lambda _: styles, axis=None)
 
 # ==============================================================================
 # 5. SIDEBAR, UPLOAD DA PLANILHA ESPELHO E FILTROS OPERACIONAIS
@@ -1089,7 +1115,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
         
     st.markdown("---")
     
-    # ESTILIZAÇÃO AVANÇADA DAS COLUNAS DA TABELA (R$ E DESTAQUES DE ALERTA)
+    # CONFIGURAÇÃO DE COLUNAS E FORMATAÇÃO MONETÁRIA
     config_colunas = {
         "A vista": st.column_config.NumberColumn("A vista", format="R$ %.2f"),
         "A credito": st.column_config.NumberColumn("A credito", format="R$ %.2f"),
@@ -1112,8 +1138,11 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
         "Área Resp. Operação": st.column_config.TextColumn("Área Resp."),
     }
     
+    # APLICANDO O PANDAS STYLER COM DESTAQUES DE CORES
+    df_estilizado = aplicar_estilo_colunas_df(df_tbl_final)
+    
     st.dataframe(
-        df_tbl_final, 
+        df_estilizado, 
         use_container_width=True, 
         hide_index=True,
         column_config=config_colunas
@@ -1210,7 +1239,8 @@ with aba_sel[6]:
         "VL. Líquido": st.column_config.NumberColumn("VL. Líquido", format="R$ %.2f"),
         "Tarifa_Total": st.column_config.NumberColumn("Tarifa Total", format="R$ %.2f"),
     }
-    st.dataframe(df_ok_view, use_container_width=True, hide_index=True, column_config=config_colunas_ok)
+    df_ok_estilizado = aplicar_estilo_colunas_df(df_ok_view)
+    st.dataframe(df_ok_estilizado, use_container_width=True, hide_index=True, column_config=config_colunas_ok)
 
 # ------------------------------------------------------------------------------
 # ABAS EXCLUSIVAS DO MASTER
