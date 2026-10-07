@@ -24,6 +24,35 @@ st.set_page_config(
 )
 ARQUIVO_DASHBOARD_PADRAO = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 
+# Dicionário de Mapeamento dos Códigos de Companhias Aéreas
+DEPARA_CIAS = {
+    "G3": "GOL (G3)",
+    "AD": "AZUL (AD)",
+    "LA": "LATAM (LA)",
+    "JJ": "LATAM (JJ)",
+    "TP": "TAP Portugal (TP)",
+    "AA": "American Airlines (AA)",
+    "AF": "Air France (AF)",
+    "KL": "KLM (KL)",
+    "LH": "Lufthansa (LH)",
+    "UA": "United Airlines (UA)",
+    "DL": "Delta Air Lines (DL)",
+    "AM": "Aeromexico (AM)",
+    "AV": "Avianca (AV)",
+    "AR": "Aerolíneas Argentinas (AR)",
+    "CM": "Copa Airlines (CM)",
+    "IB": "Iberia (IB)",
+    "EK": "Emirates (EK)",
+    "QR": "Qatar Airways (QR)",
+    "LX": "Swiss Air (LX)",
+    "AZ": "ITA Airways (AZ)",
+    "AC": "Air Canada (AC)",
+    "SA": "South African (SA)",
+    "OB": "Boliviana de Aviación (OB)",
+    "HR": "Hahn Air (HR)",
+    "15": "15 - Outras CIAs"
+}
+
 st.markdown(
     """
     <style>
@@ -78,7 +107,6 @@ st.markdown(
 # 2. FUNÇÃO DE SANITIZAÇÃO E CONEXÃO COM SUPABASE
 # ==============================================================================
 def sanitizar_bilhete(val):
-    """Padroniza identificadores removendo colchetes, decimais (.0) e espaços."""
     if pd.isna(val) or val is None:
         return ""
     s = str(val).strip()
@@ -87,7 +115,6 @@ def sanitizar_bilhete(val):
     return s.strip()
 
 def get_db_engine():
-    """Conecta ao Supabase com suporte aos Secrets e driver SQLAlchemy."""
     try:
         if "postgres" in st.secrets and "url" in st.secrets["postgres"]:
             db_url = st.secrets["postgres"]["url"]
@@ -99,7 +126,6 @@ def get_db_engine():
     return None
 
 def carregar_tratativas_db():
-    """Lê do Supabase e mantém o estado mais recente por bilhete."""
     engine = get_db_engine()
     if not engine:
         return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "data_modificacao"])
@@ -121,10 +147,6 @@ def carregar_tratativas_db():
         return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "data_modificacao"])
 
 def salvar_tratativas_lote_supabase(df_lote, usuario):
-    """
-    Executa UPSERT na tabela tratativas do Supabase.
-    Atualiza bilhetes existentes e insere novos registros.
-    """
     engine = get_db_engine()
     if not engine or df_lote.empty:
         return False, "Conexão com a base de dados indisponível.", 0, 0, 0
@@ -200,7 +222,6 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
     return True, msg, qtd_atualizados, qtd_novos, erros
 
 def registrar_log_supabase(logs_list):
-    """Grava o histórico na tabela log_auditoria do Supabase."""
     engine = get_db_engine()
     if not engine or not logs_list:
         return
@@ -429,7 +450,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# 4. SOBREPOSIÇÃO DOS DADOS DO SUPABASE SOBRE O RELATÓRIO BRUTO
+# 4. PADRONIZAÇÃO, DEPARA DE CIAS E SOBREPOSIÇÃO SUPABASE
 # ==============================================================================
 def clean_str(val):
     if pd.isna(val) or val is None: 
@@ -467,6 +488,19 @@ def padronizar_df(df):
     df_out["Status_Geral"] = df_out["Status_Geral"].apply(
         lambda x: "Pendente de Lançamento (Não Consta)" if str(x).lower().strip() in status_map else str(x)
     )
+
+    # DePara de Nomes de Companhias Aéreas
+    if "CIA" in df_out.columns:
+        df_out["CIA"] = df_out["CIA"].astype(str).str.upper().strip().replace(DEPARA_CIAS)
+
+    # Renomear 'Divergência de Receita' para 'Analisar Receita'
+    if "Status_Divergencia" in df_out.columns:
+        df_out["Status_Divergencia"] = df_out["Status_Divergencia"].astype(str).str.replace(
+            "Divergência de Receita", "Analisar Receita", case=False, regex=False
+        ).str.replace(
+            "Divergencia de Receita", "Analisar Receita", case=False, regex=False
+        )
+
     for c in ["Taxa", "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita", "Tarifa_Total", "Comissão", "Taxa DU", "Incentivo"]:
         if c in df_out.columns: 
             df_out[c] = pd.to_numeric(df_out[c], errors="coerce").fillna(0.0)
@@ -521,25 +555,24 @@ def rotear_bases_mestra(df_master):
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
         
     df_master = padronizar_df(df_master)
-    def e_apenas_divergencia_receita(st_div):
+    def e_apenas_analisar_receita(st_div):
         s = str(st_div).lower().strip()
-        if "diverg" not in s and "erro" not in s:
-            return False
-        s_sem_diverg = s.replace("divergência", "").replace("divergencia", "").strip()
-        return "receita" in s_sem_diverg and not any(x in s_sem_diverg for x in ["tarifa", "taxa", "cia", "companhia"])
+        if "analisar receita" in s or ("receita" in s and not any(x in s for x in ["tarifa", "taxa", "cia", "companhia"])):
+            return True
+        return False
         
     st_geral_str = df_master["Status_Geral"].astype(str).str.lower()
     st_div_str = df_master["Status_Divergencia"].astype(str).str.lower()
     
     mask_tem_divergencia_real = st_div_str.str.contains("divergência|divergencia|erro", na=False) & \
-                                ~df_master["Status_Divergencia"].apply(e_apenas_divergencia_receita)
+                                ~df_master["Status_Divergencia"].apply(e_apenas_analisar_receita)
                                 
     mask_status_lancado = (
         st_geral_str.str.contains("já lançado|emitido e lançado|lançado|conciliado|valores corretos|regularizado", na=False) |
         st_div_str.str.contains("valores corretos|sem divergência|sem divergencia", na=False)
     )
     
-    mask_ok = (mask_status_lancado | df_master["Status_Divergencia"].apply(e_apenas_divergencia_receita)) & ~mask_tem_divergencia_real
+    mask_ok = (mask_status_lancado | df_master["Status_Divergencia"].apply(e_apenas_analisar_receita)) & ~mask_tem_divergencia_real
     
     df_ok = df_master[mask_ok].copy()
     df_rest = df_master[~mask_ok].copy()
@@ -690,7 +723,6 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
 st.sidebar.title("Grupo Arbaitman")
 st.sidebar.caption("Conciliação Aérea FP&A v3.6 (Espelho Fiel)")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
-
 with st.sidebar.expander("📂 Atualizar Planilha Espelho Principal"):
     arq_espelho = st.file_uploader("Subir Dashboard_Revenue_Assurance_Consolidado.xlsx:", type=["xlsx"], key="uploader_dash_espelho")
     if arq_espelho:
@@ -700,11 +732,9 @@ with st.sidebar.expander("📂 Atualizar Planilha Espelho Principal"):
         st.success("✅ Planilha Espelho atualizada no servidor!")
         time.sleep(1)
         st.rerun()
-
 if st.sidebar.button("🔄 Recarregar e Limpar Cache"):
     st.cache_data.clear()
     st.rerun()
-
 with st.sidebar.expander("🔑 Alterar Minha Senha"):
     with st.form("form_pwd_side"):
         s_atu = str(st.text_input("Senha Atual:", type="password")).strip()
@@ -720,23 +750,19 @@ with st.sidebar.expander("🔑 Alterar Minha Senha"):
                     st.error(f"Erro ao salvar senha: {msg}")
             else:
                 st.error("Senha atual incorreta.")
-
 if st.sidebar.button("🔒 Sair"):
     st.session_state["autenticado"] = False
     st.rerun()
-
 st.sidebar.markdown("---")
 
 # Carregamento Inicial
 with st.spinner("🔄 Conectando ao Supabase e lendo planilha espelho..."):
     df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div, df_log = carregar_bases()
-
 df_todos_unificados = pd.concat([df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
 # Cálculo Dinâmico do Período de Datas
 dt_min_default = datetime.date(2024, 1, 1)
 dt_max_default = datetime.date(2026, 12, 31)
-
 if not df_todos_unificados.empty and "Dt_Parsed" in df_todos_unificados.columns:
     dts_validas = df_todos_unificados["Dt_Parsed"].dropna()
     if not dts_validas.empty:
@@ -746,7 +772,6 @@ if not df_todos_unificados.empty and "Dt_Parsed" in df_todos_unificados.columns:
 st.sidebar.subheader("🔍 Filtros Operacionais")
 d_inicio = st.sidebar.date_input("Data Inicial:", value=dt_min_default, format="DD/MM/YYYY")
 d_fim = st.sidebar.date_input("Data Final:", value=dt_max_default, format="DD/MM/YYYY")
-
 filtro_gerente = st.sidebar.multiselect("Gerente / Área Resp.:", options=sorted(df_todos_unificados["Área Resp. Operação"].dropna().unique()), placeholder="Todos")
 filtro_setor = st.sidebar.multiselect("Setor:", options=sorted(df_todos_unificados["Setor"].dropna().unique()), placeholder="Todos")
 filtro_cia = st.sidebar.multiselect("Companhia Aérea:", options=sorted(df_todos_unificados["CIA"].dropna().unique()), placeholder="Todas")
@@ -780,7 +805,7 @@ f_lemon_virt = aplicar_filtros(df_lemon_virt)
 f_sem_div = aplicar_filtros(df_sem_div)
 
 # ==============================================================================
-# 6. HEADER PRINCIPAL
+# 6. HEADER PRINCIPAL E ABAS
 # ==============================================================================
 st.markdown(
     """
@@ -792,21 +817,19 @@ st.markdown(
     unsafe_allow_html=True
 )
 c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("Pendentes de ERP", f"{len(f_falta):,}")
-c2.metric("Erros Valores/CIA", f"{len(f_erros):,}")
+c1.metric("Pendentes ERP (Maringá)", f"{len(f_falta):,}")
+c2.metric("Erros Val/CIA (Maringá)", f"{len(f_erros):,}")
 c3.metric("Backoffice", f"{len(f_backoffice):,}")
 c4.metric("Central de Eventos", f"{len(f_eventos):,}")
 c5.metric("Emissor Virtual", f"{len(f_lemon_virt):,}")
 c6.metric("Conciliados (OK)", f"{len(f_sem_div):,}")
 st.markdown("---")
 
-# ==============================================================================
-# 7. ESTRUTURA DE ABAS
-# ==============================================================================
+# Estrutura de Abas
 abas = [
     "📊 Dashboard Executivo",
-    "📋 1. Falta de Lançamento",
-    "⚠️ 2. Erros de Valores & CIA",
+    "📋 1. Falta de Lançamento (Maringá Turismo)",
+    "⚠️ 2. Erros de Valores & CIA (Maringá Turismo)",
     "🎧 3. Suporte Backoffice",
     "🎪 4. Central de Eventos",
     "🤖 5. Emissor Virtual Lemontech",
@@ -817,7 +840,7 @@ if e_master():
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO EXPANDIDO COM CÁLCULO FINANCEIRO CORRETO
+# ABA 0: DASHBOARD EXECUTIVO
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.markdown(
@@ -838,7 +861,7 @@ with aba_sel[0]:
     total_pendente = len(df_pendentes_todas)
     taxa_resolucao = (total_conciliado / total_casos * 100) if total_casos > 0 else 0.0
     
-    # Cálculo Financeiro Composto Executivo
+    # Cálculo Financeiro Composto
     for col_fin in ["A vista", "A credito", "Taxa", "Comissão", "Taxa DU", "Incentivo"]:
         if col_fin in df_pendentes_todas.columns:
             df_pendentes_todas[col_fin] = pd.to_numeric(df_pendentes_todas[col_fin], errors="coerce").fillna(0.0)
@@ -846,15 +869,8 @@ with aba_sel[0]:
     val_a_vista = df_pendentes_todas["A vista"].sum() if "A vista" in df_pendentes_todas.columns else 0.0
     val_a_credito = df_pendentes_todas["A credito"].sum() if "A credito" in df_pendentes_todas.columns else 0.0
     total_tarifa_pendente = val_a_vista + val_a_credito
-    
     total_taxa_pendente = df_pendentes_todas["Taxa"].sum() if "Taxa" in df_pendentes_todas.columns else 0.0
-    
-    val_comissao = df_pendentes_todas["Comissão"].sum() if "Comissão" in df_pendentes_todas.columns else 0.0
-    val_du = df_pendentes_todas["Taxa DU"].sum() if "Taxa DU" in df_pendentes_todas.columns else 0.0
-    val_incentivo = df_pendentes_todas["Incentivo"].sum() if "Incentivo" in df_pendentes_todas.columns else 0.0
-    total_receita_pendente = val_comissao + val_du + val_incentivo
-    
-    val_pendente_total = total_tarifa_pendente + total_taxa_pendente + total_receita_pendente
+    val_pendente_total = total_tarifa_pendente + total_taxa_pendente
     
     df_sla = f_sem_div.copy()
     tempo_medio_dias = 0.0
@@ -871,12 +887,6 @@ with aba_sel[0]:
     kpi4.metric("Índice de Conciliação (%)", f"{taxa_resolucao:.1f}%")
     kpi5.metric("Valor Total Pendente (R$)", f"R$ {val_pendente_total:,.2f}")
     
-    with st.expander("🔍 Ver Detalhamento Financeiro dos Bilhetes Pendentes"):
-        m_f1, m_f2, m_f3 = st.columns(3)
-        m_f1.metric("Tarifa Total Pendente (À Vista + Crédito)", f"R$ {total_tarifa_pendente:,.2f}")
-        m_f2.metric("Total de Taxas Pendentes", f"R$ {total_taxa_pendente:,.2f}")
-        m_f3.metric("Receita Total Pendente (Comissão + DU + Incentivo)", f"R$ {total_receita_pendente:,.2f}")
-
     st.markdown("---")
     
     col_d1, col_d2 = st.columns(2)
@@ -923,7 +933,7 @@ with aba_sel[0]:
             st.info("Aguardando mais atualizações salvas para calcular a média histórica de SLA.")
 
 # ------------------------------------------------------------------------------
-# FUNÇÃO REUTILIZÁVEL DE TRATATIVA LINHA A LINHA
+# FUNÇÃO REUTILIZÁVEL DE TRATATIVA E ESTILIZAÇÃO DE TABELAS
 # ------------------------------------------------------------------------------
 def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     if df_filtrado.empty:
@@ -1038,27 +1048,48 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
         df_tbl_final = df_tbl_final[cols_order].sort_values("🎯 Destaque", ascending=False)
         
     st.markdown("---")
-    st.dataframe(df_tbl_final, use_container_width=True, hide_index=True)
+    
+    # Configuração de Estilização e Formatação R$ da Tabela Interativa
+    config_colunas = {
+        "A vista": st.column_config.NumberColumn("A vista", format="R$ %.2f"),
+        "A credito": st.column_config.NumberColumn("A credito", format="R$ %.2f"),
+        "Tarifa_Sistema": st.column_config.NumberColumn("Tarifa (Sistema)", format="R$ %.2f"),
+        "Dif_Tarifa": st.column_config.NumberColumn("⚠️ Dif. Tarifa", format="R$ %.2f"),
+        "Taxa": st.column_config.NumberColumn("Taxa", format="R$ %.2f"),
+        "Taxa_Sistema": st.column_config.NumberColumn("Taxa (Sistema)", format="R$ %.2f"),
+        "Dif_Taxa": st.column_config.NumberColumn("⚠️ Dif. Taxa", format="R$ %.2f"),
+        "Comissão": st.column_config.NumberColumn("Comissão", format="R$ %.2f"),
+        "Taxa DU": st.column_config.NumberColumn("Taxa DU", format="R$ %.2f"),
+        "Desc.": st.column_config.NumberColumn("Desc.", format="R$ %.2f"),
+        "Incentivo": st.column_config.NumberColumn("Incentivo", format="R$ %.2f"),
+        "Receita_Sistema": st.column_config.NumberColumn("Receita (Sistema)", format="R$ %.2f"),
+        "Dif_Receita": st.column_config.NumberColumn("⚠️ Dif. Receita", format="R$ %.2f"),
+        "VL. Líquido": st.column_config.NumberColumn("VL. Líquido", format="R$ %.2f"),
+        "Tarifa_Total": st.column_config.NumberColumn("Tarifa Total", format="R$ %.2f"),
+    }
+    
+    st.dataframe(
+        df_tbl_final, 
+        use_container_width=True, 
+        hide_index=True,
+        column_config=config_colunas
+    )
 
 # ------------------------------------------------------------------------------
 # ABAS OPERACIONAIS
 # ------------------------------------------------------------------------------
 with aba_sel[1]:
-    st.markdown("<div class='section-banner'><h3>📋 1. Falta de Lançamento no ERP</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>📋 1. Falta de Lançamento no ERP (Maringá Turismo)</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_falta, "Falta_de_Lancamento", "fl")
-
 with aba_sel[2]:
-    st.markdown("<div class='section-banner'><h3>⚠️ 2. Divergências de Valores & CIA</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>⚠️ 2. Erros de Valores & CIA (Maringá Turismo)</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_erros, "Erros_Valores_CIA", "ev")
-
 with aba_sel[3]:
     st.markdown("<div class='section-banner'><h3>🎧 3. Suporte Backoffice</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_backoffice, "Suporte_Backoffice", "sb")
-
 with aba_sel[4]:
     st.markdown("<div class='section-banner'><h3>🎪 4. Central de Eventos</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_eventos, "Central_de_Eventos", "ce")
-
 with aba_sel[5]:
     st.markdown("<div class='section-banner'><h3>🤖 5. Emissor Virtual Lemontech</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_lemon_virt, "Emissor_Virtual_Lemontech", "evl")
@@ -1116,9 +1147,26 @@ with aba_sel[6]:
         for col in cols_ok_s:
             m_s_ok |= df_ok_view[col].astype(str).str.lower().str.contains(term, na=False)
         df_ok_view = df_ok_view[m_s_ok]
-
     st.markdown(f"**Bilhetes Conciliados Exibidos:** {len(df_ok_view):,}")
-    st.dataframe(df_ok_view, use_container_width=True, hide_index=True)
+    
+    config_colunas_ok = {
+        "A vista": st.column_config.NumberColumn("A vista", format="R$ %.2f"),
+        "A credito": st.column_config.NumberColumn("A credito", format="R$ %.2f"),
+        "Tarifa_Sistema": st.column_config.NumberColumn("Tarifa (Sistema)", format="R$ %.2f"),
+        "Dif_Tarifa": st.column_config.NumberColumn("⚠️ Dif. Tarifa", format="R$ %.2f"),
+        "Taxa": st.column_config.NumberColumn("Taxa", format="R$ %.2f"),
+        "Taxa_Sistema": st.column_config.NumberColumn("Taxa (Sistema)", format="R$ %.2f"),
+        "Dif_Taxa": st.column_config.NumberColumn("⚠️ Dif. Taxa", format="R$ %.2f"),
+        "Comissão": st.column_config.NumberColumn("Comissão", format="R$ %.2f"),
+        "Taxa DU": st.column_config.NumberColumn("Taxa DU", format="R$ %.2f"),
+        "Desc.": st.column_config.NumberColumn("Desc.", format="R$ %.2f"),
+        "Incentivo": st.column_config.NumberColumn("Incentivo", format="R$ %.2f"),
+        "Receita_Sistema": st.column_config.NumberColumn("Receita (Sistema)", format="R$ %.2f"),
+        "Dif_Receita": st.column_config.NumberColumn("⚠️ Dif. Receita", format="R$ %.2f"),
+        "VL. Líquido": st.column_config.NumberColumn("VL. Líquido", format="R$ %.2f"),
+        "Tarifa_Total": st.column_config.NumberColumn("Tarifa Total", format="R$ %.2f"),
+    }
+    st.dataframe(df_ok_view, use_container_width=True, hide_index=True, column_config=config_colunas_ok)
 
 # ------------------------------------------------------------------------------
 # ABAS EXCLUSIVAS DO MASTER
@@ -1181,7 +1229,6 @@ if e_master():
                     
                     df_existentes = carregar_tratativas_db()
                     set_existentes = set(df_existentes["bilhete"].apply(sanitizar_bilhete).tolist()) if not df_existentes.empty else set()
-
                     lote_alteracoes = []
                     novos_logs = []
                     agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1190,7 +1237,6 @@ if e_master():
                     tot_lote = 0
                     tot_para_atualizar = 0
                     tot_novos = 0
-
                     for _, r_v in df_up_raw.iterrows():
                         b_code = r_v["Bilhete_Clean"]
                         if not b_code or b_code.lower() in ["nan", "none", "-", ""]:
@@ -1203,7 +1249,6 @@ if e_master():
                         else:
                             tot_novos += 1
                             tipo_registro = "Novo Registro"
-
                         st_novo = str(r_v.get(col_st, "Pendente de Lançamento (Não Consta)")).strip() if col_st else "Pendente de Lançamento (Não Consta)"
                         ar_novo = str(r_v.get(col_ar, "Operação")).strip() if col_ar else "Operação"
                         obs_novo = str(r_v.get(col_obs, "")).replace("Sem tratativa na operação", "").strip() if col_obs else ""
@@ -1256,7 +1301,6 @@ if e_master():
                             df_ar_lote = df_lote_prep["Área Resp. Operação"].value_counts().reset_index()
                             df_ar_lote.columns = ["Gerente", "Quantidade"]
                             st.dataframe(df_ar_lote, use_container_width=True, hide_index=True)
-
                         st.markdown("**Amostra dos Dados a Serem Sincronizados no Supabase:**")
                         st.dataframe(df_lote_prep, use_container_width=True)
                         
