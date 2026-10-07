@@ -489,9 +489,9 @@ def padronizar_df(df):
         lambda x: "Pendente de Lançamento (Não Consta)" if str(x).lower().strip() in status_map else str(x)
     )
 
-    # DePara de Nomes de Companhias Aéreas
+    # DePara de Nomes de Companhias Aéreas (CORRIGIDO: .str.strip())
     if "CIA" in df_out.columns:
-        df_out["CIA"] = df_out["CIA"].astype(str).str.upper().strip().replace(DEPARA_CIAS)
+        df_out["CIA"] = df_out["CIA"].astype(str).str.upper().str.strip().replace(DEPARA_CIAS)
 
     # Renomear 'Divergência de Receita' para 'Analisar Receita'
     if "Status_Divergencia" in df_out.columns:
