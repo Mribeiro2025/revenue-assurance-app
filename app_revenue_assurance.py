@@ -62,18 +62,32 @@ st.markdown(
         * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
         .stApp { background-color: #f4f6f9; }
         
-        /* Banner do Topo Executivo */
         .main-header {
             background: linear-gradient(135deg, #001e4d 0%, #003366 50%, #004080 100%);
             padding: 24px 32px;
             border-radius: 14px;
             color: white;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             box-shadow: 0 10px 25px -5px rgba(0, 32, 96, 0.25);
         }
         .main-header h1 { color: #ffffff !important; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
         .main-header p { color: #b3d1ff !important; margin: 6px 0 0 0; font-size: 14px; font-weight: 400; }
         
+        .datasource-badge {
+            background-color: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-left: 5px solid #002060;
+            border-radius: 10px;
+            padding: 12px 18px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+        }
+        .datasource-badge .title { font-weight: 700; color: #002060; font-size: 13px; }
+        .datasource-badge .info { font-size: 12px; color: #475569; }
+
         .section-banner {
             background: #ffffff;
             border-left: 6px solid #002060;
@@ -85,7 +99,6 @@ st.markdown(
         .section-banner h3 { margin: 0; color: #002060; font-size: 19px; font-weight: 700; }
         .section-banner p { margin: 4px 0 0 0; color: #64748b; font-size: 13px; }
 
-        /* Card Container para os Gráficos do Dashboard */
         .chart-card {
             background-color: #ffffff;
             border-radius: 12px;
@@ -105,7 +118,6 @@ st.markdown(
             gap: 8px;
         }
 
-        /* Container do st.dataframe */
         div[data-testid="stDataFrame"] {
             background-color: #ffffff;
             border-radius: 12px !important;
@@ -114,12 +126,10 @@ st.markdown(
             border: 1px solid #cbd5e1;
         }
 
-        /* ESTILIZAÇÃO DO CABEÇALHO DA TABELA STREAMLIT (GLIDE DATA GRID) */
         div[data-testid="stDataFrame"] iframe {
             border-radius: 10px;
         }
 
-        /* Customização CSS para componentes nativos e tabelas */
         .dgrid-header, [data-testid="stDataFrame"] th, div[role="columnheader"] {
             background-color: #002060 !important;
             color: #ffffff !important;
@@ -130,7 +140,6 @@ st.markdown(
             border-bottom: 3px solid #001030 !important;
         }
 
-        /* Estilização Geral de Cartões KPI */
         div[data-testid="stMetric"] {
             background: #ffffff;
             border-radius: 10px;
@@ -144,7 +153,6 @@ st.markdown(
             box-shadow: 0 8px 20px rgba(0,0,0,0.08);
         }
 
-        /* Botões Estilizados */
         div.stButton > button {
             background: linear-gradient(135deg, #002060 0%, #003366 100%) !important;
             color: #ffffff !important;
@@ -175,7 +183,7 @@ st.markdown(
 )
 
 # ==============================================================================
-# 2. FUNÇÃO DE SANITIZAÇÃO E CONEXÃO COM SUPABASE
+# 2. SANITIZAÇÃO E CONEXÃO COM BANCO SUPABASE
 # ==============================================================================
 def sanitizar_bilhete(val):
     if pd.isna(val) or val is None:
@@ -288,7 +296,6 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
         except Exception:
             erros += 1
 
-    st.cache_data.clear()
     msg = f"✅ Sincronização concluída! {qtd_atualizados} bilhete(s) atualizado(s) e {qtd_novos} novo(s) inserido(s)."
     return True, msg, qtd_atualizados, qtd_novos, erros
 
@@ -521,8 +528,41 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# 4. PADRONIZAÇÃO, DEPARA DE CIAS E SOBREPOSIÇÃO SUPABASE
+# 4. FUNÇÃO CORRIGIDA DE IDENTIFICAÇÃO DE RELATÓRIO FONTE
 # ==============================================================================
+def identificar_fonte_relatorio(row):
+    aba = str(row.get("Aba_Origem", "")).lower()
+    cia_raw = str(row.get("CIA", "")).upper()
+    fornecedor = str(row.get("Fornecedor_Sistema", "")).upper()
+    emissor = str(row.get("Emissor", "")).lower() + " " + str(row.get("Emissor_Reserva_Lemon", "")).lower()
+    
+    # 1. Emissão Virtual Lemontech
+    if "lemontech" in emissor or "virtual" in emissor:
+        return "🤖 Relatório Lemontech (Virtual)"
+        
+    # 2. Relatório GOL Direct (G3 / 127)
+    if "G3" in cia_raw or "GOL" in cia_raw or "GOL" in fornecedor or "127" in aba:
+        return "✈️ Relatório GOL Direct"
+        
+    # 3. Relatório AZUL Direct (AD)
+    if "AD" in cia_raw or "AZUL" in cia_raw or "AZUL" in fornecedor:
+        return "✈️ Relatório AZUL Direct"
+
+    # 4. Relatório LATAM Direct (LA / JJ)
+    if any(x in cia_raw for x in ["LA", "JJ", "LATAM"]) or "LATAM" in fornecedor:
+        return "✈️ Relatório LATAM Direct"
+
+    # 5. BSP / IATA (Companhias Internacionais ou Nacionais via BSP)
+    cias_bsp = ["TP", "AA", "AF", "KL", "LH", "UA", "DL", "AM", "AV", "AR", "CM", "IB", "EK", "QR", "LX", "AZ", "AC", "15", "H2", "24", "OB"]
+    if "bsp" in aba or "iata" in aba or "bsp" in fornecedor or any(x in cia_raw for x in cias_bsp):
+        return "🌐 Relatório BSP (IATA)"
+        
+    # 6. Registros Internos ERP Benner
+    if "benner" in aba or "99_" in aba or "98_" in aba:
+        return "🏢 Relatório ERP Benner"
+        
+    return "📊 Relatório Consolidado Vendas"
+
 def clean_str(val):
     if pd.isna(val) or val is None: 
         return "-"
@@ -539,7 +579,7 @@ def padronizar_df(df):
             "Obs. Operação", "Setor", "Data Emissão", "CIA", "Taxa", "A vista", "A credito",
             "Data_Modificacao", "Usuario_Modificacao", "Ultima_Alteracao", "Emissor", 
             "Emissor_Reserva_Lemon", "Consultor_Lemon", "Consultor", "Status_Sistema", 
-            "Status_Divergencia", "Gerentes", "Fornecedor_Sistema", "Status_Cia"
+            "Status_Divergencia", "Gerentes", "Fornecedor_Sistema", "Status_Cia", "Fonte_Relatorio"
         ])
     
     df_out = df.copy().loc[:, ~df.columns.duplicated()].reset_index(drop=True)
@@ -560,11 +600,13 @@ def padronizar_df(df):
         lambda x: "Pendente de Lançamento (Não Consta)" if str(x).lower().strip() in status_map else str(x)
     )
 
-    # DePara de Nomes de Companhias Aéreas
+    # Identificação exata da Fonte do Relatório antes da conversão de CIA
+    df_out["Fonte_Relatorio"] = df_out.apply(identificar_fonte_relatorio, axis=1)
+
+    # DePara dos Nomes de Companhias Aéreas
     if "CIA" in df_out.columns:
         df_out["CIA"] = df_out["CIA"].astype(str).str.upper().str.strip().replace(DEPARA_CIAS)
 
-    # Renomear 'Divergência de Receita' para 'Analisar Receita'
     if "Status_Divergencia" in df_out.columns:
         df_out["Status_Divergencia"] = df_out["Status_Divergencia"].astype(str).str.replace(
             "Divergência de Receita", "Analisar Receita", case=False, regex=False
@@ -690,7 +732,9 @@ def rotear_bases_mestra(df_master):
     
     return df_falta, df_erros, df_bo, df_eventos, df_lemon_virt, df_ok
 
-@st.cache_data(ttl=1)
+# ==============================================================================
+# CARREGAMENTO DIRETO DO ARQUIVO LOCAL (SEM CACHE OBSOLETO)
+# ==============================================================================
 def carregar_bases(caminho_ou_buffer=None):
     caminho = caminho_ou_buffer if caminho_ou_buffer is not None else ARQUIVO_DASHBOARD_PADRAO
     if not isinstance(caminho, str) and not hasattr(caminho, "read"):
@@ -788,19 +832,16 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     output_buffer.seek(0)
     return output_buffer.getvalue()
 
-# FUNÇÃO DE DESTAQUE DE CORES PARA SISTEMA E DIVERGÊNCIAS
 def aplicar_estilo_colunas_df(df_input):
     if df_input.empty:
         return df_input
         
     styles = pd.DataFrame('', index=df_input.index, columns=df_input.columns)
     
-    # Colunas de Sistema (Azul Claro Executivo)
     cols_sistema = [c for c in df_input.columns if 'sistema' in str(c).lower()]
     for c in cols_sistema:
         styles[c] = 'background-color: #e6f0fa; color: #002060; font-weight: 600;'
         
-    # Colunas de Divergência (Alerta Vermelho quando houver valor)
     cols_dif = [c for c in df_input.columns if str(c).startswith('Dif_') or 'divergencia' in str(c).lower()]
     for c in cols_dif:
         for idx in df_input.index:
@@ -820,23 +861,24 @@ def aplicar_estilo_colunas_df(df_input):
     return df_input.style.apply(lambda _: styles, axis=None)
 
 # ==============================================================================
-# 5. SIDEBAR, UPLOAD DA PLANILHA ESPELHO E FILTROS OPERACIONAIS
+# 5. SIDEBAR, FILTROS E CONEXÃO
 # ==============================================================================
 st.sidebar.title("Grupo Arbaitman")
 st.sidebar.caption("Conciliação Aérea FP&A v3.6 (Espelho Fiel)")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
+
 with st.sidebar.expander("📂 Atualizar Planilha Espelho Principal"):
     arq_espelho = st.file_uploader("Subir Dashboard_Revenue_Assurance_Consolidado.xlsx:", type=["xlsx"], key="uploader_dash_espelho")
     if arq_espelho:
         with open(ARQUIVO_DASHBOARD_PADRAO, "wb") as f:
             f.write(arq_espelho.getbuffer())
-        st.cache_data.clear()
         st.success("✅ Planilha Espelho atualizada no servidor!")
         time.sleep(1)
         st.rerun()
-if st.sidebar.button("🔄 Recarregar e Limpar Cache"):
-    st.cache_data.clear()
+
+if st.sidebar.button("🔄 Recarregar e Atualizar Dados"):
     st.rerun()
+
 with st.sidebar.expander("🔑 Alterar Minha Senha"):
     with st.form("form_pwd_side"):
         s_atu = str(st.text_input("Senha Atual:", type="password")).strip()
@@ -852,17 +894,17 @@ with st.sidebar.expander("🔑 Alterar Minha Senha"):
                     st.error(f"Erro ao salvar senha: {msg}")
             else:
                 st.error("Senha atual incorreta.")
+
 if st.sidebar.button("🔒 Sair"):
     st.session_state["autenticado"] = False
     st.rerun()
+
 st.sidebar.markdown("---")
 
-# Carregamento Inicial
-with st.spinner("🔄 Conectando ao Supabase e lendo planilha espelho..."):
-    df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div, df_log = carregar_bases()
+# Carregamento Direto das Bases
+df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div, df_log = carregar_bases()
 df_todos_unificados = pd.concat([df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
-# Cálculo Dinâmico do Período de Datas
 dt_min_default = datetime.date(2024, 1, 1)
 dt_max_default = datetime.date(2026, 12, 31)
 if not df_todos_unificados.empty and "Dt_Parsed" in df_todos_unificados.columns:
@@ -874,6 +916,10 @@ if not df_todos_unificados.empty and "Dt_Parsed" in df_todos_unificados.columns:
 st.sidebar.subheader("🔍 Filtros Operacionais")
 d_inicio = st.sidebar.date_input("Data Inicial:", value=dt_min_default, format="DD/MM/YYYY")
 d_fim = st.sidebar.date_input("Data Final:", value=dt_max_default, format="DD/MM/YYYY")
+
+opts_fonte_rel = sorted(df_todos_unificados["Fonte_Relatorio"].dropna().unique()) if "Fonte_Relatorio" in df_todos_unificados.columns else []
+filtro_fonte_rel = st.sidebar.multiselect("Fonte do Relatório (GOL/BSP/AZUL/LATAM/ERP):", options=opts_fonte_rel, placeholder="Todas as fontes")
+
 filtro_gerente = st.sidebar.multiselect("Gerente / Área Resp.:", options=sorted(df_todos_unificados["Área Resp. Operação"].dropna().unique()), placeholder="Todos")
 filtro_setor = st.sidebar.multiselect("Setor:", options=sorted(df_todos_unificados["Setor"].dropna().unique()), placeholder="Todos")
 filtro_cia = st.sidebar.multiselect("Companhia Aérea:", options=sorted(df_todos_unificados["CIA"].dropna().unique()), placeholder="Todas")
@@ -890,6 +936,8 @@ def aplicar_filtros(df):
             dt_dates = df.loc[has_dt, "Dt_Parsed"].dt.date
             m_dt.loc[has_dt] = (dt_dates >= d_inicio) & (dt_dates <= d_fim)
         m = m & m_dt
+    if filtro_fonte_rel and "Fonte_Relatorio" in df.columns:
+        m = m & df["Fonte_Relatorio"].isin(filtro_fonte_rel)
     if filtro_gerente:
         m = m & df["Área Resp. Operação"].isin(filtro_gerente)
     if filtro_setor:
@@ -907,17 +955,30 @@ f_lemon_virt = aplicar_filtros(df_lemon_virt)
 f_sem_div = aplicar_filtros(df_sem_div)
 
 # ==============================================================================
-# 6. HEADER PRINCIPAL E ABAS
+# 6. HEADER PRINCIPAL E CARDS DE FONTES DE DADOS
 # ==============================================================================
 st.markdown(
     """
     <div class='main-header'>
         <h1>✈️ Grupo Arbaitman | Portal de Conciliação Aérea & Gestão de Bilhetes Pendentes (FP&A)</h1>
-        <p>Plataforma Executiva Espelho da Planilha Mestra, Conciliação em ERP e Monitoramento de SLA</p>
+        <p>Plataforma Executiva Integrada: Relatórios GOL, BSP IATA, AZUL, LATAM e ERP Benner</p>
     </div>
     """,
     unsafe_allow_html=True
 )
+
+st.markdown(
+    """
+    <div class="datasource-badge">
+        <div>
+            <span class="title">📄 Relatórios Fonte Mapeados:</span> 
+            <span class="info">✈️ <strong>Relatório GOL Direct</strong> | 🌐 <strong>Relatório BSP (IATA)</strong> | ✈️ <strong>AZUL Direct & LATAM Direct</strong> | 🏢 <strong>ERP Benner</strong> | 🤖 <strong>Lemontech</strong></span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 c1, c2, c3, c4, c5, c6 = st.columns(6)
 c1.metric("Pendentes ERP (Maringá)", f"{len(f_falta):,}")
 c2.metric("Erros Val/CIA (Maringá)", f"{len(f_erros):,}")
@@ -927,7 +988,6 @@ c5.metric("Emissor Virtual", f"{len(f_lemon_virt):,}")
 c6.metric("Conciliados (OK)", f"{len(f_sem_div):,}")
 st.markdown("---")
 
-# Estrutura de Abas
 abas = [
     "📊 Dashboard Executivo",
     "📋 1. Falta de Lançamento (Maringá Turismo)",
@@ -948,8 +1008,8 @@ with aba_sel[0]:
     st.markdown(
         """
         <div class='section-banner'>
-            <h3>📊 Painel Executivo C-Level & Desempenho de Conciliação</h3>
-            <p>Visão estratégica do volume financeiro pendente, taxa de resolução, SLAs operacionais e pendências por companhia aérea.</p>
+            <h3>📊 Painel Executivo C-Level & Distribuição por Relatório Fonte</h3>
+            <p>Visão financeira e operacional por tipo de relatório (GOL Direct, BSP IATA, AZUL, LATAM e ERP Benner).</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -963,7 +1023,6 @@ with aba_sel[0]:
     total_pendente = len(df_pendentes_todas)
     taxa_resolucao = (total_conciliado / total_casos * 100) if total_casos > 0 else 0.0
     
-    # Cálculo Financeiro Composto
     for col_fin in ["A vista", "A credito", "Taxa", "Comissão", "Taxa DU", "Incentivo"]:
         if col_fin in df_pendentes_todas.columns:
             df_pendentes_todas[col_fin] = pd.to_numeric(df_pendentes_todas[col_fin], errors="coerce").fillna(0.0)
@@ -974,14 +1033,6 @@ with aba_sel[0]:
     total_taxa_pendente = df_pendentes_todas["Taxa"].sum() if "Taxa" in df_pendentes_todas.columns else 0.0
     val_pendente_total = total_tarifa_pendente + total_taxa_pendente
     
-    df_sla = f_sem_div.copy()
-    tempo_medio_dias = 0.0
-    if not df_sla.empty and "Dt_Parsed" in df_sla.columns and "Dt_Mod_Parsed" in df_sla.columns:
-        df_sla["Dias_Resolucao"] = (df_sla["Dt_Mod_Parsed"] - df_sla["Dt_Parsed"]).dt.days
-        df_sla_valido = df_sla[df_sla["Dias_Resolucao"] >= 0]
-        if not df_sla_valido.empty:
-            tempo_medio_dias = df_sla_valido["Dias_Resolucao"].mean()
-            
     kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
     kpi1.metric("Total Bilhetes Processados", f"{total_casos:,}")
     kpi2.metric("Bilhetes Conciliados (OK)", f"{total_conciliado:,}")
@@ -991,13 +1042,46 @@ with aba_sel[0]:
     
     st.markdown("---")
     
-    cores_arbaitman = ["#002060", "#0050b3", "#0086c0", "#13c2c2", "#fa8c16", "#d90429", "#722ed1", "#faad14"]
-
     col_d1, col_d2 = st.columns(2)
     
-    # 1. GRÁFICO DE ROSCA (DONUT CHART - STATUS DAS PENDÊNCIAS)
+    # 1. GRÁFICO POR FONTE DE RELATÓRIO
     with col_d1:
-        st.markdown('<div class="chart-card"><h5>⚠️ Distribuição das Pendências por Status</h5>', unsafe_allow_html=True)
+        st.markdown('<div class="chart-card"><h5>📄 Volume de Pendências por Relatório Fonte</h5>', unsafe_allow_html=True)
+        if not df_pendentes_todas.empty and "Fonte_Relatorio" in df_pendentes_todas.columns:
+            df_fonte_chart = df_pendentes_todas["Fonte_Relatorio"].value_counts().reset_index()
+            df_fonte_chart.columns = ["Fonte do Relatório", "Bilhetes Pendentes"]
+            
+            fig_fonte = px.bar(
+                df_fonte_chart,
+                x="Fonte do Relatório",
+                y="Bilhetes Pendentes",
+                text="Bilhetes Pendentes",
+                color="Bilhetes Pendentes",
+                color_continuous_scale=["#1890ff", "#002060"]
+            )
+            fig_fonte.update_traces(
+                textposition="outside",
+                textfont=dict(size=12, color="#002060", family="Inter, sans-serif"),
+                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
+            )
+            fig_fonte.update_layout(
+                coloraxis_showscale=False,
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=25, b=20),
+                height=340,
+                xaxis=dict(title="", showgrid=False, tickangle=-10),
+                yaxis=dict(title="Bilhetes", showgrid=True, gridcolor="#f0f0f0"),
+                font=dict(family="Inter, sans-serif", size=12, color="#334155")
+            )
+            st.plotly_chart(fig_fonte, use_container_width=True)
+        else:
+            st.info("Nenhum dado de relatório fonte disponível.")
+        st.markdown('</div>', unsafe_allow_html=True)
+            
+    # 2. GRÁFICO DE ROSCA (DONUT CHART - STATUS DAS PENDÊNCIAS)
+    with col_d2:
+        st.markdown('<div class="chart-card"><h5>⚠️ Distribuição por Status Operacional</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "Status_Geral" in df_pendentes_todas.columns:
             df_st_chart = df_pendentes_todas["Status_Geral"].value_counts().reset_index()
             df_st_chart.columns = ["Status", "Quantidade"]
@@ -1007,7 +1091,7 @@ with aba_sel[0]:
                 values="Quantidade", 
                 names="Status", 
                 hole=0.55,
-                color_discrete_sequence=cores_arbaitman
+                color_discrete_sequence=["#002060", "#0050b3", "#0086c0", "#13c2c2", "#fa8c16", "#d90429"]
             )
             fig_pie.update_traces(
                 textposition='inside',
@@ -1026,125 +1110,11 @@ with aba_sel[0]:
             )
             st.plotly_chart(fig_pie, use_container_width=True)
         else:
-            st.info("Nenhuma pendência registrada para os filtros selecionados.")
-        st.markdown('</div>', unsafe_allow_html=True)
-            
-    # 2. GRÁFICO DE BARRAS (PENDÊNCIAS POR COMPANHIA AÉREA)
-    with col_d2:
-        st.markdown('<div class="chart-card"><h5>✈️ Pendências por Companhia Aérea (Top 8)</h5>', unsafe_allow_html=True)
-        if not df_pendentes_todas.empty and "CIA" in df_pendentes_todas.columns:
-            df_cia_chart = df_pendentes_todas["CIA"].value_counts().head(8).reset_index()
-            df_cia_chart.columns = ["Companhia", "Bilhetes Pendentes"]
-            
-            fig_cia = px.bar(
-                df_cia_chart, 
-                x="Companhia", 
-                y="Bilhetes Pendentes", 
-                text="Bilhetes Pendentes",
-                color="Bilhetes Pendentes",
-                color_continuous_scale=["#1890ff", "#002060"]
-            )
-            fig_cia.update_traces(
-                textposition="outside",
-                textfont=dict(size=12, color="#002060", family="Inter, sans-serif"),
-                marker_line_color='#002060',
-                marker_line_width=1,
-                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
-            )
-            fig_cia.update_layout(
-                coloraxis_showscale=False,
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=25, b=20),
-                height=340,
-                xaxis=dict(title="", showgrid=False, tickangle=-15),
-                yaxis=dict(title="Bilhetes", showgrid=True, gridcolor="#f0f0f0"),
-                font=dict(family="Inter, sans-serif", size=12, color="#334155")
-            )
-            st.plotly_chart(fig_cia, use_container_width=True)
-        else:
-            st.info("Nenhuma companhia aérea registrada.")
-        st.markdown('</div>', unsafe_allow_html=True)
-            
-    col_d3, col_d4 = st.columns(2)
-    
-    # 3. GRÁFICO DE BARRAS (TOP 8 GERENTES)
-    with col_d3:
-        st.markdown('<div class="chart-card"><h5>👤 Top 8 Gerentes por Volume de Pendências</h5>', unsafe_allow_html=True)
-        if not df_pendentes_todas.empty and "Área Resp. Operação" in df_pendentes_todas.columns:
-            df_ger_chart = df_pendentes_todas["Área Resp. Operação"].value_counts().head(8).reset_index()
-            df_ger_chart.columns = ["Gerente", "Quantidade"]
-            
-            fig_ger = px.bar(
-                df_ger_chart, 
-                x="Gerente", 
-                y="Quantidade", 
-                text="Quantidade",
-                color="Quantidade",
-                color_continuous_scale=["#69c0ff", "#003366"]
-            )
-            fig_ger.update_traces(
-                textposition="outside",
-                textfont=dict(size=12, color="#002060", family="Inter, sans-serif"),
-                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
-            )
-            fig_ger.update_layout(
-                coloraxis_showscale=False,
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=25, b=20),
-                height=320,
-                xaxis=dict(title="", showgrid=False, tickangle=-15),
-                yaxis=dict(title="Quantidade", showgrid=True, gridcolor="#f0f0f0"),
-                font=dict(family="Inter, sans-serif", size=12, color="#334155")
-            )
-            st.plotly_chart(fig_ger, use_container_width=True)
-        else:
-            st.info("Nenhum dado de gerente disponível.")
-        st.markdown('</div>', unsafe_allow_html=True)
-            
-    # 4. GRÁFICO DE SLA MÉDIO DE SOLUÇÃO
-    with col_d4:
-        st.markdown('<div class="chart-card"><h5>⏱️ SLA Médio de Solução por Gerente (Dias)</h5>', unsafe_allow_html=True)
-        if not df_sla.empty and "Dias_Resolucao" in df_sla.columns and "Área Resp. Operação" in df_sla.columns:
-            df_sla_validos = df_sla[df_sla["Dias_Resolucao"] >= 0]
-            if not df_sla_validos.empty:
-                df_sla_ger = df_sla_validos.groupby("Área Resp. Operação")["Dias_Resolucao"].mean().reset_index()
-                df_sla_ger.columns = ["Gerente", "Dias_Medios"]
-                df_sla_ger = df_sla_ger.sort_values("Dias_Medios", ascending=False).head(8)
-                
-                fig_sla = px.bar(
-                    df_sla_ger, 
-                    x="Gerente", 
-                    y="Dias_Medios", 
-                    text_auto=".1f",
-                    color="Dias_Medios",
-                    color_continuous_scale=["#ff7875", "#d90429"]
-                )
-                fig_sla.update_traces(
-                    textposition="outside",
-                    textfont=dict(size=12, color="#9c0006", family="Inter, sans-serif"),
-                    hovertemplate='<b>%{x}</b><br>SLA Médio: %{y:.1f} dia(s)'
-                )
-                fig_sla.update_layout(
-                    coloraxis_showscale=False,
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    margin=dict(l=10, r=10, t=25, b=20),
-                    height=320,
-                    xaxis=dict(title="", showgrid=False, tickangle=-15),
-                    yaxis=dict(title="Dias Médios", showgrid=True, gridcolor="#f0f0f0"),
-                    font=dict(family="Inter, sans-serif", size=12, color="#334155")
-                )
-                st.plotly_chart(fig_sla, use_container_width=True)
-            else:
-                st.info("Aguardando conciliação de bilhetes para exibir médias de SLA.")
-        else:
-            st.info("Aguardando conciliação de bilhetes para exibir médias de SLA.")
+            st.info("Nenhuma pendência registrada.")
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
-# FUNÇÃO REUTILIZÁVEL DE TRATATIVA E ESTILIZAÇÃO DE TABELAS
+# FUNÇÃO REUTILIZÁVEL DE TRATATIVA E EXIBIÇÃO DA COLUNA DE RELATÓRIO
 # ------------------------------------------------------------------------------
 def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     if df_filtrado.empty:
@@ -1153,7 +1123,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
         
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
-        termo_busca = st.text_input("🔍 Buscar nesta tela (por Bilhete, LOC, Cliente, Passageiro ou Gerente):", key=f"src_{key_prefix}")
+        termo_busca = st.text_input("🔍 Buscar nesta tela (por Bilhete, LOC, Cliente, Passageiro, Gerente ou Relatório):", key=f"src_{key_prefix}")
     with col_h2:
         st.write("")
         st.write("")
@@ -1167,7 +1137,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     df_exib = df_filtrado.copy()
     if termo_busca.strip():
         term = termo_busca.strip().lower()
-        cols_search = [c for c in ["Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Ponto de venda", "Gerentes", "Área Resp. Operação", "Consultor", "Cliente", "Setor"] if c in df_exib.columns]
+        cols_search = [c for c in ["Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Ponto de venda", "Gerentes", "Área Resp. Operação", "Consultor", "Cliente", "Setor", "Fonte_Relatorio"] if c in df_exib.columns]
         mask_src = pd.Series(False, index=df_exib.index)
         for col in cols_search:
             mask_src |= df_exib[col].astype(str).str.lower().str.contains(term, na=False)
@@ -1189,8 +1159,9 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
         st.markdown(f"#### 🎯 Informações do(s) Bilhete(s) Selecionado(s) ({len(df_sel_cards)})")
         for _, r_card in df_sel_cards.iterrows():
             obs_card = str(r_card.get('Obs. Operação', '')).replace("Sem tratativa na operação", "").strip() or '-'
+            fonte_card = r_card.get('Fonte_Relatorio', 'Relatório Consolidado')
             st.markdown(f"""
-            * **Bilhete:** `{r_card.get('Bilhetes')}` | **CIA:** {r_card.get('CIA')} | **Ponto Venda:** {r_card.get('Ponto de venda')}
+            * **Bilhete:** `{r_card.get('Bilhetes')}` | **Relatório Fonte:** `{fonte_card}` | **CIA:** {r_card.get('CIA')}
             * **Gerente Atual:** {r_card.get('Área Resp. Operação')} | **Setor:** {r_card.get('Setor')} | **Status Atual:** `{r_card.get('Status_Geral')}`
             * **Obs. Atual:** {obs_card}
             """)
@@ -1260,8 +1231,8 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
         
     st.markdown("---")
     
-    # CONFIGURAÇÃO DE COLUNAS E FORMATAÇÃO MONETÁRIA
     config_colunas = {
+        "Fonte_Relatorio": st.column_config.TextColumn("📄 Fonte do Relatório"),
         "A vista": st.column_config.NumberColumn("A vista", format="R$ %.2f"),
         "A credito": st.column_config.NumberColumn("A credito", format="R$ %.2f"),
         "Tarifa_Sistema": st.column_config.NumberColumn("Tarifa (Sistema)", format="R$ %.2f"),
@@ -1283,7 +1254,6 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
         "Área Resp. Operação": st.column_config.TextColumn("Área Resp."),
     }
     
-    # APLICANDO O PANDAS STYLER COM DESTAQUES DE CORES
     df_estilizado = aplicar_estilo_colunas_df(df_tbl_final)
     
     st.dataframe(
@@ -1320,7 +1290,7 @@ with aba_sel[6]:
         """
         <div class='section-banner'>
             <h3>✅ 6. Módulo de Bilhetes Conciliados (Sem Divergência)</h3>
-            <p>Base de bilhetes validados, sem divergências ativas e integrados no ERP. Utilize os filtros avançados abaixo para análises manuais e extração de relatórios.</p>
+            <p>Base de bilhetes validados, sem divergências ativas e integrados no ERP.</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -1360,7 +1330,7 @@ with aba_sel[6]:
         
     if s_ok.strip():
         term = s_ok.strip().lower()
-        cols_ok_s = [c for c in ["Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Ponto de venda", "Gerentes", "Consultor"] if c in df_ok_view.columns]
+        cols_ok_s = [c for c in ["Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Ponto de venda", "Gerentes", "Consultor", "Fonte_Relatorio"] if c in df_ok_view.columns]
         m_s_ok = pd.Series(False, index=df_ok_view.index)
         for col in cols_ok_s:
             m_s_ok |= df_ok_view[col].astype(str).str.lower().str.contains(term, na=False)
@@ -1368,6 +1338,7 @@ with aba_sel[6]:
     st.markdown(f"**Bilhetes Conciliados Exibidos:** {len(df_ok_view):,}")
     
     config_colunas_ok = {
+        "Fonte_Relatorio": st.column_config.TextColumn("📄 Fonte do Relatório"),
         "A vista": st.column_config.NumberColumn("A vista", format="R$ %.2f"),
         "A credito": st.column_config.NumberColumn("A credito", format="R$ %.2f"),
         "Tarifa_Sistema": st.column_config.NumberColumn("Tarifa (Sistema)", format="R$ %.2f"),
@@ -1422,8 +1393,7 @@ if e_master():
                 
     with aba_sel[9]:
         st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Avançado)")
-        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização massiva no Supabase com análise estatística prévia.")
-        st.warning("🔒 **Sincronização em Lote Ativa:** Os bilhetes e seus campos serão atualizados diretamente no Supabase mantendo a última versão.")
+        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização massiva no Supabase.")
         
         arq_upload = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "xls", "csv"], key="uploader_lote")
         if arq_upload:
@@ -1508,19 +1478,6 @@ if e_master():
                     m4.metric("Duplicados no Arquivo", duplicados_arquivo)
                     
                     if not df_lote_prep.empty:
-                        st.markdown("#### 📈 Estatísticas do Arquivo Importado")
-                        col_e1, col_e2 = st.columns(2)
-                        with col_e1:
-                            st.markdown("**Distribuição por Status de Destino:**")
-                            df_st_lote = df_lote_prep["Status_Geral"].value_counts().reset_index()
-                            df_st_lote.columns = ["Status", "Quantidade"]
-                            st.dataframe(df_st_lote, use_container_width=True, hide_index=True)
-                        with col_e2:
-                            st.markdown("**Distribuição por Área Responsável / Gerente:**")
-                            df_ar_lote = df_lote_prep["Área Resp. Operação"].value_counts().reset_index()
-                            df_ar_lote.columns = ["Gerente", "Quantidade"]
-                            st.dataframe(df_ar_lote, use_container_width=True, hide_index=True)
-                        st.markdown("**Amostra dos Dados a Serem Sincronizados no Supabase:**")
                         st.dataframe(df_lote_prep, use_container_width=True)
                         
                         if st.button("🚀 Confirmar e Enviar Atualizações para o Supabase", key="btn_confirmar_lote"):
