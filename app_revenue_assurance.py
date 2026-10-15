@@ -1038,75 +1038,53 @@ with aba_sel[0]:
     st.markdown("---")
     
     # --------------------------------------------------------------------------
-    # LINHA 1 DE GRÁFICOS: RELATÓRIO FONTE & STATUS
+    # LINHA 1 DE GRÁFICOS: EVOLUÇÃO TEMPORAL (POR MÊS) & STATUS OPERACIONAL
     # --------------------------------------------------------------------------
     col_d1, col_d2 = st.columns(2)
     
     with col_d1:
-        st.markdown('<div class="chart-card"><h5>📄 Volume de Pendências por Relatório Fonte</h5>', unsafe_allow_html=True)
-        if not df_pendentes_todas.empty and "Fonte_Relatorio" in df_pendentes_todas.columns:
-            df_fonte_chart = df_pendentes_todas["Fonte_Relatorio"].value_counts().reset_index()
-            df_fonte_chart.columns = ["Fonte do Relatório", "Bilhetes Pendentes"]
+        st.markdown('<div class="chart-card"><h5>📅 Evolução Temporal das Pendências (Por Mês de Emissão)</h5>', unsafe_allow_html=True)
+        if not df_pendentes_todas.empty and "Dt_Parsed" in df_pendentes_todas.columns:
+            df_temp = df_pendentes_todas.copy()
+            df_temp_valid = df_temp[df_temp["Dt_Parsed"].notna()].copy()
             
-            fig_fonte = px.bar(
-                df_fonte_chart,
-                x="Fonte do Relatório",
-                y="Bilhetes Pendentes",
-                text="Bilhetes Pendentes",
-                color="Bilhetes Pendentes",
-                color_continuous_scale=["#1890ff", "#002060"]
-            )
-            fig_fonte.update_traces(
-                textposition="outside",
-                textfont=dict(size=12, color="#002060", family="Inter, sans-serif"),
-                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
-            )
-            fig_fonte.update_layout(
-                coloraxis_showscale=False,
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=25, b=20),
-                height=320,
-                xaxis=dict(title="", showgrid=False, tickangle=-10),
-                yaxis=dict(title="Bilhetes", showgrid=True, gridcolor="#f0f0f0"),
-                font=dict(family="Inter, sans-serif", size=12, color="#334155")
-            )
-            st.plotly_chart(fig_fonte, use_container_width=True)
+            if not df_temp_valid.empty:
+                df_temp_valid["AnoMes"] = df_temp_valid["Dt_Parsed"].dt.strftime("%Y-%m")
+                df_temp_valid["AnoMes_Label"] = df_temp_valid["Dt_Parsed"].dt.strftime("%m/%Y")
+                
+                df_evol = df_temp_valid.groupby(["AnoMes", "AnoMes_Label"]).size().reset_index(name="Volume")
+                df_evol = df_evol.sort_values("AnoMes")
+                
+                fig_evol = px.line(
+                    df_evol,
+                    x="AnoMes_Label",
+                    y="Volume",
+                    text="Volume",
+                    markers=True,
+                    line_shape="linear"
+                )
+                fig_evol.update_traces(
+                    line_color="#002060",
+                    line_width=3,
+                    marker=dict(size=8, color="#0050b3"),
+                    textposition="top center",
+                    textfont=dict(size=11, color="#002060", family="Inter, sans-serif"),
+                    hovertemplate='<b>Mês: %{x}</b><br>Pendências: %{y:,} bilhete(s)'
+                )
+                fig_evol.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    margin=dict(l=10, r=10, t=30, b=20),
+                    height=320,
+                    xaxis=dict(title="", showgrid=False),
+                    yaxis=dict(title="Qtd. Bilhetes", showgrid=True, gridcolor="#f0f0f0"),
+                    font=dict(family="Inter, sans-serif", size=12, color="#334155")
+                )
+                st.plotly_chart(fig_evol, use_container_width=True)
+            else:
+                st.info("Nenhuma data válida encontrada para compor a evolução temporal.")
         else:
-            st.info("Nenhum dado de relatório fonte disponível.")
-        st.markdown('</div>', unsafe_allow_html=True)
-            
-    with col_d2:
-        st.markdown('<div class="chart-card"><h5>⚠️ Distribuição por Status Operacional</h5>', unsafe_allow_html=True)
-        if not df_pendentes_todas.empty and "Status_Geral" in df_pendentes_todas.columns:
-            df_st_chart = df_pendentes_todas["Status_Geral"].value_counts().reset_index()
-            df_st_chart.columns = ["Status", "Quantidade"]
-            
-            fig_pie = px.pie(
-                df_st_chart, 
-                values="Quantidade", 
-                names="Status", 
-                hole=0.55,
-                color_discrete_sequence=["#002060", "#0050b3", "#0086c0", "#13c2c2", "#fa8c16", "#d90429"]
-            )
-            fig_pie.update_traces(
-                textposition='inside',
-                textinfo='percent',
-                hovertemplate='<b>%{label}</b><br>Volume: %{value:,} bilhete(s)<br>Representação: %{percent}',
-                marker=dict(line=dict(color='#ffffff', width=2))
-            )
-            fig_pie.update_layout(
-                showlegend=True,
-                legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=10, b=40),
-                height=320,
-                font=dict(family="Inter, sans-serif", size=12, color="#334155")
-            )
-            st.plotly_chart(fig_pie, use_container_width=True)
-        else:
-            st.info("Nenhuma pendência registrada.")
+            st.info("Nenhum dado temporal disponível.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # --------------------------------------------------------------------------
