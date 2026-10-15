@@ -679,28 +679,31 @@ def rotear_bases_mestra(df_master):
     df_ok = df_master[mask_ok].copy()
     df_rest = df_master[~mask_ok].copy()
     
+    # 1. Roteamento Backoffice: apenas se a Área Resp. / Gerente / Obs indicar Backoffice
     def e_bo_flexivel(r):
         ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
         obs_val = str(r.get("Obs. Operação", "")).strip().lower()
         st_val = str(r.get("Status_Geral", "")).strip().lower()
         ger_val = str(r.get("Gerentes", "")).strip().lower()
-        setor_val = str(r.get("Setor", "")).strip().lower()
-        origem_val = str(r.get("Aba_Origem", "")).strip().lower()
-        return any(k in ar_val or k in ger_val or k in setor_val or k in origem_val or k in obs_val or k in st_val
+        return any(k in ar_val or k in ger_val or k in obs_val or k in st_val
                    for k in ["katia", "kátia", "backoffice", "suporte"])
                     
     mask_bo = df_rest.apply(e_bo_flexivel, axis=1)
     df_bo = df_rest[mask_bo].copy()
     df_rest = df_rest[~mask_bo].copy()
     
-    mask_evt = (
-        df_rest["Setor"].astype(str).str.lower().str.contains("eventos", na=False) |
-        df_rest["Área Resp. Operação"].astype(str).str.lower().str.contains("eventos", na=False) |
-        df_rest["Gerentes"].astype(str).str.lower().str.contains("eventos", na=False)
-    )
+    # 2. Roteamento Central de Eventos: EXIGE estritamente que a Área Responsável / Gerente seja "Central de Eventos"
+    def e_eventos_estrito(r):
+        ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
+        ger_val = str(r.get("Gerentes", "")).strip().lower()
+        # Se o gerente/área responsável foi alterado para outra pessoa (ex: Fabiano Souza), NÃO é mais Central de Eventos
+        return "eventos" in ar_val or "eventos" in ger_val
+        
+    mask_evt = df_rest.apply(e_eventos_estrito, axis=1)
     df_eventos = df_rest[mask_evt].copy()
     df_rest = df_rest[~mask_evt].copy()
     
+    # 3. Roteamento Emissor Virtual Lemontech
     def e_emissor_virtual(r):
         for col in ["Emissor", "Emissor_Reserva_Lemon", "Consultor_Lemon", "Consultor"]:
             val = str(r.get(col, "")).lower().strip()
@@ -712,6 +715,7 @@ def rotear_bases_mestra(df_master):
     df_lemon_virt = df_rest[mask_lemon].copy()
     df_rest = df_rest[~mask_lemon].copy()
     
+    # 4. Restante dividido entre Erros e Falta de Lançamento
     mask_consta_benner = ~df_rest["Status_Sistema"].astype(str).str.upper().str.contains("NAO_CONSTA|NÃO_CONSTA", na=False)
     mask_tem_divergencia = df_rest["Status_Divergencia"].astype(str).str.lower().str.contains("divergência|divergencia|erro", na=False)
     
