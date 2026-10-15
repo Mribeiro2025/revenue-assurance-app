@@ -722,7 +722,7 @@ def rotear_bases_mestra(df_master):
     return df_falta, df_erros, df_bo, df_eventos, df_lemon_virt, df_ok
 
 # ==============================================================================
-# CARREGAMENTO COM MEMÓRIA PERSISTENTE E DEDUPLICAÇÃO ESTRITA
+# CARREGAMENTO COM DEDUPLICAÇÃO ESTRITA PRIMÁRIA (MANTÉM FIXO 1.232 BILHETES)
 # ==============================================================================
 def carregar_bases():
     if "planilha_master_bytes" in st.session_state and st.session_state["planilha_master_bytes"]:
@@ -750,10 +750,14 @@ def carregar_bases():
             
         df_m = pd.concat(frames, ignore_index=True)
         
-        df_m = mesclar_com_supabase(df_m)
-        
+        # Deduplicação primária estrita no carregamento antes de mesclar ou rotear
         if "Bilhetes" in df_m.columns:
             df_m["Bilhete_Clean"] = df_m["Bilhetes"].apply(sanitizar_bilhete)
+            df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
+
+        df_m = mesclar_com_supabase(df_m)
+        
+        if "Bilhete_Clean" in df_m.columns:
             df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
 
         f_falta, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
@@ -855,7 +859,6 @@ st.sidebar.title("Grupo Arbaitman")
 st.sidebar.caption("Conciliação Aérea FP&A v3.6 (Espelho Fiel)")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 
-# RESTRIÇÃO MASTER: Apenas Master pode atualizar a planilha espelho principal
 if e_master():
     with st.sidebar.expander("📂 Atualizar Planilha Espelho Principal"):
         arq_espelho = st.file_uploader("Subir Dashboard_Revenue_Assurance_Consolidado.xlsx:", type=["xlsx"], key="uploader_dash_espelho")
@@ -997,14 +1000,14 @@ if e_master():
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO (CFO & C-LEVEL VIEW)
+# ABA 0: DASHBOARD EXECUTIVO (6 GRÁFICOS ESTRUTURADOS)
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.markdown(
         """
         <div class='section-banner'>
             <h3>📊 Painel Executivo C-Level & Análise Financeira FP&A</h3>
-            <p>Visão estratégica do volume financeiro pendente, exposição de receita, SLAs operacionais e detalhamento por Companhia Aérea e Gerente.</p>
+            <p>Visão estratégica com 6 gráficos do volume de pendências, evolução temporal, distribuição por setor/gerente e exposição financeira R$.</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -1038,12 +1041,12 @@ with aba_sel[0]:
     st.markdown("---")
     
     # --------------------------------------------------------------------------
-    # LINHA 1 DE GRÁFICOS: EVOLUÇÃO TEMPORAL (POR MÊS) & STATUS OPERACIONAL
+    # LINHA 1 DE GRÁFICOS: 1. EVOLUÇÃO TEMPORAL MENSAL & 2. STATUS OPERACIONAL
     # --------------------------------------------------------------------------
     col_d1, col_d2 = st.columns(2)
     
     with col_d1:
-        st.markdown('<div class="chart-card"><h5>📅 Evolução Temporal das Pendências (Por Mês de Emissão)</h5>', unsafe_allow_html=True)
+        st.markdown('<div class="chart-card"><h5>📅 1. Evolução Temporal das Pendências (Por Mês de Emissão)</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "Dt_Parsed" in df_pendentes_todas.columns:
             df_temp = df_pendentes_todas.copy()
             df_temp_valid = df_temp[df_temp["Dt_Parsed"].notna()].copy()
@@ -1060,8 +1063,7 @@ with aba_sel[0]:
                     x="AnoMes_Label",
                     y="Volume",
                     text="Volume",
-                    markers=True,
-                    line_shape="linear"
+                    markers=True
                 )
                 fig_evol.update_traces(
                     line_color="#002060",
@@ -1082,18 +1084,51 @@ with aba_sel[0]:
                 )
                 st.plotly_chart(fig_evol, use_container_width=True)
             else:
-                st.info("Nenhuma data válida encontrada para compor a evolução temporal.")
+                st.info("Nenhuma data válida para evolução temporal.")
         else:
             st.info("Nenhum dado temporal disponível.")
         st.markdown('</div>', unsafe_allow_html=True)
 
+    with col_d2:
+        st.markdown('<div class="chart-card"><h5>⚠️ 2. Distribuição por Status Operacional</h5>', unsafe_allow_html=True)
+        if not df_pendentes_todas.empty and "Status_Geral" in df_pendentes_todas.columns:
+            df_st_chart = df_pendentes_todas["Status_Geral"].value_counts().reset_index()
+            df_st_chart.columns = ["Status", "Quantidade"]
+            
+            fig_pie = px.pie(
+                df_st_chart, 
+                values="Quantidade", 
+                names="Status", 
+                hole=0.55,
+                color_discrete_sequence=["#002060", "#0050b3", "#0086c0", "#13c2c2", "#fa8c16", "#d90429"]
+            )
+            fig_pie.update_traces(
+                textposition='inside',
+                textinfo='percent',
+                hovertemplate='<b>%{label}</b><br>Volume: %{value:,} bilhete(s)<br>Representação: %{percent}',
+                marker=dict(line=dict(color='#ffffff', width=2))
+            )
+            fig_pie.update_layout(
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=10, b=40),
+                height=320,
+                font=dict(family="Inter, sans-serif", size=12, color="#334155")
+            )
+            st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.info("Nenhuma pendência registrada.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
     # --------------------------------------------------------------------------
-    # LINHA 2 DE GRÁFICOS: CIA AÉREA & GERENTE (QUANTIDADE)
+    # LINHA 2 DE GRÁFICOS: 3. CIA AÉREA & 4. GERENTE (QUANTIDADE)
     # --------------------------------------------------------------------------
     col_d3, col_d4 = st.columns(2)
     
     with col_d3:
-        st.markdown('<div class="chart-card"><h5>✈️ Pendências por Companhia Aérea (Top 8)</h5>', unsafe_allow_html=True)
+        st.markdown('<div class="chart-card"><h5>✈️ 3. Pendências por Companhia Aérea (Top 8)</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "CIA" in df_pendentes_todas.columns:
             df_cia_chart = df_pendentes_todas["CIA"].value_counts().head(8).reset_index()
             df_cia_chart.columns = ["Companhia", "Bilhetes Pendentes"]
@@ -1127,7 +1162,7 @@ with aba_sel[0]:
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_d4:
-        st.markdown('<div class="chart-card"><h5>👤 Volume de Pendências por Gerente / Área (Top 8)</h5>', unsafe_allow_html=True)
+        st.markdown('<div class="chart-card"><h5>👤 4. Volume de Pendências por Gerente / Área (Top 8)</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "Área Resp. Operação" in df_pendentes_todas.columns:
             df_ger_chart = df_pendentes_todas["Área Resp. Operação"].value_counts().head(8).reset_index()
             df_ger_chart.columns = ["Gerente", "Quantidade"]
@@ -1161,51 +1196,48 @@ with aba_sel[0]:
         st.markdown('</div>', unsafe_allow_html=True)
 
     # --------------------------------------------------------------------------
-    # LINHA 3 DE GRÁFICOS: VISÃO FINANCEIRA CFO (EXPOSIÇÃO R$ POR CIA E GERENTE)
+    # LINHA 3 DE GRÁFICOS: 5. SETOR / UNIDADE & 6. EXPOSIÇÃO FINANCEIRA (R$)
     # --------------------------------------------------------------------------
     col_d5, col_d6 = st.columns(2)
     
     with col_d5:
-        st.markdown('<div class="chart-card"><h5>💰 Exposição Financeira (R$) por Companhia Aérea</h5>', unsafe_allow_html=True)
-        if not df_pendentes_todas.empty and "CIA" in df_pendentes_todas.columns:
-            df_pendentes_todas["Val_Total_Linha"] = df_pendentes_todas["A vista"] + df_pendentes_todas["A credito"] + df_pendentes_todas["Taxa"]
-            df_fin_cia = df_pendentes_todas.groupby("CIA")["Val_Total_Linha"].sum().reset_index()
-            df_fin_cia = df_fin_cia.sort_values("Val_Total_Linha", ascending=False).head(8)
-            df_fin_cia["Val_Fmt"] = df_fin_cia["Val_Total_Linha"].apply(lambda x: f"R$ {x:,.0f}")
+        st.markdown('<div class="chart-card"><h5>🏢 5. Volume de Pendências por Setor / Unidade (Top 8)</h5>', unsafe_allow_html=True)
+        if not df_pendentes_todas.empty and "Setor" in df_pendentes_todas.columns:
+            df_setor_chart = df_pendentes_todas["Setor"].value_counts().head(8).reset_index()
+            df_setor_chart.columns = ["Setor", "Quantidade"]
             
-            fig_fin_cia = px.bar(
-                df_fin_cia,
-                x="CIA",
-                y="Val_Total_Linha",
-                text="Val_Fmt",
-                color="Val_Total_Linha",
-                color_continuous_scale=["#b7eb8f", "#52c41a", "#135200"]
+            fig_setor = px.bar(
+                df_setor_chart,
+                x="Setor",
+                y="Quantidade",
+                text="Quantidade",
+                color="Quantidade",
+                color_continuous_scale=["#adc6ff", "#1d39c4"]
             )
-            fig_fin_cia.update_traces(
+            fig_setor.update_traces(
                 textposition="outside",
-                textfont=dict(size=11, color="#135200", family="Inter, sans-serif"),
-                hovertemplate='<b>%{x}</b><br>Exposição: R$ %{y:,.2f}'
+                textfont=dict(size=12, color="#002060", family="Inter, sans-serif"),
+                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
             )
-            fig_fin_cia.update_layout(
+            fig_setor.update_layout(
                 coloraxis_showscale=False,
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 margin=dict(l=10, r=10, t=25, b=20),
                 height=330,
                 xaxis=dict(title="", showgrid=False, tickangle=-15),
-                yaxis=dict(title="Valor Pendente (R$)", showgrid=True, gridcolor="#f0f0f0"),
+                yaxis=dict(title="Quantidade", showgrid=True, gridcolor="#f0f0f0"),
                 font=dict(family="Inter, sans-serif", size=12, color="#334155")
             )
-            st.plotly_chart(fig_fin_cia, use_container_width=True)
+            st.plotly_chart(fig_setor, use_container_width=True)
         else:
-            st.info("Nenhum dado financeiro disponível.")
+            st.info("Nenhum dado de setor disponível.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_d6:
-        st.markdown('<div class="chart-card"><h5>💼 Exposição Financeira (R$) por Gerente / Área</h5>', unsafe_allow_html=True)
+        st.markdown('<div class="chart-card"><h5>💼 6. Exposição Financeira (R$) por Gerente / Área</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "Área Resp. Operação" in df_pendentes_todas.columns:
-            if "Val_Total_Linha" not in df_pendentes_todas.columns:
-                df_pendentes_todas["Val_Total_Linha"] = df_pendentes_todas["A vista"] + df_pendentes_todas["A credito"] + df_pendentes_todas["Taxa"]
+            df_pendentes_todas["Val_Total_Linha"] = df_pendentes_todas["A vista"] + df_pendentes_todas["A credito"] + df_pendentes_todas["Taxa"]
             df_fin_ger = df_pendentes_todas.groupby("Área Resp. Operação")["Val_Total_Linha"].sum().reset_index()
             df_fin_ger = df_fin_ger.sort_values("Val_Total_Linha", ascending=False).head(8)
             df_fin_ger["Val_Fmt"] = df_fin_ger["Val_Total_Linha"].apply(lambda x: f"R$ {x:,.0f}")
