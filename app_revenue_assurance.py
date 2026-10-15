@@ -679,7 +679,7 @@ def rotear_bases_mestra(df_master):
     df_ok = df_master[mask_ok].copy()
     df_rest = df_master[~mask_ok].copy()
     
-    # 1. Roteamento Backoffice: apenas se a Área Resp. / Gerente / Obs indicar Backoffice
+    # 1. Roteamento Backoffice
     def e_bo_flexivel(r):
         ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
         obs_val = str(r.get("Obs. Operação", "")).strip().lower()
@@ -696,7 +696,6 @@ def rotear_bases_mestra(df_master):
     def e_eventos_estrito(r):
         ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
         ger_val = str(r.get("Gerentes", "")).strip().lower()
-        # Se o gerente/área responsável foi alterado para outra pessoa (ex: Fabiano Souza), NÃO é mais Central de Eventos
         return "eventos" in ar_val or "eventos" in ger_val
         
     mask_evt = df_rest.apply(e_eventos_estrito, axis=1)
