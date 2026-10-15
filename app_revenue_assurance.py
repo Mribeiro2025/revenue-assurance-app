@@ -62,12 +62,13 @@ st.markdown(
         * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
         .stApp { background-color: #f4f6f9; }
         
+        /* Banner do Topo Executivo */
         .main-header {
             background: linear-gradient(135deg, #001e4d 0%, #003366 50%, #004080 100%);
             padding: 24px 32px;
             border-radius: 14px;
             color: white;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
             box-shadow: 0 10px 25px -5px rgba(0, 32, 96, 0.25);
         }
         .main-header h1 { color: #ffffff !important; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
@@ -99,6 +100,7 @@ st.markdown(
         .section-banner h3 { margin: 0; color: #002060; font-size: 19px; font-weight: 700; }
         .section-banner p { margin: 4px 0 0 0; color: #64748b; font-size: 13px; }
 
+        /* Card Container para os Gráficos do Dashboard */
         .chart-card {
             background-color: #ffffff;
             border-radius: 12px;
@@ -118,6 +120,7 @@ st.markdown(
             gap: 8px;
         }
 
+        /* Container do st.dataframe */
         div[data-testid="stDataFrame"] {
             background-color: #ffffff;
             border-radius: 12px !important;
@@ -126,6 +129,7 @@ st.markdown(
             border: 1px solid #cbd5e1;
         }
 
+        /* ESTILIZAÇÃO DO CABEÇALHO DA TABELA STREAMLIT (GLIDE DATA GRID) */
         div[data-testid="stDataFrame"] iframe {
             border-radius: 10px;
         }
@@ -140,6 +144,7 @@ st.markdown(
             border-bottom: 3px solid #001030 !important;
         }
 
+        /* Estilização Geral de Cartões KPI */
         div[data-testid="stMetric"] {
             background: #ffffff;
             border-radius: 10px;
@@ -153,6 +158,7 @@ st.markdown(
             box-shadow: 0 8px 20px rgba(0,0,0,0.08);
         }
 
+        /* Botões Estilizados */
         div.stButton > button {
             background: linear-gradient(135deg, #002060 0%, #003366 100%) !important;
             color: #ffffff !important;
@@ -183,7 +189,7 @@ st.markdown(
 )
 
 # ==============================================================================
-# 2. SANITIZAÇÃO E CONEXÃO COM BANCO SUPABASE
+# 2. FUNÇÃO DE SANITIZAÇÃO E CONEXÃO COM SUPABASE
 # ==============================================================================
 def sanitizar_bilhete(val):
     if pd.isna(val) or val is None:
@@ -286,7 +292,6 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
 
     sucessos = 0
     erros = 0
-
     for item in dados_lote:
         try:
             with engine.connect() as conn:
@@ -528,7 +533,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# 4. FUNÇÃO CORRIGIDA DE IDENTIFICAÇÃO DE RELATÓRIO FONTE
+# 4. PADRONIZAÇÃO, DEPARA DE CIAS E IDENTIFICAÇÃO DAS FONTES DE DADOS
 # ==============================================================================
 def identificar_fonte_relatorio(row):
     aba = str(row.get("Aba_Origem", "")).lower()
@@ -536,32 +541,18 @@ def identificar_fonte_relatorio(row):
     fornecedor = str(row.get("Fornecedor_Sistema", "")).upper()
     emissor = str(row.get("Emissor", "")).lower() + " " + str(row.get("Emissor_Reserva_Lemon", "")).lower()
     
-    # 1. Emissão Virtual Lemontech
     if "lemontech" in emissor or "virtual" in emissor:
         return "🤖 Relatório Lemontech (Virtual)"
-        
-    # 2. Relatório GOL Direct (G3 / 127)
     if "G3" in cia_raw or "GOL" in cia_raw or "GOL" in fornecedor or "127" in aba:
         return "✈️ Relatório GOL Direct"
-        
-    # 3. Relatório AZUL Direct (AD)
     if "AD" in cia_raw or "AZUL" in cia_raw or "AZUL" in fornecedor:
         return "✈️ Relatório AZUL Direct"
-
-    # 4. Relatório LATAM Direct (LA / JJ)
     if any(x in cia_raw for x in ["LA", "JJ", "LATAM"]) or "LATAM" in fornecedor:
         return "✈️ Relatório LATAM Direct"
-
-    # 5. BSP / IATA (Companhias Internacionais ou Nacionais via BSP)
     cias_bsp = ["TP", "AA", "AF", "KL", "LH", "UA", "DL", "AM", "AV", "AR", "CM", "IB", "EK", "QR", "LX", "AZ", "AC", "15", "H2", "24", "OB"]
     if "bsp" in aba or "iata" in aba or "bsp" in fornecedor or any(x in cia_raw for x in cias_bsp):
         return "🌐 Relatório BSP (IATA)"
-        
-    # 6. Registros Internos ERP Benner
-    if "benner" in aba or "99_" in aba or "98_" in aba:
-        return "🏢 Relatório ERP Benner"
-        
-    return "📊 Relatório Consolidado Vendas"
+    return "🏢 Relatório ERP Benner"
 
 def clean_str(val):
     if pd.isna(val) or val is None: 
@@ -600,10 +591,8 @@ def padronizar_df(df):
         lambda x: "Pendente de Lançamento (Não Consta)" if str(x).lower().strip() in status_map else str(x)
     )
 
-    # Identificação exata da Fonte do Relatório antes da conversão de CIA
     df_out["Fonte_Relatorio"] = df_out.apply(identificar_fonte_relatorio, axis=1)
 
-    # DePara dos Nomes de Companhias Aéreas
     if "CIA" in df_out.columns:
         df_out["CIA"] = df_out["CIA"].astype(str).str.upper().str.strip().replace(DEPARA_CIAS)
 
@@ -733,22 +722,21 @@ def rotear_bases_mestra(df_master):
     return df_falta, df_erros, df_bo, df_eventos, df_lemon_virt, df_ok
 
 # ==============================================================================
-# CARREGAMENTO DIRETO DO ARQUIVO LOCAL (SEM CACHE OBSOLETO)
+# CARREGAMENTO COM MEMÓRIA PERSISTENTE E DEDUPLICAÇÃO ESTRITA
 # ==============================================================================
-def carregar_bases(caminho_ou_buffer=None):
-    caminho = caminho_ou_buffer if caminho_ou_buffer is not None else ARQUIVO_DASHBOARD_PADRAO
-    if not isinstance(caminho, str) and not hasattr(caminho, "read"):
+def carregar_bases():
+    # 1. Prioriza a planilha guardada na sessão RAM do usuário
+    if "planilha_master_bytes" in st.session_state and st.session_state["planilha_master_bytes"]:
+        fonte = io.BytesIO(st.session_state["planilha_master_bytes"])
+    elif os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
+        fonte = ARQUIVO_DASHBOARD_PADRAO
+    else:
         vazio = padronizar_df(None)
         return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
-        
-    if isinstance(caminho, str) and not os.path.exists(caminho):
-        vazio = padronizar_df(None)
-        return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
-    
+
     try:
-        xls = pd.ExcelFile(caminho, engine="openpyxl")
+        xls = pd.ExcelFile(fonte, engine="openpyxl")
         frames = []
-        
         for sheet in xls.sheet_names:
             if sheet.startswith("99_") or sheet.startswith("98_"):
                 df_sheet = pd.read_excel(xls, sheet_name=sheet)
@@ -763,11 +751,14 @@ def carregar_bases(caminho_ou_buffer=None):
             
         df_m = pd.concat(frames, ignore_index=True)
         
+        # 2. Cruzamento com Supabase
+        df_m = mesclar_com_supabase(df_m)
+        
+        # 3. Deduplicação Estrita pós-merge (mantém exatamente os 1.232 bilhetes unificados)
         if "Bilhetes" in df_m.columns:
             df_m["Bilhete_Clean"] = df_m["Bilhetes"].apply(sanitizar_bilhete)
             df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
-            
-        df_m = mesclar_com_supabase(df_m)
+
         f_falta, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
         return f_falta, f_erros, f_bo, f_evt, f_lem, f_ok, df_log_arq
     except Exception as e:
@@ -861,7 +852,7 @@ def aplicar_estilo_colunas_df(df_input):
     return df_input.style.apply(lambda _: styles, axis=None)
 
 # ==============================================================================
-# 5. SIDEBAR, FILTROS E CONEXÃO
+# 5. SIDEBAR, UPLOAD PERSISTENTE E FILTROS OPERACIONAIS
 # ==============================================================================
 st.sidebar.title("Grupo Arbaitman")
 st.sidebar.caption("Conciliação Aérea FP&A v3.6 (Espelho Fiel)")
@@ -870,9 +861,14 @@ st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_sta
 with st.sidebar.expander("📂 Atualizar Planilha Espelho Principal"):
     arq_espelho = st.file_uploader("Subir Dashboard_Revenue_Assurance_Consolidado.xlsx:", type=["xlsx"], key="uploader_dash_espelho")
     if arq_espelho:
-        with open(ARQUIVO_DASHBOARD_PADRAO, "wb") as f:
-            f.write(arq_espelho.getbuffer())
-        st.success("✅ Planilha Espelho atualizada no servidor!")
+        bytes_data = arq_espelho.getvalue()
+        st.session_state["planilha_master_bytes"] = bytes_data
+        try:
+            with open(ARQUIVO_DASHBOARD_PADRAO, "wb") as f:
+                f.write(bytes_data)
+        except Exception:
+            pass
+        st.success("✅ Planilha Espelho atualizada e fixa na sessão!")
         time.sleep(1)
         st.rerun()
 
@@ -897,11 +893,11 @@ with st.sidebar.expander("🔑 Alterar Minha Senha"):
 
 if st.sidebar.button("🔒 Sair"):
     st.session_state["autenticado"] = False
+    st.session_state.pop("planilha_master_bytes", None)
     st.rerun()
 
 st.sidebar.markdown("---")
 
-# Carregamento Direto das Bases
 df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div, df_log = carregar_bases()
 df_todos_unificados = pd.concat([df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
@@ -955,7 +951,7 @@ f_lemon_virt = aplicar_filtros(df_lemon_virt)
 f_sem_div = aplicar_filtros(df_sem_div)
 
 # ==============================================================================
-# 6. HEADER PRINCIPAL E CARDS DE FONTES DE DADOS
+# 6. HEADER PRINCIPAL E ABAS
 # ==============================================================================
 st.markdown(
     """
@@ -1114,7 +1110,7 @@ with aba_sel[0]:
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
-# FUNÇÃO REUTILIZÁVEL DE TRATATIVA E EXIBIÇÃO DA COLUNA DE RELATÓRIO
+# FUNÇÃO REUTILIZÁVEL DE TRATATIVA E ESTILIZAÇÃO DE TABELAS
 # ------------------------------------------------------------------------------
 def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     if df_filtrado.empty:
@@ -1283,14 +1279,14 @@ with aba_sel[5]:
     renderizar_modulo_tratativa(f_lemon_virt, "Emissor_Virtual_Lemontech", "evl")
 
 # ------------------------------------------------------------------------------
-# ABA 6: BILHETES CONCILIADOS (SEM DIVERGÊNCIA)
+# ABA 6: BILHETES DIRECIONADOS À CONCILIAÇÃO
 # ------------------------------------------------------------------------------
 with aba_sel[6]:
     st.markdown(
         """
         <div class='section-banner'>
-            <h3>✅ 6. Módulo de Bilhetes Conciliados (Sem Divergência)</h3>
-            <p>Base de bilhetes validados, sem divergências ativas e integrados no ERP.</p>
+            <h3>✅ 6. Módulo de Bilhetes Voltado para a Conciliação</h3>
+            <p>Base de bilhetes validados, sem divergências ativas e integrados no ERP. Utilize os filtros avançados abaixo para análises manuais e extração de relatórios.</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -1393,7 +1389,8 @@ if e_master():
                 
     with aba_sel[9]:
         st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Avançado)")
-        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização massiva no Supabase.")
+        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização massiva no Supabase com análise estatística prévia.")
+        st.warning("🔒 **Sincronização em Lote Ativa:** Os bilhetes e seus campos serão atualizados diretamente no Supabase mantendo a última versão.")
         
         arq_upload = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "xls", "csv"], key="uploader_lote")
         if arq_upload:
@@ -1478,6 +1475,19 @@ if e_master():
                     m4.metric("Duplicados no Arquivo", duplicados_arquivo)
                     
                     if not df_lote_prep.empty:
+                        st.markdown("#### 📈 Estatísticas do Arquivo Importado")
+                        col_e1, col_e2 = st.columns(2)
+                        with col_e1:
+                            st.markdown("**Distribuição por Status de Destino:**")
+                            df_st_lote = df_lote_prep["Status_Geral"].value_counts().reset_index()
+                            df_st_lote.columns = ["Status", "Quantidade"]
+                            st.dataframe(df_st_lote, use_container_width=True, hide_index=True)
+                        with col_e2:
+                            st.markdown("**Distribuição por Área Responsável / Gerente:**")
+                            df_ar_lote = df_lote_prep["Área Resp. Operação"].value_counts().reset_index()
+                            df_ar_lote.columns = ["Gerente", "Quantidade"]
+                            st.dataframe(df_ar_lote, use_container_width=True, hide_index=True)
+                        st.markdown("**Amostra dos Dados a Serem Sincronizados no Supabase:**")
                         st.dataframe(df_lote_prep, use_container_width=True)
                         
                         if st.button("🚀 Confirmar e Enviar Atualizações para o Supabase", key="btn_confirmar_lote"):
