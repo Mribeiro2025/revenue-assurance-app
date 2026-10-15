@@ -129,7 +129,7 @@ st.markdown(
             border: 1px solid #cbd5e1;
         }
 
-        /* ESTILIZAÇÃO DO CABEÇALHO DA TABELA STREAMLIT (GLIDE DATA GRID) */
+        /* ESTILIZAÇÃO DO CABEÇALHO DA TABELA STREAMLIT */
         div[data-testid="stDataFrame"] iframe {
             border-radius: 10px;
         }
@@ -725,7 +725,6 @@ def rotear_bases_mestra(df_master):
 # CARREGAMENTO COM MEMÓRIA PERSISTENTE E DEDUPLICAÇÃO ESTRITA
 # ==============================================================================
 def carregar_bases():
-    # 1. Prioriza a planilha guardada na sessão RAM do usuário
     if "planilha_master_bytes" in st.session_state and st.session_state["planilha_master_bytes"]:
         fonte = io.BytesIO(st.session_state["planilha_master_bytes"])
     elif os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
@@ -751,10 +750,8 @@ def carregar_bases():
             
         df_m = pd.concat(frames, ignore_index=True)
         
-        # 2. Cruzamento com Supabase
         df_m = mesclar_com_supabase(df_m)
         
-        # 3. Deduplicação Estrita pós-merge (mantém exatamente os 1.232 bilhetes unificados)
         if "Bilhetes" in df_m.columns:
             df_m["Bilhete_Clean"] = df_m["Bilhetes"].apply(sanitizar_bilhete)
             df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
@@ -852,25 +849,27 @@ def aplicar_estilo_colunas_df(df_input):
     return df_input.style.apply(lambda _: styles, axis=None)
 
 # ==============================================================================
-# 5. SIDEBAR, UPLOAD PERSISTENTE E FILTROS OPERACIONAIS
+# 5. SIDEBAR, UPLOAD PERSISTENTE (EXCLUSIVO MASTER) E FILTROS OPERACIONAIS
 # ==============================================================================
 st.sidebar.title("Grupo Arbaitman")
 st.sidebar.caption("Conciliação Aérea FP&A v3.6 (Espelho Fiel)")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 
-with st.sidebar.expander("📂 Atualizar Planilha Espelho Principal"):
-    arq_espelho = st.file_uploader("Subir Dashboard_Revenue_Assurance_Consolidado.xlsx:", type=["xlsx"], key="uploader_dash_espelho")
-    if arq_espelho:
-        bytes_data = arq_espelho.getvalue()
-        st.session_state["planilha_master_bytes"] = bytes_data
-        try:
-            with open(ARQUIVO_DASHBOARD_PADRAO, "wb") as f:
-                f.write(bytes_data)
-        except Exception:
-            pass
-        st.success("✅ Planilha Espelho atualizada e fixa na sessão!")
-        time.sleep(1)
-        st.rerun()
+# RESTRIÇÃO MASTER: Apenas Master pode atualizar a planilha espelho principal
+if e_master():
+    with st.sidebar.expander("📂 Atualizar Planilha Espelho Principal"):
+        arq_espelho = st.file_uploader("Subir Dashboard_Revenue_Assurance_Consolidado.xlsx:", type=["xlsx"], key="uploader_dash_espelho")
+        if arq_espelho:
+            bytes_data = arq_espelho.getvalue()
+            st.session_state["planilha_master_bytes"] = bytes_data
+            try:
+                with open(ARQUIVO_DASHBOARD_PADRAO, "wb") as f:
+                    f.write(bytes_data)
+            except Exception:
+                pass
+            st.success("✅ Planilha Espelho atualizada e fixa na sessão!")
+            time.sleep(1)
+            st.rerun()
 
 if st.sidebar.button("🔄 Recarregar e Atualizar Dados"):
     st.rerun()
@@ -998,14 +997,14 @@ if e_master():
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO
+# ABA 0: DASHBOARD EXECUTIVO (CFO & C-LEVEL VIEW)
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.markdown(
         """
         <div class='section-banner'>
-            <h3>📊 Painel Executivo C-Level & Distribuição por Relatório Fonte</h3>
-            <p>Visão financeira e operacional por tipo de relatório (GOL Direct, BSP IATA, AZUL, LATAM e ERP Benner).</p>
+            <h3>📊 Painel Executivo C-Level & Análise Financeira FP&A</h3>
+            <p>Visão estratégica do volume financeiro pendente, exposição de receita, SLAs operacionais e detalhamento por Companhia Aérea e Gerente.</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -1038,9 +1037,11 @@ with aba_sel[0]:
     
     st.markdown("---")
     
+    # --------------------------------------------------------------------------
+    # LINHA 1 DE GRÁFICOS: RELATÓRIO FONTE & STATUS
+    # --------------------------------------------------------------------------
     col_d1, col_d2 = st.columns(2)
     
-    # 1. GRÁFICO POR FONTE DE RELATÓRIO
     with col_d1:
         st.markdown('<div class="chart-card"><h5>📄 Volume de Pendências por Relatório Fonte</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "Fonte_Relatorio" in df_pendentes_todas.columns:
@@ -1065,7 +1066,7 @@ with aba_sel[0]:
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 margin=dict(l=10, r=10, t=25, b=20),
-                height=340,
+                height=320,
                 xaxis=dict(title="", showgrid=False, tickangle=-10),
                 yaxis=dict(title="Bilhetes", showgrid=True, gridcolor="#f0f0f0"),
                 font=dict(family="Inter, sans-serif", size=12, color="#334155")
@@ -1075,7 +1076,6 @@ with aba_sel[0]:
             st.info("Nenhum dado de relatório fonte disponível.")
         st.markdown('</div>', unsafe_allow_html=True)
             
-    # 2. GRÁFICO DE ROSCA (DONUT CHART - STATUS DAS PENDÊNCIAS)
     with col_d2:
         st.markdown('<div class="chart-card"><h5>⚠️ Distribuição por Status Operacional</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "Status_Geral" in df_pendentes_todas.columns:
@@ -1101,12 +1101,163 @@ with aba_sel[0]:
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 margin=dict(l=10, r=10, t=10, b=40),
-                height=340,
+                height=320,
                 font=dict(family="Inter, sans-serif", size=12, color="#334155")
             )
             st.plotly_chart(fig_pie, use_container_width=True)
         else:
             st.info("Nenhuma pendência registrada.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # --------------------------------------------------------------------------
+    # LINHA 2 DE GRÁFICOS: CIA AÉREA & GERENTE (QUANTIDADE)
+    # --------------------------------------------------------------------------
+    col_d3, col_d4 = st.columns(2)
+    
+    with col_d3:
+        st.markdown('<div class="chart-card"><h5>✈️ Pendências por Companhia Aérea (Top 8)</h5>', unsafe_allow_html=True)
+        if not df_pendentes_todas.empty and "CIA" in df_pendentes_todas.columns:
+            df_cia_chart = df_pendentes_todas["CIA"].value_counts().head(8).reset_index()
+            df_cia_chart.columns = ["Companhia", "Bilhetes Pendentes"]
+            
+            fig_cia = px.bar(
+                df_cia_chart, 
+                x="Companhia", 
+                y="Bilhetes Pendentes", 
+                text="Bilhetes Pendentes",
+                color="Bilhetes Pendentes",
+                color_continuous_scale=["#69c0ff", "#002060"]
+            )
+            fig_cia.update_traces(
+                textposition="outside",
+                textfont=dict(size=12, color="#002060", family="Inter, sans-serif"),
+                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
+            )
+            fig_cia.update_layout(
+                coloraxis_showscale=False,
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=25, b=20),
+                height=320,
+                xaxis=dict(title="", showgrid=False, tickangle=-15),
+                yaxis=dict(title="Bilhetes", showgrid=True, gridcolor="#f0f0f0"),
+                font=dict(family="Inter, sans-serif", size=12, color="#334155")
+            )
+            st.plotly_chart(fig_cia, use_container_width=True)
+        else:
+            st.info("Nenhuma companhia aérea registrada.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_d4:
+        st.markdown('<div class="chart-card"><h5>👤 Volume de Pendências por Gerente / Área (Top 8)</h5>', unsafe_allow_html=True)
+        if not df_pendentes_todas.empty and "Área Resp. Operação" in df_pendentes_todas.columns:
+            df_ger_chart = df_pendentes_todas["Área Resp. Operação"].value_counts().head(8).reset_index()
+            df_ger_chart.columns = ["Gerente", "Quantidade"]
+            
+            fig_ger = px.bar(
+                df_ger_chart, 
+                x="Gerente", 
+                y="Quantidade", 
+                text="Quantidade",
+                color="Quantidade",
+                color_continuous_scale=["#91d5ff", "#003366"]
+            )
+            fig_ger.update_traces(
+                textposition="outside",
+                textfont=dict(size=12, color="#002060", family="Inter, sans-serif"),
+                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
+            )
+            fig_ger.update_layout(
+                coloraxis_showscale=False,
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=25, b=20),
+                height=320,
+                xaxis=dict(title="", showgrid=False, tickangle=-15),
+                yaxis=dict(title="Quantidade", showgrid=True, gridcolor="#f0f0f0"),
+                font=dict(family="Inter, sans-serif", size=12, color="#334155")
+            )
+            st.plotly_chart(fig_ger, use_container_width=True)
+        else:
+            st.info("Nenhum dado de gerente disponível.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # --------------------------------------------------------------------------
+    # LINHA 3 DE GRÁFICOS: VISÃO FINANCEIRA CFO (EXPOSIÇÃO R$ POR CIA E GERENTE)
+    # --------------------------------------------------------------------------
+    col_d5, col_d6 = st.columns(2)
+    
+    with col_d5:
+        st.markdown('<div class="chart-card"><h5>💰 Exposição Financeira (R$) por Companhia Aérea</h5>', unsafe_allow_html=True)
+        if not df_pendentes_todas.empty and "CIA" in df_pendentes_todas.columns:
+            df_pendentes_todas["Val_Total_Linha"] = df_pendentes_todas["A vista"] + df_pendentes_todas["A credito"] + df_pendentes_todas["Taxa"]
+            df_fin_cia = df_pendentes_todas.groupby("CIA")["Val_Total_Linha"].sum().reset_index()
+            df_fin_cia = df_fin_cia.sort_values("Val_Total_Linha", ascending=False).head(8)
+            df_fin_cia["Val_Fmt"] = df_fin_cia["Val_Total_Linha"].apply(lambda x: f"R$ {x:,.0f}")
+            
+            fig_fin_cia = px.bar(
+                df_fin_cia,
+                x="CIA",
+                y="Val_Total_Linha",
+                text="Val_Fmt",
+                color="Val_Total_Linha",
+                color_continuous_scale=["#b7eb8f", "#52c41a", "#135200"]
+            )
+            fig_fin_cia.update_traces(
+                textposition="outside",
+                textfont=dict(size=11, color="#135200", family="Inter, sans-serif"),
+                hovertemplate='<b>%{x}</b><br>Exposição: R$ %{y:,.2f}'
+            )
+            fig_fin_cia.update_layout(
+                coloraxis_showscale=False,
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=25, b=20),
+                height=330,
+                xaxis=dict(title="", showgrid=False, tickangle=-15),
+                yaxis=dict(title="Valor Pendente (R$)", showgrid=True, gridcolor="#f0f0f0"),
+                font=dict(family="Inter, sans-serif", size=12, color="#334155")
+            )
+            st.plotly_chart(fig_fin_cia, use_container_width=True)
+        else:
+            st.info("Nenhum dado financeiro disponível.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_d6:
+        st.markdown('<div class="chart-card"><h5>💼 Exposição Financeira (R$) por Gerente / Área</h5>', unsafe_allow_html=True)
+        if not df_pendentes_todas.empty and "Área Resp. Operação" in df_pendentes_todas.columns:
+            if "Val_Total_Linha" not in df_pendentes_todas.columns:
+                df_pendentes_todas["Val_Total_Linha"] = df_pendentes_todas["A vista"] + df_pendentes_todas["A credito"] + df_pendentes_todas["Taxa"]
+            df_fin_ger = df_pendentes_todas.groupby("Área Resp. Operação")["Val_Total_Linha"].sum().reset_index()
+            df_fin_ger = df_fin_ger.sort_values("Val_Total_Linha", ascending=False).head(8)
+            df_fin_ger["Val_Fmt"] = df_fin_ger["Val_Total_Linha"].apply(lambda x: f"R$ {x:,.0f}")
+            
+            fig_fin_ger = px.bar(
+                df_fin_ger,
+                x="Área Resp. Operação",
+                y="Val_Total_Linha",
+                text="Val_Fmt",
+                color="Val_Total_Linha",
+                color_continuous_scale=["#ffe7ba", "#fa8c16", "#d96a00"]
+            )
+            fig_fin_ger.update_traces(
+                textposition="outside",
+                textfont=dict(size=11, color="#d96a00", family="Inter, sans-serif"),
+                hovertemplate='<b>%{x}</b><br>Exposição: R$ %{y:,.2f}'
+            )
+            fig_fin_ger.update_layout(
+                coloraxis_showscale=False,
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=25, b=20),
+                height=330,
+                xaxis=dict(title="", showgrid=False, tickangle=-15),
+                yaxis=dict(title="Valor Pendente (R$)", showgrid=True, gridcolor="#f0f0f0"),
+                font=dict(family="Inter, sans-serif", size=12, color="#334155")
+            )
+            st.plotly_chart(fig_fin_ger, use_container_width=True)
+        else:
+            st.info("Nenhum dado financeiro por gerente disponível.")
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
