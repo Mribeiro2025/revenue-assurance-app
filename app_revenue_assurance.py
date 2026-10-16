@@ -727,17 +727,14 @@ def rotear_bases_mestra(df_master):
 # ==============================================================================
 # CARREGAMENTO COM DEDUPLICAÇÃO ESTRITA PRIMÁRIA (MANTÉM FIXO 1.232 BILHETES)
 # ==============================================================================
-def carregar_bases():
-    if "planilha_master_bytes" in st.session_state and st.session_state["planilha_master_bytes"]:
-        fonte = io.BytesIO(st.session_state["planilha_master_bytes"])
-    elif os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
-        fonte = ARQUIVO_DASHBOARD_PADRAO
-    else:
-        vazio = padronizar_df(None)
-        return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
-
+# ==============================================================================
+# CARREGAMENTO DEFINITIVO COM CACHE E DEDUPLICAÇÃO ESTRITA SOBERANA
+# ==============================================================================
+@st.cache_data(ttl=600, show_spinner=False)
+def ler_excel_bruto_normalizado(caminho_ou_bytes):
+    """Lê e sanitiza o arquivo Excel para evitar inflar linhas por duplicidade de abas."""
     try:
-        xls = pd.ExcelFile(fonte, engine="openpyxl")
+        xls = pd.ExcelFile(caminho_ou_bytes, engine="openpyxl")
         frames = []
         for sheet in xls.sheet_names:
             if sheet.startswith("99_") or sheet.startswith("98_"):
@@ -748,18 +745,42 @@ def carregar_bases():
         df_log_arq = pd.read_excel(xls, "00_Log_Auditoria") if "00_Log_Auditoria" in xls.sheet_names else pd.DataFrame()
         
         if not frames:
-            vazio = padronizar_df(None)
-            return vazio, vazio, vazio, vazio, vazio, vazio, df_log_arq
+            return pd.DataFrame(), df_log_arq
             
         df_m = pd.concat(frames, ignore_index=True)
         
-        # Deduplicação primária estrita no carregamento antes de mesclar ou rotear
+        # Normalização rigorosa da chave do bilhete na leitura
         if "Bilhetes" in df_m.columns:
             df_m["Bilhete_Clean"] = df_m["Bilhetes"].apply(sanitizar_bilhete)
+            # Remove linhas vazias ou sem bilhete válido
+            df_m = df_m[df_m["Bilhete_Clean"].astype(str).str.len() > 3]
+            # Deduplicação estrita garantindo apenas a 1ª ocorrência
             df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
+            
+        return df_m, df_log_arq
+    except Exception as e:
+        return pd.DataFrame(), pd.DataFrame()
 
+def carregar_bases():
+    if "planilha_master_bytes" in st.session_state and st.session_state["planilha_master_bytes"]:
+        fonte = io.BytesIO(st.session_state["planilha_master_bytes"])
+    elif os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
+        fonte = ARQUIVO_DASHBOARD_PADRAO
+    else:
+        vazio = padronizar_df(None)
+        return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
+
+    try:
+        df_m, df_log_arq = ler_excel_bruto_normalizado(fonte)
+        
+        if df_m.empty:
+            vazio = padronizar_df(None)
+            return vazio, vazio, vazio, vazio, vazio, vazio, df_log_arq
+
+        # Sincroniza com as tratativas salvas no banco de dados Supabase
         df_m = mesclar_com_supabase(df_m)
         
+        # Re-garante a deduplicação absoluta após a mesclagem com o banco
         if "Bilhete_Clean" in df_m.columns:
             df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
 
