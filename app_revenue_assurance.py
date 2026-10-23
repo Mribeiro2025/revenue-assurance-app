@@ -290,19 +290,16 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
             data_modificacao = NOW();
     """)
 
-    sucessos = 0
-    erros = 0
-    for item in dados_lote:
-        try:
-            with engine.connect() as conn:
-                conn.execute(sql_upsert, item)
-                conn.commit()
-                sucessos += 1
-        except Exception:
-            erros += 1
-
-    msg = f"✅ Sincronização concluída! {qtd_atualizados} bilhete(s) atualizado(s) e {qtd_novos} novo(s) inserido(s)."
-    return True, msg, qtd_atualizados, qtd_novos, erros
+    try:
+        # Execução otimizada em lote (batch execution) em conexão única
+        with engine.begin() as conn:
+            conn.execute(sql_upsert, dados_lote)
+        
+        st.cache_data.clear() # Limpa caches para atualização imediata
+        msg = f"✅ Sincronização rápida concluída! {qtd_atualizados} bilhete(s) atualizado(s) e {qtd_novos} novo(s) inserido(s)."
+        return True, msg, qtd_atualizados, qtd_novos, 0
+    except Exception as e:
+        return False, f"Erro ao salvar tratativas: {e}", 0, 0, len(dados_lote)
 
 def registrar_log_supabase(logs_list):
     engine = get_db_engine()
@@ -649,7 +646,17 @@ def mesclar_com_supabase(df_excel):
             df_merged[col_excel] = df_merged[col_sb].where(mask_valido, df_merged[col_excel])
             
     cols_drop = [c for c in cols_presentes if c in df_merged.columns]
-    df_merged.drop(columns=cols_drop, inplace=True, errors="ignore")
+    df_merged = df_merged.drop(columns=cols_drop)
+
+    # CORREÇÃO CHAVE: Atualiza o status de divergência para bilhetes resolvidos
+    st_geral_str = df_merged["Status_Geral"].astype(str).str.lower().str.strip()
+    mask_resolvido = st_geral_str.str.contains("já lançado|emitido e lançado|lançado|conciliado|valores corretos|regularizado", na=False)
+    
+    if "Status_Divergencia" in df_merged.columns:
+        df_merged.loc[mask_resolvido, "Status_Divergencia"] = "Valores Corretos"
+    if "Status_Cia" in df_merged.columns:
+        df_merged.loc[mask_resolvido, "Status_Cia"] = "OK"
+
     return df_merged
 
 def rotear_bases_mestra(df_master):
@@ -657,29 +664,32 @@ def rotear_bases_mestra(df_master):
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
         
     df_master = padronizar_df(df_master)
+    
     def e_apenas_analisar_receita(st_div):
         s = str(st_div).lower().strip()
         if "analisar receita" in s or ("receita" in s and not any(x in s for x in ["tarifa", "taxa", "cia", "companhia"])):
             return True
         return False
         
-    st_geral_str = df_master["Status_Geral"].astype(str).str.lower()
-    st_div_str = df_master["Status_Divergencia"].astype(str).str.lower()
+    st_geral_str = df_master["Status_Geral"].astype(str).str.lower().str.strip()
+    st_div_str = df_master["Status_Divergencia"].astype(str).str.lower().str.strip()
     
-    mask_tem_divergencia_real = st_div_str.str.contains("divergência|divergencia|erro", na=False) & \
-                                ~df_master["Status_Divergencia"].apply(e_apenas_analisar_receita)
-                                
     mask_status_lancado = (
         st_geral_str.str.contains("já lançado|emitido e lançado|lançado|conciliado|valores corretos|regularizado", na=False) |
         st_div_str.str.contains("valores corretos|sem divergência|sem divergencia", na=False)
     )
     
+    # Se já foi lançado ou resolvido, desconsidera divergências antigas
+    mask_tem_divergencia_real = st_div_str.str.contains("divergência|divergencia|erro", na=False) & \
+                                ~df_master["Status_Divergencia"].apply(e_apenas_analisar_receita) & \
+                                ~mask_status_lancado
+                                
     mask_ok = (mask_status_lancado | df_master["Status_Divergencia"].apply(e_apenas_analisar_receita)) & ~mask_tem_divergencia_real
     
     df_ok = df_master[mask_ok].copy()
     df_rest = df_master[~mask_ok].copy()
     
-    # 1. Roteamento Backoffice
+    # Roteamento de setores
     def e_bo_flexivel(r):
         ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
         obs_val = str(r.get("Obs. Operação", "")).strip().lower()
@@ -692,7 +702,6 @@ def rotear_bases_mestra(df_master):
     df_bo = df_rest[mask_bo].copy()
     df_rest = df_rest[~mask_bo].copy()
     
-    # 2. Roteamento Central de Eventos: EXIGE estritamente que a Área Responsável / Gerente seja "Central de Eventos"
     def e_eventos_estrito(r):
         ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
         ger_val = str(r.get("Gerentes", "")).strip().lower()
@@ -702,27 +711,18 @@ def rotear_bases_mestra(df_master):
     df_eventos = df_rest[mask_evt].copy()
     df_rest = df_rest[~mask_evt].copy()
     
-    # 3. Roteamento Emissor Virtual Lemontech
-    def e_emissor_virtual(r):
-        for col in ["Emissor", "Emissor_Reserva_Lemon", "Consultor_Lemon", "Consultor"]:
-            val = str(r.get(col, "")).lower().strip()
-            if "virtual" in val or "lemontech" in val:
-                return True
-        return False
+    def e_emissao(r):
+        st_val = str(r.get("Status_Geral", "")).strip().lower()
+        ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
+        return "falta de lançamento" in st_val or "não consta" in st_val or "emissão" in ar_val or "emissao" in ar_val
         
-    mask_lemon = df_rest.apply(e_emissor_virtual, axis=1)
-    df_lemon_virt = df_rest[mask_lemon].copy()
-    df_rest = df_rest[~mask_lemon].copy()
+    mask_falta = df_rest.apply(e_emissao, axis=1)
+    df_falta = df_rest[mask_falta].copy()
+    df_erros = df_rest[~mask_falta].copy()
     
-    # 4. Restante dividido entre Erros e Falta de Lançamento
-    mask_consta_benner = ~df_rest["Status_Sistema"].astype(str).str.upper().str.contains("NAO_CONSTA|NÃO_CONSTA", na=False)
-    mask_tem_divergencia = df_rest["Status_Divergencia"].astype(str).str.lower().str.contains("divergência|divergencia|erro", na=False)
+    df_lemontech = pd.DataFrame()
     
-    mask_erros = mask_consta_benner | mask_tem_divergencia
-    df_erros = df_rest[mask_erros].copy()
-    df_falta = df_rest[~mask_erros].copy()
-    
-    return df_falta, df_erros, df_bo, df_eventos, df_lemon_virt, df_ok
+    return df_falta, df_erros, df_bo, df_eventos, df_lemontech, df_ok
 
 # ==============================================================================
 # CARREGAMENTO COM DEDUPLICAÇÃO ESTRITA PRIMÁRIA (MANTÉM FIXO 1.232 BILHETES)
