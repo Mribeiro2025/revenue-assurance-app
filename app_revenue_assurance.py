@@ -14,7 +14,7 @@ import streamlit as st
 from sqlalchemy import create_engine, text
 
 # ==============================================================================
-# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS EXECUTIVOS (CABEÇALHO PREMIUM)
+# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS EXECUTIVOS
 # ==============================================================================
 st.set_page_config(
     page_title="Grupo Arbaitman | Portal de Conciliação Aérea & Bilhetes Pendentes",
@@ -22,9 +22,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 ARQUIVO_DASHBOARD_PADRAO = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 
-# Dicionário de Mapeamento dos Códigos de Companhias Aéreas
 DEPARA_CIAS = {
     "G3": "GOL (G3)",
     "AD": "AZUL (AD)",
@@ -53,16 +53,13 @@ DEPARA_CIAS = {
     "15": "15 - Outras CIAs"
 }
 
-# INJEÇÃO CSS COMPLETA PARA APLICAÇÃO E CABEÇALHOS DA TABELA
 st.markdown(
     """
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        
         * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
         .stApp { background-color: #f4f6f9; }
         
-        /* Banner do Topo Executivo */
         .main-header {
             background: linear-gradient(135deg, #001e4d 0%, #003366 50%, #004080 100%);
             padding: 24px 32px;
@@ -88,7 +85,6 @@ st.markdown(
         }
         .datasource-badge .title { font-weight: 700; color: #002060; font-size: 13px; }
         .datasource-badge .info { font-size: 12px; color: #475569; }
-
         .section-banner {
             background: #ffffff;
             border-left: 6px solid #002060;
@@ -99,8 +95,6 @@ st.markdown(
         }
         .section-banner h3 { margin: 0; color: #002060; font-size: 19px; font-weight: 700; }
         .section-banner p { margin: 4px 0 0 0; color: #64748b; font-size: 13px; }
-
-        /* Card Container para os Gráficos do Dashboard */
         .chart-card {
             background-color: #ffffff;
             border-radius: 12px;
@@ -119,8 +113,6 @@ st.markdown(
             align-items: center;
             gap: 8px;
         }
-
-        /* Container do st.dataframe */
         div[data-testid="stDataFrame"] {
             background-color: #ffffff;
             border-radius: 12px !important;
@@ -128,12 +120,9 @@ st.markdown(
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
             border: 1px solid #cbd5e1;
         }
-
-        /* ESTILIZAÇÃO DO CABEÇALHO DA TABELA STREAMLIT */
         div[data-testid="stDataFrame"] iframe {
             border-radius: 10px;
         }
-
         .dgrid-header, [data-testid="stDataFrame"] th, div[role="columnheader"] {
             background-color: #002060 !important;
             color: #ffffff !important;
@@ -143,8 +132,6 @@ st.markdown(
             text-transform: uppercase !important;
             border-bottom: 3px solid #001030 !important;
         }
-
-        /* Estilização Geral de Cartões KPI */
         div[data-testid="stMetric"] {
             background: #ffffff;
             border-radius: 10px;
@@ -157,8 +144,6 @@ st.markdown(
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(0,0,0,0.08);
         }
-
-        /* Botões Estilizados */
         div.stButton > button {
             background: linear-gradient(135deg, #002060 0%, #003366 100%) !important;
             color: #ffffff !important;
@@ -174,7 +159,6 @@ st.markdown(
             box-shadow: 0 6px 14px rgba(0,32,96,0.3) !important;
             transform: translateY(-1px);
         }
-
         .highlight-card {
             background: #f0f7ff;
             border: 1px solid #bae0ff;
@@ -235,14 +219,11 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
     engine = get_db_engine()
     if not engine or df_lote.empty:
         return False, "Conexão com a base de dados indisponível.", 0, 0, 0
-
     df_existentes = carregar_tratativas_db()
     set_existentes = set(df_existentes["bilhete"].apply(sanitizar_bilhete).tolist()) if not df_existentes.empty else set()
-
     dados_lote = []
     qtd_atualizados = 0
     qtd_novos = 0
-
     for _, r in df_lote.iterrows():
         b_clean = sanitizar_bilhete(r.get("Bilhetes", r.get("bilhete", "")))
         if b_clean and b_clean.lower() not in ["nan", "none", "", "-"]:
@@ -258,12 +239,10 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 ar_val = "Operação"
             if gerente_val in ["-", "", "None", "nan"]:
                 gerente_val = ar_val
-
             if b_clean in set_existentes:
                 qtd_atualizados += 1
             else:
                 qtd_novos += 1
-
             dados_lote.append({
                 "bilhete": b_clean,
                 "status_geral": st_val,
@@ -273,10 +252,8 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 "gerentes": gerente_val,
                 "usuario": str(usuario)
             })
-
     if not dados_lote:
         return False, "Nenhum bilhete válido para atualização.", 0, 0, 0
-
     sql_upsert = text("""
         INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
         VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW())
@@ -289,13 +266,10 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
             usuario_modificacao = EXCLUDED.usuario_modificacao,
             data_modificacao = NOW();
     """)
-
     try:
-        # Execução otimizada em lote (batch execution) em conexão única
         with engine.begin() as conn:
             conn.execute(sql_upsert, dados_lote)
-        
-        st.cache_data.clear() # Limpa caches para atualização imediata
+        st.cache_data.clear()
         msg = f"✅ Sincronização rápida concluída! {qtd_atualizados} bilhete(s) atualizado(s) e {qtd_novos} novo(s) inserido(s)."
         return True, msg, qtd_atualizados, qtd_novos, 0
     except Exception as e:
@@ -305,7 +279,6 @@ def registrar_log_supabase(logs_list):
     engine = get_db_engine()
     if not engine or not logs_list:
         return
-    
     df_logs = pd.DataFrame(logs_list)
     df_logs.rename(columns={
         "Data_Hora": "data_hora",
@@ -318,7 +291,6 @@ def registrar_log_supabase(logs_list):
         "Observacao": "observacao",
         "Tipo_Interacao": "tipo_interacao"
     }, inplace=False)
-    
     try:
         with engine.begin() as conn:
             conn.execute(text("""
@@ -587,19 +559,15 @@ def padronizar_df(df):
     df_out["Status_Geral"] = df_out["Status_Geral"].apply(
         lambda x: "Pendente de Lançamento (Não Consta)" if str(x).lower().strip() in status_map else str(x)
     )
-
     df_out["Fonte_Relatorio"] = df_out.apply(identificar_fonte_relatorio, axis=1)
-
     if "CIA" in df_out.columns:
         df_out["CIA"] = df_out["CIA"].astype(str).str.upper().str.strip().replace(DEPARA_CIAS)
-
     if "Status_Divergencia" in df_out.columns:
         df_out["Status_Divergencia"] = df_out["Status_Divergencia"].astype(str).str.replace(
             "Divergência de Receita", "Analisar Receita", case=False, regex=False
         ).str.replace(
             "Divergencia de Receita", "Analisar Receita", case=False, regex=False
         )
-
     for c in ["Taxa", "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita", "Tarifa_Total", "Comissão", "Taxa DU", "Incentivo"]:
         if c in df_out.columns: 
             df_out[c] = pd.to_numeric(df_out[c], errors="coerce").fillna(0.0)
@@ -647,16 +615,16 @@ def mesclar_com_supabase(df_excel):
             
     cols_drop = [c for c in cols_presentes if c in df_merged.columns]
     df_merged = df_merged.drop(columns=cols_drop)
-
-    # CORREÇÃO CHAVE: Atualiza o status de divergência para bilhetes resolvidos
+    
+    # SOBREPOSIÇÃO AUTOMÁTICA DE TRATATIVAS RESOLVIDAS
     st_geral_str = df_merged["Status_Geral"].astype(str).str.lower().str.strip()
-    mask_resolvido = st_geral_str.str.contains("já lançado|emitido e lançado|lançado|conciliado|valores corretos|regularizado", na=False)
+    termos_ok = ["já lançado", "ja lancado", "emitido e lançado", "emitido e lancado", "lançado", "lancado", "conciliado", "valores corretos", "regularizado", "ok"]
+    mask_resolvido = st_geral_str.apply(lambda s: any(t in s for t in termos_ok))
     
     if "Status_Divergencia" in df_merged.columns:
         df_merged.loc[mask_resolvido, "Status_Divergencia"] = "Valores Corretos"
     if "Status_Cia" in df_merged.columns:
         df_merged.loc[mask_resolvido, "Status_Cia"] = "OK"
-
     return df_merged
 
 def rotear_bases_mestra(df_master):
@@ -674,12 +642,13 @@ def rotear_bases_mestra(df_master):
     st_geral_str = df_master["Status_Geral"].astype(str).str.lower().str.strip()
     st_div_str = df_master["Status_Divergencia"].astype(str).str.lower().str.strip()
     
+    termos_ok = ["já lançado", "ja lancado", "emitido e lançado", "emitido e lancado", "lançado", "lancado", "conciliado", "valores corretos", "regularizado", "ok"]
+    
     mask_status_lancado = (
-        st_geral_str.str.contains("já lançado|emitido e lançado|lançado|conciliado|valores corretos|regularizado", na=False) |
+        st_geral_str.apply(lambda s: any(t in s for t in termos_ok)) |
         st_div_str.str.contains("valores corretos|sem divergência|sem divergencia", na=False)
     )
     
-    # Se já foi lançado ou resolvido, desconsidera divergências antigas
     mask_tem_divergencia_real = st_div_str.str.contains("divergência|divergencia|erro", na=False) & \
                                 ~df_master["Status_Divergencia"].apply(e_apenas_analisar_receita) & \
                                 ~mask_status_lancado
@@ -689,7 +658,6 @@ def rotear_bases_mestra(df_master):
     df_ok = df_master[mask_ok].copy()
     df_rest = df_master[~mask_ok].copy()
     
-    # Roteamento de setores
     def e_bo_flexivel(r):
         ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
         obs_val = str(r.get("Obs. Operação", "")).strip().lower()
@@ -724,15 +692,8 @@ def rotear_bases_mestra(df_master):
     
     return df_falta, df_erros, df_bo, df_eventos, df_lemontech, df_ok
 
-# ==============================================================================
-# CARREGAMENTO COM DEDUPLICAÇÃO ESTRITA PRIMÁRIA (MANTÉM FIXO 1.232 BILHETES)
-# ==============================================================================
-# ==============================================================================
-# CARREGAMENTO DEFINITIVO COM CACHE E DEDUPLICAÇÃO ESTRITA SOBERANA
-# ==============================================================================
 @st.cache_data(ttl=600, show_spinner=False)
 def ler_excel_bruto_normalizado(caminho_ou_bytes):
-    """Lê e sanitiza o arquivo Excel para evitar inflar linhas por duplicidade de abas."""
     try:
         xls = pd.ExcelFile(caminho_ou_bytes, engine="openpyxl")
         frames = []
@@ -749,12 +710,9 @@ def ler_excel_bruto_normalizado(caminho_ou_bytes):
             
         df_m = pd.concat(frames, ignore_index=True)
         
-        # Normalização rigorosa da chave do bilhete na leitura
         if "Bilhetes" in df_m.columns:
             df_m["Bilhete_Clean"] = df_m["Bilhetes"].apply(sanitizar_bilhete)
-            # Remove linhas vazias ou sem bilhete válido
             df_m = df_m[df_m["Bilhete_Clean"].astype(str).str.len() > 3]
-            # Deduplicação estrita garantindo apenas a 1ª ocorrência
             df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
             
         return df_m, df_log_arq
@@ -769,21 +727,17 @@ def carregar_bases():
     else:
         vazio = padronizar_df(None)
         return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
-
     try:
         df_m, df_log_arq = ler_excel_bruto_normalizado(fonte)
         
         if df_m.empty:
             vazio = padronizar_df(None)
             return vazio, vazio, vazio, vazio, vazio, vazio, df_log_arq
-
-        # Sincroniza com as tratativas salvas no banco de dados Supabase
+            
         df_m = mesclar_com_supabase(df_m)
         
-        # Re-garante a deduplicação absoluta após a mesclagem com o banco
         if "Bilhete_Clean" in df_m.columns:
             df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
-
         f_falta, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
         return f_falta, f_erros, f_bo, f_evt, f_lem, f_ok, df_log_arq
     except Exception as e:
@@ -853,7 +807,6 @@ def aplicar_estilo_colunas_df(df_input):
         return df_input
         
     styles = pd.DataFrame('', index=df_input.index, columns=df_input.columns)
-    
     cols_sistema = [c for c in df_input.columns if 'sistema' in str(c).lower()]
     for c in cols_sistema:
         styles[c] = 'background-color: #e6f0fa; color: #002060; font-weight: 600;'
@@ -877,12 +830,11 @@ def aplicar_estilo_colunas_df(df_input):
     return df_input.style.apply(lambda _: styles, axis=None)
 
 # ==============================================================================
-# 5. SIDEBAR, UPLOAD PERSISTENTE (EXCLUSIVO MASTER) E FILTROS OPERACIONAIS
+# 5. SIDEBAR E FILTROS OPERACIONAIS
 # ==============================================================================
 st.sidebar.title("Grupo Arbaitman")
 st.sidebar.caption("Conciliação Aérea FP&A v3.6 (Espelho Fiel)")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
-
 if e_master():
     with st.sidebar.expander("📂 Atualizar Planilha Espelho Principal"):
         arq_espelho = st.file_uploader("Subir Dashboard_Revenue_Assurance_Consolidado.xlsx:", type=["xlsx"], key="uploader_dash_espelho")
@@ -923,7 +875,6 @@ if st.sidebar.button("🔒 Sair"):
     st.rerun()
 
 st.sidebar.markdown("---")
-
 df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div, df_log = carregar_bases()
 df_todos_unificados = pd.concat([df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
@@ -938,10 +889,8 @@ if not df_todos_unificados.empty and "Dt_Parsed" in df_todos_unificados.columns:
 st.sidebar.subheader("🔍 Filtros Operacionais")
 d_inicio = st.sidebar.date_input("Data Inicial:", value=dt_min_default, format="DD/MM/YYYY")
 d_fim = st.sidebar.date_input("Data Final:", value=dt_max_default, format="DD/MM/YYYY")
-
 opts_fonte_rel = sorted(df_todos_unificados["Fonte_Relatorio"].dropna().unique()) if "Fonte_Relatorio" in df_todos_unificados.columns else []
 filtro_fonte_rel = st.sidebar.multiselect("Fonte do Relatório (GOL/BSP/AZUL/LATAM/ERP):", options=opts_fonte_rel, placeholder="Todas as fontes")
-
 filtro_gerente = st.sidebar.multiselect("Gerente / Área Resp.:", options=sorted(df_todos_unificados["Área Resp. Operação"].dropna().unique()), placeholder="Todos")
 filtro_setor = st.sidebar.multiselect("Setor:", options=sorted(df_todos_unificados["Setor"].dropna().unique()), placeholder="Todos")
 filtro_cia = st.sidebar.multiselect("Companhia Aérea:", options=sorted(df_todos_unificados["CIA"].dropna().unique()), placeholder="Todas")
@@ -950,7 +899,6 @@ def aplicar_filtros(df):
     if df is None or df.empty:
         return df
     m = pd.Series(True, index=df.index)
-    
     if "Dt_Parsed" in df.columns and d_inicio and d_fim:
         has_dt = df["Dt_Parsed"].notna()
         m_dt = pd.Series(True, index=df.index)
@@ -966,7 +914,6 @@ def aplicar_filtros(df):
         m = m & df["Setor"].isin(filtro_setor)
     if filtro_cia:
         m = m & df["CIA"].isin(filtro_cia)
-        
     return df[m].reset_index(drop=True)
 
 f_falta = aplicar_filtros(df_falta)
@@ -988,7 +935,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
 st.markdown(
     """
     <div class="datasource-badge">
@@ -1024,7 +970,7 @@ if e_master():
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO (6 GRÁFICOS ESTRUTURADOS)
+# ABA 0: DASHBOARD EXECUTIVO
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.markdown(
@@ -1064,11 +1010,7 @@ with aba_sel[0]:
     
     st.markdown("---")
     
-    # --------------------------------------------------------------------------
-    # LINHA 1 DE GRÁFICOS: 1. EVOLUÇÃO TEMPORAL MENSAL & 2. STATUS OPERACIONAL
-    # --------------------------------------------------------------------------
     col_d1, col_d2 = st.columns(2)
-    
     with col_d1:
         st.markdown('<div class="chart-card"><h5>📅 1. Evolução Temporal das Pendências (Por Mês de Emissão)</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "Dt_Parsed" in df_pendentes_todas.columns:
@@ -1078,17 +1020,10 @@ with aba_sel[0]:
             if not df_temp_valid.empty:
                 df_temp_valid["AnoMes"] = df_temp_valid["Dt_Parsed"].dt.strftime("%Y-%m")
                 df_temp_valid["AnoMes_Label"] = df_temp_valid["Dt_Parsed"].dt.strftime("%m/%Y")
-                
                 df_evol = df_temp_valid.groupby(["AnoMes", "AnoMes_Label"]).size().reset_index(name="Volume")
                 df_evol = df_evol.sort_values("AnoMes")
                 
-                fig_evol = px.line(
-                    df_evol,
-                    x="AnoMes_Label",
-                    y="Volume",
-                    text="Volume",
-                    markers=True
-                )
+                fig_evol = px.line(df_evol, x="AnoMes_Label", y="Volume", text="Volume", markers=True)
                 fig_evol.update_traces(
                     line_color="#002060",
                     line_width=3,
@@ -1120,25 +1055,19 @@ with aba_sel[0]:
             df_st_chart.columns = ["Status", "Quantidade"]
             
             fig_pie = px.pie(
-                df_st_chart, 
-                values="Quantidade", 
-                names="Status", 
-                hole=0.55,
+                df_st_chart, values="Quantidade", names="Status", hole=0.55,
                 color_discrete_sequence=["#002060", "#0050b3", "#0086c0", "#13c2c2", "#fa8c16", "#d90429"]
             )
             fig_pie.update_traces(
-                textposition='inside',
-                textinfo='percent',
+                textposition='inside', textinfo='percent',
                 hovertemplate='<b>%{label}</b><br>Volume: %{value:,} bilhete(s)<br>Representação: %{percent}',
                 marker=dict(line=dict(color='#ffffff', width=2))
             )
             fig_pie.update_layout(
                 showlegend=True,
                 legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=10, b=40),
-                height=320,
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=10, b=40), height=320,
                 font=dict(family="Inter, sans-serif", size=12, color="#334155")
             )
             st.plotly_chart(fig_pie, use_container_width=True)
@@ -1146,11 +1075,7 @@ with aba_sel[0]:
             st.info("Nenhuma pendência registrada.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --------------------------------------------------------------------------
-    # LINHA 2 DE GRÁFICOS: 3. CIA AÉREA & 4. GERENTE (QUANTIDADE)
-    # --------------------------------------------------------------------------
     col_d3, col_d4 = st.columns(2)
-    
     with col_d3:
         st.markdown('<div class="chart-card"><h5>✈️ 3. Pendências por Companhia Aérea (Top 8)</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "CIA" in df_pendentes_todas.columns:
@@ -1158,12 +1083,8 @@ with aba_sel[0]:
             df_cia_chart.columns = ["Companhia", "Bilhetes Pendentes"]
             
             fig_cia = px.bar(
-                df_cia_chart, 
-                x="Companhia", 
-                y="Bilhetes Pendentes", 
-                text="Bilhetes Pendentes",
-                color="Bilhetes Pendentes",
-                color_continuous_scale=["#69c0ff", "#002060"]
+                df_cia_chart, x="Companhia", y="Bilhetes Pendentes", text="Bilhetes Pendentes",
+                color="Bilhetes Pendentes", color_continuous_scale=["#69c0ff", "#002060"]
             )
             fig_cia.update_traces(
                 textposition="outside",
@@ -1171,11 +1092,8 @@ with aba_sel[0]:
                 hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
             )
             fig_cia.update_layout(
-                coloraxis_showscale=False,
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=25, b=20),
-                height=320,
+                coloraxis_showscale=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=25, b=20), height=320,
                 xaxis=dict(title="", showgrid=False, tickangle=-15),
                 yaxis=dict(title="Bilhetes", showgrid=True, gridcolor="#f0f0f0"),
                 font=dict(family="Inter, sans-serif", size=12, color="#334155")
@@ -1192,12 +1110,8 @@ with aba_sel[0]:
             df_ger_chart.columns = ["Gerente", "Quantidade"]
             
             fig_ger = px.bar(
-                df_ger_chart, 
-                x="Gerente", 
-                y="Quantidade", 
-                text="Quantidade",
-                color="Quantidade",
-                color_continuous_scale=["#91d5ff", "#003366"]
+                df_ger_chart, x="Gerente", y="Quantidade", text="Quantidade",
+                color="Quantidade", color_continuous_scale=["#91d5ff", "#003366"]
             )
             fig_ger.update_traces(
                 textposition="outside",
@@ -1205,11 +1119,8 @@ with aba_sel[0]:
                 hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
             )
             fig_ger.update_layout(
-                coloraxis_showscale=False,
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=25, b=20),
-                height=320,
+                coloraxis_showscale=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=25, b=20), height=320,
                 xaxis=dict(title="", showgrid=False, tickangle=-15),
                 yaxis=dict(title="Quantidade", showgrid=True, gridcolor="#f0f0f0"),
                 font=dict(family="Inter, sans-serif", size=12, color="#334155")
@@ -1219,11 +1130,7 @@ with aba_sel[0]:
             st.info("Nenhum dado de gerente disponível.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --------------------------------------------------------------------------
-    # LINHA 3 DE GRÁFICOS: 5. SETOR / UNIDADE & 6. EXPOSIÇÃO FINANCEIRA (R$)
-    # --------------------------------------------------------------------------
     col_d5, col_d6 = st.columns(2)
-    
     with col_d5:
         st.markdown('<div class="chart-card"><h5>🏢 5. Volume de Pendências por Setor / Unidade (Top 8)</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "Setor" in df_pendentes_todas.columns:
@@ -1231,12 +1138,8 @@ with aba_sel[0]:
             df_setor_chart.columns = ["Setor", "Quantidade"]
             
             fig_setor = px.bar(
-                df_setor_chart,
-                x="Setor",
-                y="Quantidade",
-                text="Quantidade",
-                color="Quantidade",
-                color_continuous_scale=["#adc6ff", "#1d39c4"]
+                df_setor_chart, x="Setor", y="Quantidade", text="Quantidade",
+                color="Quantidade", color_continuous_scale=["#adc6ff", "#1d39c4"]
             )
             fig_setor.update_traces(
                 textposition="outside",
@@ -1244,11 +1147,8 @@ with aba_sel[0]:
                 hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
             )
             fig_setor.update_layout(
-                coloraxis_showscale=False,
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=25, b=20),
-                height=330,
+                coloraxis_showscale=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=25, b=20), height=330,
                 xaxis=dict(title="", showgrid=False, tickangle=-15),
                 yaxis=dict(title="Quantidade", showgrid=True, gridcolor="#f0f0f0"),
                 font=dict(family="Inter, sans-serif", size=12, color="#334155")
@@ -1267,12 +1167,8 @@ with aba_sel[0]:
             df_fin_ger["Val_Fmt"] = df_fin_ger["Val_Total_Linha"].apply(lambda x: f"R$ {x:,.0f}")
             
             fig_fin_ger = px.bar(
-                df_fin_ger,
-                x="Área Resp. Operação",
-                y="Val_Total_Linha",
-                text="Val_Fmt",
-                color="Val_Total_Linha",
-                color_continuous_scale=["#ffe7ba", "#fa8c16", "#d96a00"]
+                df_fin_ger, x="Área Resp. Operação", y="Val_Total_Linha", text="Val_Fmt",
+                color="Val_Total_Linha", color_continuous_scale=["#ffe7ba", "#fa8c16", "#d96a00"]
             )
             fig_fin_ger.update_traces(
                 textposition="outside",
@@ -1280,11 +1176,8 @@ with aba_sel[0]:
                 hovertemplate='<b>%{x}</b><br>Exposição: R$ %{y:,.2f}'
             )
             fig_fin_ger.update_layout(
-                coloraxis_showscale=False,
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=25, b=20),
-                height=330,
+                coloraxis_showscale=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=25, b=20), height=330,
                 xaxis=dict(title="", showgrid=False, tickangle=-15),
                 yaxis=dict(title="Valor Pendente (R$)", showgrid=True, gridcolor="#f0f0f0"),
                 font=dict(family="Inter, sans-serif", size=12, color="#334155")
@@ -1436,13 +1329,7 @@ def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     }
     
     df_estilizado = aplicar_estilo_colunas_df(df_tbl_final)
-    
-    st.dataframe(
-        df_estilizado, 
-        use_container_width=True, 
-        hide_index=True,
-        column_config=config_colunas
-    )
+    st.dataframe(df_estilizado, use_container_width=True, hide_index=True, column_config=config_colunas)
 
 # ------------------------------------------------------------------------------
 # ABAS OPERACIONAIS
@@ -1597,7 +1484,6 @@ if e_master():
                     st.error("⚠️ O arquivo precisa conter ao menos uma coluna identificadora de 'Bilhete'.")
                 else:
                     df_up_raw["Bilhete_Clean"] = df_up_raw[col_b].apply(sanitizar_bilhete)
-                    
                     df_existentes = carregar_tratativas_db()
                     set_existentes = set(df_existentes["bilhete"].apply(sanitizar_bilhete).tolist()) if not df_existentes.empty else set()
                     lote_alteracoes = []
@@ -1650,7 +1536,6 @@ if e_master():
                     df_lote_prep = pd.DataFrame(lote_alteracoes)
                     
                     st.markdown("### 📊 Relatório Estatístico Pré-Carga")
-                    
                     m1, m2, m3, m4 = st.columns(4)
                     m1.metric("Total de Bilhetes", tot_lote)
                     m2.metric("Bilhetes a Atualizar no Supabase", tot_para_atualizar)

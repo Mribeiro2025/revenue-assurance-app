@@ -23,6 +23,7 @@ print(" MOTOR DE AUDITORIA FP&A ADVANCED - REVENUE ASSURANCE ".center(75, "="))
 print("=" * 75)
 
 PASTA_ENVIO = "Envio"
+
 MAPA_CIAS = {
     "JJ": "LATAM", "LA": "LATAM", "PZ": "LATAM", "4C": "LATAM", "XL": "LATAM", "4M": "LATAM",
     "G3": "GOL", "AD": "AZUL", "TP": "TAP", "CM": "COPA", "AA": "AMERICAN", "UA": "UNITED",
@@ -40,7 +41,6 @@ def obter_engine_supabase():
     """Obtém a conexão com o Supabase com suporte multiplataforma a versões do Python."""
     try:
         from sqlalchemy import create_engine
-        
         try:
             import tomllib
         except ImportError:
@@ -54,6 +54,8 @@ def obter_engine_supabase():
                 secrets = tomllib.load(f)
                 db_url = secrets.get("postgres", {}).get("url")
                 if db_url:
+                    if db_url.startswith("postgresql://"):
+                        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
                     return create_engine(db_url, pool_pre_ping=True)
     except Exception:
         pass
@@ -164,6 +166,7 @@ def gerar_chave_composta(codigo, data_str):
 def carregar_tratativas_e_logs_anteriores(out_file):
     dict_historico = {}
     df_log_antigo = pd.DataFrame()
+    
     def indexar_memoria(b_raw, dados):
         if not b_raw or str(b_raw).strip().lower() in ["nan", "none", "", "-"]:
             return
@@ -174,6 +177,7 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                 val_str = str(val).strip() if pd.notna(val) else ""
                 if val_str and val_str not in ["-", "nan", "none", "Sem tratativa na operação"]:
                     dict_historico[k][col] = val
+
     if os.path.exists(out_file):
         try:
             xls = pd.ExcelFile(out_file, engine="openpyxl")
@@ -195,6 +199,7 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                                 "Área Resp. Operação": r.get("Área Resp. Operação"),
                                 "Obs. Operação": obs_limpa,
                                 "Setor": r.get("Setor"),
+                                "Gerentes": r.get("Gerentes"),
                                 "Obs_Auditoria_Replica": r.get("Obs_Auditoria_Replica"),
                                 "Ponto de venda": r.get("Ponto de venda"),
                                 "Código Iata": r.get("Código Iata"),
@@ -204,6 +209,7 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                             })
         except Exception as e:
             print(f"⚠️ Aviso ao carregar histórico do Excel: {e}")
+
     file_memoria = "Historico_Tratativas.csv"
     if os.path.exists(file_memoria) and os.path.getsize(file_memoria) > 0:
         try:
@@ -217,6 +223,7 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                         "Área Resp. Operação": r.get("Área Resp. Operação"),
                         "Obs. Operação": obs_limpa,
                         "Setor": r.get("Setor"),
+                        "Gerentes": r.get("Gerentes"),
                         "Obs_Auditoria_Replica": r.get("Obs_Auditoria_Replica"),
                         "Ponto de venda": r.get("Ponto de venda"),
                         "Código Iata": r.get("Código Iata"),
@@ -227,10 +234,11 @@ def carregar_tratativas_e_logs_anteriores(out_file):
             print(f"🛡️ Memória protegida '{file_memoria}' sincronizada com sucesso.")
         except Exception as e:
             print(f"⚠️ Erro ao ler memória CSV: {e}")
+
     engine_sb = obter_engine_supabase()
     if engine_sb:
         try:
-            df_sb = pd.read_sql("SELECT bilhete, status_geral, area_resp, obs_operacao FROM tratativas", engine_sb)
+            df_sb = pd.read_sql("SELECT bilhete, status_geral, area_resp, obs_operacao, setor, gerentes FROM tratativas", engine_sb)
             if not df_sb.empty:
                 for r in df_sb.to_dict("records"):
                     b_key = clean_str_strict(r.get("bilhete"))
@@ -240,12 +248,15 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                             "Status_Geral": r.get("status_geral"),
                             "Área Resp. Operação": r.get("area_resp"),
                             "Obs. Operação": obs_limpa,
+                            "Setor": r.get("setor"),
+                            "Gerentes": r.get("gerentes"),
                         })
                 print(f"☁️ Supabase conectado! {len(df_sb)} tratativas resgatadas da nuvem com sucesso.")
         except Exception as e:
             print(f"⚠️ Aviso ao conectar/carregar dados do Supabase: {e}")
     else:
         print("⚠️ Conexão com Supabase não estabelecida.")
+
     return dict_historico, df_log_antigo
 
 def buscar_memoria(dict_historico, bilhete_raw):
@@ -258,6 +269,9 @@ def encontrar_arquivo(nomes_possiveis):
     for nome in nomes_possiveis:
         if os.path.exists(nome):
             return nome
+        caminho_envio = os.path.join(PASTA_ENVIO, nome)
+        if os.path.exists(caminho_envio):
+            return caminho_envio
     return None
 
 def salvar_csv_atomico(df, caminho_csv):
@@ -281,6 +295,7 @@ def sincronizar_supabase_fim(df_master):
                 conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS gerentes VARCHAR(255);"))
         except Exception:
             pass
+
         upsert_sql = text("""
             INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
             VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, 'Motor_VSCode', NOW())
@@ -329,9 +344,7 @@ def executar_auditoria():
     df_iata = pd.read_excel(caminho_iata) if caminho_iata else pd.DataFrame()
     iata_dict = {}
     if not df_iata.empty:
-        # Mapeamento flexível de colunas (ignora maiúsculas/minúsculas, acentos e caracteres especiais)
         cols_map = {re.sub(r"[^a-z]", "", str(col).lower()): col for col in df_iata.columns}
-        
         col_codigo = next((cols_map[k] for k in cols_map if "cod" in k or "iata" in k), df_iata.columns[0])
         col_nome = next((cols_map[k] for k in cols_map if "nome" in k or "razao" in k or "empresa" in k), df_iata.columns[1] if len(df_iata.columns) > 1 else df_iata.columns[0])
         col_gerente = next((cols_map[k] for k in cols_map if "gerente" in k or "resp" in k), df_iata.columns[2] if len(df_iata.columns) > 2 else df_iata.columns[0])
@@ -376,6 +389,7 @@ def executar_auditoria():
     else:
         caminho_benner = encontrar_arquivo(["Acumulado.xlsx", "Acumulado.XLSX"])
         df_benner = pd.read_excel(caminho_benner, sheet_name="Planilha1") if caminho_benner else pd.DataFrame()
+
     benner_index = {}
     key_cols_benner = [
         "Bilhete", "Localizador", "Rloc Cia", "Rloc CIA", "Código Rloc",
@@ -445,6 +459,7 @@ def executar_auditoria():
         (["GOL.XLSX", "GOL.xlsx"], "GOL"),
     ]
     registros_conciliados = []
+    
     for lista_nomes, nome_fonte in fontes:
         caminho_arq = encontrar_arquivo(lista_nomes)
         if not caminho_arq:
@@ -461,7 +476,6 @@ def executar_auditoria():
             col5 = safe_get_col(row, 5)
             col6 = safe_get_col(row, 6)
             
-            # Detecta e Atualiza o Mapeamento Dinâmico de Colunas
             row_str = [str(x).strip().upper() for x in row.values]
             if any("BILHETE" in x or "A VISTA" in x or "A CREDITO" in x or "TARIFA" in x or "DOCUMENTO" in x for x in row_str):
                 col_map = {}
@@ -471,7 +485,6 @@ def executar_auditoria():
                         col_map[v_clean] = c_idx
                 continue
                 
-            # Regex ajustada para capturar IATAs com múltiplos hífens/espaços (ex: 57-05782-5)
             if re.match(r"^\s*(\d{2}-?\d{5}-?\d?|\d{7,8})\s*$", col0):
                 curr_iata = col0
                 if col4:
@@ -499,7 +512,6 @@ def executar_auditoria():
                 if not dt_emissao or dt_emissao.upper() in ["EMISSÃO", "EMISSAO"]:
                     continue
 
-                # TRATAMENTO DE BILHETE vs DOCUMENTO vs LOCALIZADOR
                 doc_col_idx = col_map.get("DOCUMENTO", 22)
                 doc_val = safe_get_col(row, doc_col_idx)
                 clean_doc = re.sub(r"[^0-9]", "", doc_val)
@@ -512,14 +524,12 @@ def executar_auditoria():
 
                 hist_data = buscar_memoria(dict_historico, bilhete_chave)
                 
-                # IATA E MAPA DE GERENTES
                 iata_final = curr_iata or hist_data.get("Código Iata") or "DIRETO"
                 iata_clean = clean_iata(iata_final)
                 m_iata = iata_dict.get(iata_clean, {})
                 
-                # Resolução inteligente do Gerente Responsável
                 gerente_do_dict = clean_str_strict(m_iata.get("Gerente_Responsavel"))
-                hist_gerente = clean_str_strict(hist_data.get("Área Resp. Operação"))
+                hist_gerente = clean_str_strict(hist_data.get("Área Resp. Operação") or hist_data.get("Gerentes"))
                 
                 if hist_gerente and hist_gerente.lower() not in ["não mapeado", "nao mapeado", "-", "sem mapeamento", "nan", "none"]:
                     gerente_resp = hist_gerente
@@ -528,7 +538,6 @@ def executar_auditoria():
                 else:
                     gerente_resp = "Não Mapeado"
                 
-                # Resolução inteligente do Ponto de Venda / Cliente
                 ponto_curr = clean_str_strict(curr_ponto_venda)
                 ponto_hist = clean_str_strict(hist_data.get("Ponto de venda"))
                 ponto_oficial = clean_str_strict(m_iata.get("Nome_IATA_Oficial"))
@@ -547,6 +556,7 @@ def executar_auditoria():
                 st_lower = str(hist_data.get("Status_Geral") or "").strip().lower()
                 area_lower = str(gerente_resp).strip().lower()
                 obs_lower = str(obs_op).strip().lower()
+
                 tem_gerente_bo = any(k in area_lower for k in ["katia martins", "kátia martins", "suporte backoffice", "backoffice"])
                 tem_chamado_obs = any(p in obs_lower or p in st_lower for p in ["ticket", "chamado", "suporte"])
                 e_suporte_backoffice = tem_gerente_bo and tem_chamado_obs
@@ -610,12 +620,14 @@ def executar_auditoria():
                     cliente_sistema = b_match["Benner_Cliente"]
                     emissor_sistema = b_match["Benner_Emissor"]
                     sist_reserva = b_match["Benner_Sistema_Reserva"]
+
                     sigla_cia = col1.strip().upper()
                     nome_esperado_cia = MAPA_CIAS.get(sigla_cia, sigla_cia)
                     status_cia = (
                         "OK" if (nome_esperado_cia in fornec_sistema.upper() or sigla_cia in fornec_sistema.upper())
                         else "Divergência de Cia Aérea"
                     )
+
                     dif_tarifa = tarifa_emitida - tarifa_sistema
                     dif_taxa = taxa_emitida - taxa_sistema
                     dif_receita = receita_emitida - receita_sistema
@@ -637,12 +649,14 @@ def executar_auditoria():
                             divs.append("Receita")
                         if status_cia != "OK":
                             divs.append("Cia Aérea")
+
                         if divs:
                             status_divergencia = f"Divergência de {' e '.join(divs)}"
                             aba_destino = "98_OK_Divergencia_Operacao"
                         else:
                             status_divergencia = "Valores Corretos"
                             aba_destino = "98_OK_Sem_Divergencia_Concil"
+
                     status_geral = hist_data.get("Status_Geral") or "Emitido e Lançado"
                 else:
                     status_sistema = "NAO_CONSTA"
@@ -662,9 +676,16 @@ def executar_auditoria():
                     status_geral = hist_data.get("Status_Geral") or "Pendente de Lançamento (Não Consta)"
                     aba_destino = "99_Base_Divergencias_Geral"
 
-                sg_str = str(status_geral).lower()
-                if any(term in sg_str for term in ["já lançado", "conciliado", "regularizado", "sem divergência"]):
+                # SOBREPOSIÇÃO INTELIGENTE DE TRATATIVA DO SUPABASE
+                sg_str = str(status_geral).lower().strip()
+                termos_resolvidos = [
+                    "já lançado", "ja lancado", "emitido e lançado", "emitido e lancado",
+                    "lançado", "lancado", "conciliado", "regularizado", "sem divergência",
+                    "sem divergencia", "valores corretos", "ok"
+                ]
+                if any(term in sg_str for term in termos_resolvidos):
                     status_divergencia = "Valores Corretos"
+                    status_cia = "OK"
                     aba_destino = "98_OK_Sem_Divergencia_Concil"
 
                 rec = {
@@ -726,7 +747,6 @@ def executar_auditoria():
         return
 
     df_master = pd.DataFrame(registros_conciliados)
-
     for col_str in ["Bilhetes", "Localizador_Sistema", "Data Emissão", "CIA", "Ponto de venda"]:
         if col_str in df_master.columns:
             df_master[col_str] = df_master[col_str].astype(str).str.strip()
@@ -739,6 +759,7 @@ def executar_auditoria():
     a_vista_col = df_master["A vista"] if "A vista" in df_master.columns else pd.Series(0.0, index=df_master.index)
     a_credito_col = df_master["A credito"] if "A credito" in df_master.columns else pd.Series(0.0, index=df_master.index)
     df_master["Tarifa_Total"] = pd.to_numeric(a_vista_col, errors="coerce").fillna(0.0) + pd.to_numeric(a_credito_col, errors="coerce").fillna(0.0)
+
     inc_col = df_master["Incentivo"] if "Incentivo" in df_master.columns else pd.Series(0.0, index=df_master.index)
     com_col = df_master["Comissão"] if "Comissão" in df_master.columns else pd.Series(0.0, index=df_master.index)
     tdu_col = df_master["Taxa DU"] if "Taxa DU" in df_master.columns else pd.Series(0.0, index=df_master.index)
@@ -858,7 +879,6 @@ def executar_auditoria():
                         value=f"=SUM({col_letter}2:{col_letter}{max_row})",
                     )
                     c_tot.font = Font(bold=True)
-
         for col_idx in range(1, ws.max_column + 1):
             col_letter = get_column_letter(col_idx)
             col_name = str(ws.cell(row=1, column=col_idx).value or "")
