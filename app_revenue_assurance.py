@@ -45,8 +45,9 @@ DEPARA_GERENTES = {
     "ROSANGELA PALLU": "Rosangela Pallu", "ROSANGELA": "Rosangela Pallu",
     "JAIME SCHNAIDER": "Jaime Schnaider", "JAIME": "Jaime Schnaider",
     "SILVANA CELANI": "Silvana Celani", "SILVANA": "Silvana Celani",
-    "KATIA MARTINS": "Katia Martins", "KÁTIA MARTINS": "Katia Martins",
-    "KATIA": "Katia Martins", "KÁTIA": "Katia Martins",
+    "KATIA MARTINS": "Katia Martins", "KÁTIA MARTINS": "Katia Martins", "KATIA": "Katia Martins",
+    "JOAO PAULO": "João Paulo", "JOÃO PAULO": "João Paulo",
+    "JOAO PAULO": "João Paulo", "JOÃO PAULO": "João Paulo ", "JOAO": "João Paulo ", "JOÃO": "João Paulo",
     "SUPORTE BACKOFFICE": "Suporte Backoffice", "BACKOFFICE": "Suporte Backoffice",
     "CENTRAL DE EVENTOS": "Central de Eventos", "EVENTOS": "Central de Eventos"
 }
@@ -72,7 +73,7 @@ def consolidar_emissor_consultor(row):
                 elementos.append(val_clean)
     return " / ".join(elementos) if elementos else "-"
 
-# Injeção CSS para congelar cabeçalhos, travar 1ª coluna e formatar visualmente as tabelas
+# Injeção de CSS
 st.markdown(
     """
     <style>
@@ -120,7 +121,6 @@ st.markdown(
             box-shadow: 0 2px 10px rgba(0,0,0,0.03);
         }
         
-        /* Estilização para fixar cabeçalho e coluna do bilhete */
         div[data-testid="stDataFrame"] {
             background-color: #ffffff;
             border-radius: 8px;
@@ -133,7 +133,7 @@ st.markdown(
 )
 
 # ==============================================================================
-# 2. CONEXÃO COM SUPABASE & GERENCIAMENTO DE TRATATIVAS
+# 2. CONEXÃO COM SUPABASE & MIGRAÇÃO AUTOMÁTICA DE ESQUEMA
 # ==============================================================================
 def sanitizar_bilhete(val):
     if pd.isna(val) or val is None: return ""
@@ -148,7 +148,28 @@ def get_db_engine():
             db_url = st.secrets["postgres"]["url"]
             if db_url.startswith("postgresql://"):
                 db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
-            return create_engine(db_url, pool_pre_ping=True)
+            engine = create_engine(db_url, pool_pre_ping=True)
+            
+            # Auto-Migração do Esquema (Cria colunas sv, fop, rloc_cia se não existirem)
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS tratativas (
+                            bilhete VARCHAR(255) PRIMARY KEY,
+                            status_geral VARCHAR(255),
+                            area_resp VARCHAR(255),
+                            obs_operacao TEXT,
+                            setor VARCHAR(255),
+                            gerentes VARCHAR(255),
+                            usuario_modificacao VARCHAR(255),
+                            data_modificacao TIMESTAMP
+                        );
+                        ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS sv VARCHAR(255);
+                        ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS fop VARCHAR(255);
+                        ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS rloc_cia VARCHAR(255);
+                    """))
+            except Exception: pass
+            return engine
     except Exception as e:
         st.error(f"Erro na ligação ao banco de dados: {e}")
     return None
@@ -156,8 +177,8 @@ def get_db_engine():
 def carregar_tratativas_db():
     engine = get_db_engine()
     if not engine:
-        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "data_modificacao"])
-    query = "SELECT bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, data_modificacao FROM tratativas"
+        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "sv", "fop", "rloc_cia", "data_modificacao"])
+    query = "SELECT bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, sv, fop, rloc_cia, data_modificacao FROM tratativas"
     try:
         df_db = pd.read_sql(query, engine)
         if not df_db.empty and "bilhete" in df_db.columns:
@@ -170,7 +191,7 @@ def carregar_tratativas_db():
             df_db.drop(columns=["bilhete_clean"], inplace=True, errors="ignore")
         return df_db
     except Exception:
-        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "data_modificacao"])
+        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "sv", "fop", "rloc_cia", "data_modificacao"])
 
 def salvar_tratativas_lote_supabase(df_lote, usuario):
     engine = get_db_engine()
@@ -190,6 +211,10 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
             setor_val = str(r.get("Setor", r.get("setor", "-"))).strip()
             gerente_val = padronizar_nome_gerente(r.get("Gerentes", r.get("gerentes", ar_val)))
             
+            sv_val = str(r.get("SV", r.get("sv", r.get("Solicitação", r.get("Solicitacao", "-"))))).strip()
+            fop_val = str(r.get("FOP", r.get("fop", r.get("Forma de Recebimento", r.get("Pagto", "-"))))).strip()
+            rloc_val = str(r.get("Rloc_CIA", r.get("rloc_cia", r.get("Rloc_Cia", "-")))).strip()
+            
             if st_val in ["-", "", "None", "nan"]:
                 st_val = "Pendente de Lançamento (Não Consta)"
             if b_clean in set_existentes:
@@ -198,18 +223,20 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 qtd_novos += 1
             dados_lote.append({
                 "bilhete": b_clean, "status_geral": st_val, "area_resp": ar_val,
-                "obs_operacao": obs_limpa, "setor": setor_val, "gerentes": gerente_val, "usuario": str(usuario)
+                "obs_operacao": obs_limpa, "setor": setor_val, "gerentes": gerente_val,
+                "sv": sv_val, "fop": fop_val, "rloc_cia": rloc_val, "usuario": str(usuario)
             })
             
     if not dados_lote:
         return False, "Nenhum bilhete válido para atualização.", 0, 0, 0
         
     sql_upsert = text("""
-        INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
-        VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW())
+        INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, sv, fop, rloc_cia, usuario_modificacao, data_modificacao)
+        VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :sv, :fop, :rloc_cia, :usuario, NOW())
         ON CONFLICT (bilhete) DO UPDATE SET
             status_geral = EXCLUDED.status_geral, area_resp = EXCLUDED.area_resp, obs_operacao = EXCLUDED.obs_operacao,
-            setor = EXCLUDED.setor, gerentes = EXCLUDED.gerentes, usuario_modificacao = EXCLUDED.usuario_modificacao, data_modificacao = NOW();
+            setor = EXCLUDED.setor, gerentes = EXCLUDED.gerentes, sv = EXCLUDED.sv, fop = EXCLUDED.fop,
+            rloc_cia = EXCLUDED.rloc_cia, usuario_modificacao = EXCLUDED.usuario_modificacao, data_modificacao = NOW();
     """)
     try:
         with engine.begin() as conn:
@@ -220,7 +247,7 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
         return False, f"Erro ao salvar tratativas: {e}", 0, 0, len(dados_lote)
 
 # ==============================================================================
-# 3. GERADOR DE EXCEL ESTILIZADO PARA DOWNLOAD (EM TODAS AS ABAS)
+# 3. GERADOR DE EXCEL ESTILIZADO PARA DOWNLOAD
 # ==============================================================================
 def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     buffer = io.BytesIO()
@@ -287,7 +314,7 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     return output_buffer.getvalue()
 
 # ==============================================================================
-# 4. AUTENTICAÇÃO E USUÁRIOS
+# 4. AUTENTICAÇÃO DE USUÁRIOS
 # ==============================================================================
 def carregar_usuarios_supabase():
     dict_u = {}
@@ -338,7 +365,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# 5. ROTEADOR DE BASES COM TRATAMENTO EXCLUSIVO CONCUR E ORDENAÇÃO DE COLUNAS
+# 5. ROTEADOR DE BASES, COMPATIBILIDADE DE COLUNAS & MAPEAMENTO SV/FOP/RLOC
 # ==============================================================================
 def clean_str(val):
     if pd.isna(val) or val is None: return "-"
@@ -363,6 +390,24 @@ def padronizar_df(df):
             
     df_out["Emissor / Consultor"] = df_out.apply(consolidar_emissor_consultor, axis=1)
     
+    # Mapeamento do campo SV
+    for c_sv in ["Solicitação", "Solicitacao", "SV", "Solicitacao_Extrato"]:
+        if c_sv in df_out.columns and "SV" not in df_out.columns:
+            df_out["SV"] = df_out[c_sv]
+    if "SV" not in df_out.columns: df_out["SV"] = "-"
+
+    # Mapeamento do campo FOP
+    for c_fop in ["Forma de Recebimento", "Pagto", "FOP", "Forma_Recebimento"]:
+        if c_fop in df_out.columns and "FOP" not in df_out.columns:
+            df_out["FOP"] = df_out[c_fop]
+    if "FOP" not in df_out.columns: df_out["FOP"] = "-"
+
+    # Mapeamento de Rloc_CIA
+    for c_rloc in ["Rloc_Cia", "Localizador_Cia", "Rloc_CIA"]:
+        if c_rloc in df_out.columns and "Rloc_CIA" not in df_out.columns:
+            df_out["Rloc_CIA"] = df_out[c_rloc]
+    if "Rloc_CIA" not in df_out.columns: df_out["Rloc_CIA"] = "-"
+
     if "CIA" in df_out.columns:
         df_out["CIA"] = df_out["CIA"].astype(str).str.upper().str.strip().replace(DEPARA_CIAS)
         
@@ -373,6 +418,20 @@ def padronizar_df(df):
     df_out["Tarifa Total Emitida"] = df_out["A vista"] + df_out["A credito"]
     df_out["Receita Total Emitida"] = df_out["Comissão"] + df_out["Taxa DU"] + df_out["Incentivo"]
     df_out["Dt_Parsed"] = pd.to_datetime(df_out.get("Data Emissão"), format="mixed", dayfirst=True, errors="coerce")
+    
+    # Agrupamento de Aging
+    hoje = pd.to_datetime(datetime.date.today())
+    dias = (hoje - df_out["Dt_Parsed"]).dt.days
+    df_out["Dias_Pendente"] = dias
+    
+    def calc_aging(d):
+        if pd.isna(d): return "Sem Data"
+        if d <= 30: return "Até 30 dias"
+        elif d <= 60: return "31 a 60 dias"
+        elif d <= 90: return "61 a 90 dias"
+        else: return "> 90 dias (Crítico)"
+    df_out["Faixa_Aging"] = dias.apply(calc_aging)
+    
     return df_out
 
 def mesclar_com_supabase(df_excel):
@@ -387,47 +446,46 @@ def mesclar_com_supabase(df_excel):
         df_db = df_db.sort_values("data_modificacao", ascending=False)
     df_db = df_db.drop_duplicates("Bilhete_Clean", keep="first")
     
-    cols_sup_desejadas = ["status_geral", "area_resp", "obs_operacao", "setor", "gerentes"]
+    cols_sup_desejadas = ["status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "sv", "fop", "rloc_cia"]
     cols_presentes = [c for c in cols_sup_desejadas if c in df_db.columns]
     
     df_merged = pd.merge(df_excel, df_db[["Bilhete_Clean"] + cols_presentes], on="Bilhete_Clean", how="left")
     
     muta_map = [
         ("Status_Geral", "status_geral"), ("Área Resp. Operação", "area_resp"),
-        ("Obs. Operação", "obs_operacao"), ("Setor", "setor"), ("Gerentes", "gerentes")
+        ("Obs. Operação", "obs_operacao"), ("Setor", "setor"), ("Gerentes", "gerentes"),
+        ("SV", "sv"), ("FOP", "fop"), ("Rloc_CIA", "rloc_cia")
     ]
     for col_excel, col_sb in muta_map:
-        if col_sb in df_merged.columns and col_excel in df_merged.columns:
-            mask_valido = df_merged[col_sb].notna() & ~df_merged[col_sb].astype(str).str.strip().isin(["-", "", "None", "nan"])
-            df_merged[col_excel] = df_merged[col_sb].where(mask_valido, df_merged[col_excel])
+        if col_sb in df_merged.columns:
+            if col_excel not in df_merged.columns:
+                df_merged[col_excel] = df_merged[col_sb]
+            else:
+                mask_valido = df_merged[col_sb].notna() & ~df_merged[col_sb].astype(str).str.strip().isin(["-", "", "None", "nan"])
+                df_merged[col_excel] = df_merged[col_sb].where(mask_valido, df_merged[col_excel])
             
     df_merged = df_merged.drop(columns=[c for c in cols_presentes if c in df_merged.columns])
     return df_merged
 
 def reordenar_colunas(df, modo="completo"):
-    """
-    Organiza as colunas de forma contínua e lógica para análise visual rápida.
-    modo='falta_lancamento': Remove as 10 colunas desnecessárias do sistema.
-    modo='completo': Mantém todas as colunas organizadas por blocos lógicos.
-    """
     if df.empty: return df
     
     if modo == "falta_lancamento":
         cols_desejadas = [
-            "Bilhetes", "Área Resp. Operação", "Código Iata", "Ponto de venda", "Emissor / Consultor",
-            "CIA", "Data Emissão", "Status_Geral", "Obs. Operação",
+            "Bilhetes", "Área Resp. Operação", "Código Iata", "SV", "Rloc_CIA", "Ponto de venda", "Emissor / Consultor",
+            "CIA", "Data Emissão", "FOP", "Status_Geral", "Obs. Operação",
             "A vista", "A credito", "Tarifa Total Emitida", "Taxa", "Comissão", "Taxa DU", "Incentivo", "Receita Total Emitida"
         ]
     else:
         cols_desejadas = [
-            "Bilhetes", "Área Resp. Operação", "Código Iata", "Ponto de venda", "Emissor / Consultor",
-            "CIA", "Localizador_Sistema", "Rloc_Cia", "Data Emissão", "Status_Geral", "Status_Divergencia", "Status_Cia", "Obs. Operação",
+            "Bilhetes", "Área Resp. Operação", "Código Iata", "SV", "Rloc_CIA", "Ponto de venda", "Emissor / Consultor",
+            "CIA", "Localizador_Sistema", "Data Emissão", "FOP", "Status_Geral", "Status_Divergencia", "Status_Cia", "Obs. Operação",
             "A vista", "A credito", "Tarifa Total Emitida", "Taxa", "Comissão", "Taxa DU", "Incentivo", "Receita Total Emitida",
             "Fornecedor_Sistema", "Status_Sistema", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita"
         ]
         
     cols_finais = [c for c in cols_desejadas if c in df.columns]
-    cols_sobra = [c for c in df.columns if c not in cols_finais and c not in ["Dt_Parsed", "Bilhete_Clean", "Aba_Origem", "Fornecedor_Sistema", "Localizador_Sistema", "Status_Sistema", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita", "Aba_Destino"]]
+    cols_sobra = [c for c in df.columns if c not in cols_finais and c not in ["Dt_Parsed", "Bilhete_Clean", "Aba_Origem", "Fornecedor_Sistema", "Localizador_Sistema", "Status_Sistema", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita", "Aba_Destino", "Dias_Pendente", "Faixa_Aging"]]
     
     if modo != "falta_lancamento":
         cols_finais.extend(cols_sobra)
@@ -449,7 +507,7 @@ def rotear_bases_mestra(df_master):
     df_ok = df_master[mask_ok].copy()
     df_pend = df_master[~mask_ok].copy()
     
-    # 1. ERRO DE INTEGRAÇÃO CONCUR (NOVA ABA EXCLUSIVA)
+    # 1. ERRO DE INTEGRAÇÃO CONCUR
     def e_concur(r):
         obs_val = str(r.get("Obs. Operação", "")).lower()
         st_val = str(r.get("Status_Geral", "")).lower()
@@ -487,7 +545,7 @@ def rotear_bases_mestra(df_master):
     df_falta = df_rest[mask_falta].copy()
     df_erros = df_rest[~mask_falta].copy()
     
-    # Aplicação da reordenação e limpeza de colunas
+    # Reordenação de colunas por aba
     df_falta = reordenar_colunas(df_falta, modo="falta_lancamento")
     df_concur = reordenar_colunas(df_concur, modo="falta_lancamento")
     df_erros = reordenar_colunas(df_erros, modo="completo")
@@ -531,7 +589,7 @@ df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_
 df_todos_unificados = pd.concat([df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
 st.sidebar.title("Grupo Arbaitman")
-st.sidebar.caption("Conciliação Aérea FP&A v4.0 (C-Level Edition)")
+st.sidebar.caption("Conciliação Aérea FP&A v4.2")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 
 if st.sidebar.button("🔄 Recarregar Dados"):
@@ -618,37 +676,48 @@ with aba_sel[0]:
     tarifa_total_emitida = df_todos_unificados["Tarifa Total Emitida"].sum() if "Tarifa Total Emitida" in df_todos_unificados.columns else 0.0
     taxa_total_emitida = df_todos_unificados["Taxa"].sum() if "Taxa" in df_todos_unificados.columns else 0.0
     receita_total_emitida = df_todos_unificados["Receita Total Emitida"].sum() if "Receita Total Emitida" in df_todos_unificados.columns else 0.0
-    
-    # BLOCO DE KPIS FINANCEIROS EXPANDIDO
-    k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("Vol. Total de Bilhetes", f"{tot_processados:,}")
-    k2.metric("Índice de Conciliação (%)", f"{taxa_concil:.1f}%")
+    ticket_medio_pendente = (df_pendentes["Tarifa Total Emitida"].sum() / len(df_pendentes)) if not df_pendentes.empty else 0.0
+
+    # BLOCO DE KPIS EXECUTIVE SUMMARY
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
+    k1.metric("Vol. Total Bilhetes", f"{tot_processados:,}")
+    k2.metric("Taxa Conciliação", f"{taxa_concil:.1f}%")
     k3.metric("Tarifa Total Emitida", f"R$ {tarifa_total_emitida:,.2f}")
     k4.metric("Taxa Total Emitida", f"R$ {taxa_total_emitida:,.2f}")
     k5.metric("Receita Total Emitida", f"R$ {receita_total_emitida:,.2f}")
+    k6.metric("Ticket Médio Pendente", f"R$ {ticket_medio_pendente:,.2f}")
     
     st.markdown("---")
     
-    # LINHA 1 DE GRÁFICOS: ROSCA DE STATUS + TOP CIAS
+    # LINHA 1 DE GRÁFICOS: DISTRIBUIÇÃO POR ABA (NOVO!) + TOP CIAS
     g1, g2 = st.columns(2)
     with g1:
-        st.markdown('<div class="chart-card"><h5>⚠️ Pendências por Status Operacional</h5>', unsafe_allow_html=True)
-        if not df_pendentes.empty:
-            df_st = df_pendentes["Status_Geral"].value_counts().reset_index()
-            df_st.columns = ["Status", "Quantidade"]
-            
+        st.markdown('<div class="chart-card"><h5>📊 Distribuição de Bilhetes Pendentes por Aba do Sistema</h5>', unsafe_allow_html=True)
+        
+        dados_abas = [
+            {"Aba": "1. Falta Lançamento", "Quantidade": len(f_falta)},
+            {"Aba": "2. Erro Concur 🚨", "Quantidade": len(f_concur)},
+            {"Aba": "3. Erros de Valores", "Quantidade": len(f_erros)},
+            {"Aba": "4. Backoffice", "Quantidade": len(f_backoffice)},
+            {"Aba": "5. Central Eventos", "Quantidade": len(f_eventos)},
+            {"Aba": "6. Emissor Virtual", "Quantidade": len(f_lemon_virt)}
+        ]
+        df_abas = pd.DataFrame(dados_abas)
+        df_abas = df_abas[df_abas["Quantidade"] > 0]
+        
+        if not df_abas.empty:
             fig_pie = px.pie(
-                df_st, values="Quantidade", names="Status", hole=0.5,
-                color_discrete_sequence=["#002060", "#d90429", "#0050b3", "#0086c0", "#fa8c16"]
+                df_abas, values="Quantidade", names="Aba", hole=0.5,
+                color_discrete_sequence=["#002060", "#d90429", "#fa8c16", "#0050b3", "#0086c0", "#722ed1"]
             )
             fig_pie.update_traces(
                 textposition='inside',
-                textinfo='value+percent', # RÓTULOS ON-SCREEN
-                hovertemplate='<b>%{label}</b><br>Quantidade: %{value:,}<br>Representação: %{percent}'
+                textinfo='value+percent',
+                hovertemplate='<b>%{label}</b><br>Volume: %{value:,}<br>Representação: %{percent}'
             )
-            fig_pie.update_layout(height=320, margin=dict(l=10, r=10, t=10, b=10))
+            fig_pie.update_layout(height=330, margin=dict(l=10, r=10, t=10, b=10))
             st.plotly_chart(fig_pie, use_container_width=True)
-        else: st.info("Sem pendências.")
+        else: st.info("Sem pendências cadastradas.")
         st.markdown('</div>', unsafe_allow_html=True)
         
     with g2:
@@ -659,32 +728,40 @@ with aba_sel[0]:
             
             fig_bar = px.bar(df_cia, x="Companhia", y="Quantidade", text="Quantidade", color_discrete_sequence=["#002060"])
             fig_bar.update_traces(
-                textposition='outside', # RÓTULOS ON-SCREEN ACIMA DA BARRA
-                texttemplate='%{value:,}',
-                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,}'
-            )
-            fig_bar.update_layout(height=320, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Qtd Bilhetes")
-            st.plotly_chart(fig_bar, use_container_width=True)
-        else: st.info("Sem pendências.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # LINHA 2 DE GRÁFICOS: GERENTE QUANTIDADE + EXPOSIÇÃO FINANCEIRA R$
-    g3, g4 = st.columns(2)
-    with g3:
-        st.markdown('<div class="chart-card"><h5>👤 Pendências por Gerente Responsável</h5>', unsafe_allow_html=True)
-        if not df_pendentes.empty:
-            df_ger = df_pendentes["Área Resp. Operação"].value_counts().reset_index()
-            df_ger.columns = ["Gerente", "Quantidade"]
-            
-            fig_ger = px.bar(df_ger, x="Gerente", y="Quantidade", text="Quantidade", color_discrete_sequence=["#0050b3"])
-            fig_ger.update_traces(
                 textposition='outside',
                 texttemplate='%{value:,}',
                 hovertemplate='<b>%{x}</b><br>Pendências: %{y:,}'
             )
-            fig_ger.update_layout(height=330, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Qtd Bilhetes")
-            st.plotly_chart(fig_ger, use_container_width=True)
+            fig_bar.update_layout(height=330, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Qtd Bilhetes")
+            st.plotly_chart(fig_bar, use_container_width=True)
         else: st.info("Sem pendências.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # LINHA 2 DE GRÁFICOS: AGING / CURVA DE ENVELHECIMENTO + EXPOSIÇÃO POR GERENTE
+    g3, g4 = st.columns(2)
+    with g3:
+        st.markdown('<div class="chart-card"><h5>⏳ Aging / Curva de Envelhecimento das Pendências</h5>', unsafe_allow_html=True)
+        if not df_pendentes.empty and "Faixa_Aging" in df_pendentes.columns:
+            df_aging = df_pendentes["Faixa_Aging"].value_counts().reset_index()
+            df_aging.columns = ["Faixa", "Quantidade"]
+            
+            # Ordenação temporal correta
+            ordem_aging = ["Até 30 dias", "31 a 60 dias", "61 a 90 dias", "> 90 dias (Crítico)", "Sem Data"]
+            df_aging["Faixa"] = pd.Categorical(df_aging["Faixa"], categories=ordem_aging, ordered=True)
+            df_aging = df_aging.sort_values("Faixa")
+            
+            fig_aging = px.bar(df_aging, x="Faixa", y="Quantidade", text="Quantidade", color="Faixa",
+                               color_discrete_map={
+                                   "Até 30 dias": "#52c41a",
+                                   "31 a 60 dias": "#1890ff",
+                                   "61 a 90 dias": "#fa8c16",
+                                   "> 90 dias (Crítico)": "#f5222d",
+                                   "Sem Data": "#bfbfbf"
+                               })
+            fig_aging.update_traces(textposition='outside', texttemplate='%{value:,}')
+            fig_aging.update_layout(height=330, margin=dict(l=10, r=10, t=25, b=10), showlegend=False, xaxis_title="", yaxis_title="Qtd Bilhetes")
+            st.plotly_chart(fig_aging, use_container_width=True)
+        else: st.info("Sem dados de aging.")
         st.markdown('</div>', unsafe_allow_html=True)
         
     with g4:
@@ -696,17 +773,14 @@ with aba_sel[0]:
             df_fin["Texto_Fmt"] = df_fin["Valor_Total"].apply(lambda x: f"R$ {x:,.0f}")
             
             fig_fin = px.bar(df_fin, x="Área Resp. Operação", y="Valor_Total", text="Texto_Fmt", color_discrete_sequence=["#fa8c16"])
-            fig_fin.update_traces(
-                textposition='outside',
-                hovertemplate='<b>%{x}</b><br>Valor Pendente: R$ %{y:,.2f}'
-            )
+            fig_fin.update_traces(textposition='outside', hovertemplate='<b>%{x}</b><br>Valor Pendente: R$ %{y:,.2f}')
             fig_fin.update_layout(height=330, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Valor (R$)")
             st.plotly_chart(fig_fin, use_container_width=True)
         else: st.info("Sem pendências.")
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
-# MÓDULO REUTILIZÁVEL DE TABELAS E FORMULÁRIOS
+# MÓDULO REUTILIZÁVEL DE TABELAS (CORREÇÃO COMPLETA DO BUG DE ARRAYS)
 # ------------------------------------------------------------------------------
 def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
     if df_tab.empty:
@@ -728,7 +802,7 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
     df_exib = df_tab.copy()
     if termo.strip():
         t_low = termo.strip().lower()
-        cols_s = [c for c in ["Bilhetes", "Localizador_Sistema", "Área Resp. Operação", "Emissor / Consultor", "Ponto de venda"] if c in df_exib.columns]
+        cols_s = [c for c in ["Bilhetes", "Localizador_Sistema", "Área Resp. Operação", "Emissor / Consultor", "Ponto de venda", "SV", "Rloc_CIA"] if c in df_exib.columns]
         m_s = pd.Series(False, index=df_exib.index)
         for col in cols_s:
             m_s |= df_exib[col].astype(str).str.lower().str.contains(t_low, na=False)
@@ -743,7 +817,7 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
         st.info(f"🎯 **{len(df_sel)} bilhete(s) selecionado(s)** para atualização no Supabase.")
         
         with st.form(f"form_{key_pfx}"):
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
             with c1:
                 st_novo = st.selectbox("Novo Status:", [
                     "Já Lançado no ERP", "Emitido e Lançado", "Pendente de Lançamento (Não Consta)",
@@ -752,18 +826,35 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
             with c2:
                 opts_g = sorted(list(set(DEPARA_GERENTES.values())))
                 ar_nova = st.selectbox("Nova Área Responsável / Gerente:", opts_g, key=f"ar_{key_pfx}")
+            with c3:
+                rloc_novo = st.text_input("Novo Rloc_CIA (Opcional):", key=f"rloc_{key_pfx}")
                 
             obs_nova = st.text_area("Observação / Justificativa Detalhada:", key=f"obs_{key_pfx}")
             
             if st.form_submit_button("💾 Salvar Tratativa no Supabase"):
                 usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
+                n_items = len(df_sel)
+                
+                # CORREÇÃO DO BUG: Garantir que todas as colunas tenham exatos n_items elementos
+                setor_vals = df_sel["Setor"].values if "Setor" in df_sel.columns else ["-"] * n_items
+                sv_vals = df_sel["SV"].values if "SV" in df_sel.columns else ["-"] * n_items
+                fop_vals = df_sel["FOP"].values if "FOP" in df_sel.columns else ["-"] * n_items
+                
+                if rloc_novo.strip():
+                    rloc_vals = [rloc_novo.strip()] * n_items
+                else:
+                    rloc_vals = df_sel["Rloc_CIA"].values if "Rloc_CIA" in df_sel.columns else ["-"] * n_items
+                
                 df_up = pd.DataFrame({
                     "Bilhetes": df_sel["Bilhetes"].values,
-                    "Status_Geral": [st_novo] * len(df_sel),
-                    "Área Resp. Operação": [ar_nova] * len(df_sel),
-                    "Obs. Operação": [obs_nova] * len(df_sel),
-                    "Setor": df_sel.get("Setor", pd.Series("-")).values,
-                    "Gerentes": [ar_nova] * len(df_sel)
+                    "Status_Geral": [st_novo] * n_items,
+                    "Área Resp. Operação": [ar_nova] * n_items,
+                    "Obs. Operação": [obs_nova] * n_items,
+                    "Setor": setor_vals,
+                    "Gerentes": [ar_nova] * n_items,
+                    "SV": sv_vals,
+                    "FOP": fop_vals,
+                    "Rloc_CIA": rloc_vals
                 })
                 ok, msg, _, _, _ = salvar_tratativas_lote_supabase(df_up, usr_str)
                 if ok:
@@ -776,38 +867,38 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
     st.dataframe(df_exib, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------------------------
-# RENDEREIZAÇÃO DAS ABAS OPERACIONAIS
+# ABAS OPERACIONAIS
 # ------------------------------------------------------------------------------
 with aba_sel[1]:
-    st.markdown("<div class='section-banner'><h3>📋 1. Falta de Lançamento no ERP (Maringá)</h3><p>Quadro enxuto focado exclusivamente nas emissões pendentes de lançamento.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>📋 1. Falta de Lançamento no ERP (Maringá)</h3><p>Emissões pendentes de lançamento no ERP Benner.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_falta, "Falta_Lancamento", "fl")
 
 with aba_sel[2]:
-    st.markdown("<div class='section-banner'><h3>🚨 2. Erro de Integração Concur</h3><p>Aba dedicada exclusivamente às falhas de integração originadas do Concur.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>🚨 2. Erro de Integração Concur</h3><p>Aba dedicada exclusivamente às falhas de integração com a plataforma Concur.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_concur, "Erro_Concur", "conc")
 
 with aba_sel[3]:
-    st.markdown("<div class='section-banner'><h3>⚠️ 3. Erros de Valores & CIA (Maringá)</h3><p>Bilhetes presentes no ERP com divergência de Tarifa, Taxa ou Companhia Aérea.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>⚠️ 3. Erros de Valores & CIA (Maringá)</h3><p>Bilhetes no ERP com divergência de Tarifa, Taxa ou Companhia Aérea.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_erros, "Erros_Valores", "ev")
 
 with aba_sel[4]:
-    st.markdown("<div class='section-banner'><h3>🎧 4. Suporte Backoffice</h3><p>Casos sob gestão e análise do Suporte Backoffice e chamados abertos.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>🎧 4. Suporte Backoffice</h3><p>Casos sob gestão e análise da equipe de Backoffice.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_backoffice, "Suporte_Backoffice", "sb")
 
 with aba_sel[5]:
-    st.markdown("<div class='section-banner'><h3>🎪 5. Central de Eventos</h3><p>Emissões associadas ao setor de Eventos.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>🎪 5. Central de Eventos</h3><p>Emissões corporativas associadas ao setor de Eventos.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_eventos, "Central_Eventos", "ce")
 
 with aba_sel[6]:
-    st.markdown("<div class='section-banner'><h3>🤖 6. Emissor Virtual Lemontech</h3><p>Bilhetes com emissão via robô/virtual Lemontech.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>🤖 6. Emissor Virtual Lemontech</h3><p>Emissões realizadas via robô / Emissor Virtual Lemontech.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_lemon_virt, "Emissor_Virtual", "evl")
 
 with aba_sel[7]:
-    st.markdown("<div class='section-banner'><h3>✅ 7. Bilhetes Solicitados Conciliação</h3><p>Bilhetes validados e prontos sem divergências ativas.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>✅ 7. Bilhetes Solicitados Conciliação</h3><p>Bilhetes validados e conciliados sem divergências ativas.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_sem_div, "Bilhetes_Conciliados", "ok")
 
 # ------------------------------------------------------------------------------
-# ABAS MASTER: ACESSOS, HISTÓRICO E CARGA EM LOTE
+# ABAS MASTER: ACESSOS, HISTÓRICO E CARGA EM LOTE INTERATIVA
 # ------------------------------------------------------------------------------
 if e_master():
     with aba_sel[8]:
@@ -828,21 +919,49 @@ if e_master():
             except Exception: st.info("Sem registros no log.")
 
     with aba_sel[10]:
-        st.subheader("📥 Carga de Retornos de Cobrança em Lote")
-        st.markdown("Envie um arquivo `.xlsx` ou `.csv` para atualização em massa no Supabase.")
-        arq_up = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "csv"], key="upl_lote")
+        st.subheader("📥 Carga de Retornos de Cobrança em Lote Avançada")
+        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização massiva no Supabase.")
+        
+        arq_up = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "csv"], key="upl_lote_adv")
+        
         if arq_up:
             try:
                 df_lote_raw = pd.read_csv(arq_up, dtype=str) if arq_up.name.endswith(".csv") else pd.read_excel(arq_up, dtype=str)
-                st.success(f"Arquivo lido com sucesso! Total de {len(df_lote_raw)} linhas.")
-                st.dataframe(df_lote_raw.head(10), use_container_width=True)
-                if st.button("🚀 Confirmar e Atualizar no Supabase"):
+                st.success(f"📂 **Arquivo carregado:** `{arq_up.name}` | Total de **{len(df_lote_raw):,} linhas** encontradas.")
+                st.dataframe(df_lote_raw.head(10), use_container_width=True, hide_index=True)
+                
+                if st.button("🚀 Confirmar e Processar Lote no Supabase", type="primary"):
+                    progress_bar = st.progress(0, text="Iniciando leitura e validação dos bilhetes...")
+                    
+                    for idx in range(1, 101, 20):
+                        time.sleep(0.08)
+                        progress_bar.progress(idx, text=f"Sincronizando registros com o Supabase... ({idx}%)")
+                        
                     usr_str = f"CargaLote_{st.session_state['usuario_atual']}"
-                    ok, msg, _, _, _ = salvar_tratativas_lote_supabase(df_lote_raw, usr_str)
+                    ok, msg, n_at, n_nv, n_err = salvar_tratativas_lote_supabase(df_lote_raw, usr_str)
+                    
+                    progress_bar.progress(100, text="Sincronização concluída!")
+                    time.sleep(0.3)
+                    
                     if ok:
-                        st.success(msg)
-                        time.sleep(1)
+                        st.balloons()
+                        st.markdown(
+                            f"""
+                            <div style='background: #f0fdf4; border: 1px solid #86efac; padding: 16px; border-radius: 8px; margin-top: 15px;'>
+                                <h4 style='color: #166534; margin: 0;'>🎉 Sincronização em Lote Finalizada com Sucesso!</h4>
+                                <p style='color: #15803d; margin: 5px 0 0 0;'>{msg}</p>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+                        c_a, c_b = st.columns(2)
+                        c_a.metric("Bilhetes Atualizados", f"{n_at:,}")
+                        c_b.metric("Novos Registros Criados", f"{n_nv:,}")
+                        
+                        time.sleep(1.5)
                         st.cache_data.clear()
                         st.rerun()
-                    else: st.error(msg)
-            except Exception as e: st.error(f"Erro ao processar arquivo: {e}")
+                    else:
+                        st.error(f"Erro no processamento do lote: {msg}")
+            except Exception as e:
+                st.error(f"Erro ao ler e processar arquivo: {e}")
