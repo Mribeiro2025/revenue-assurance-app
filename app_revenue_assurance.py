@@ -25,6 +25,9 @@ st.set_page_config(
 
 ARQUIVO_DASHBOARD_PADRAO = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 
+# Tempo máximo de inatividade em horas até exigir novo login (Padrão: 8h)
+TEMPO_MAXIMO_SESSAO_HORAS = 8.0 
+
 DEPARA_CIAS = {
     "G3": "GOL (G3)", "AD": "AZUL (AD)", "LA": "LATAM (LA)", "JJ": "LATAM (JJ)",
     "TP": "TAP Portugal (TP)", "AA": "American Airlines (AA)", "AF": "Air France (AF)",
@@ -47,7 +50,6 @@ DEPARA_GERENTES = {
     "SILVANA CELANI": "Silvana Celani", "SILVANA": "Silvana Celani",
     "KATIA MARTINS": "Katia Martins", "KÁTIA MARTINS": "Katia Martins", "KATIA": "Katia Martins",
     "JOAO PAULO": "João Paulo", "JOÃO PAULO": "João Paulo",
-    "JOAO PAULO": "João Paulo", "JOÃO PAULO": "João Paulo ", "JOAO": "João Paulo ", "JOÃO": "João Paulo",
     "SUPORTE BACKOFFICE": "Suporte Backoffice", "BACKOFFICE": "Suporte Backoffice",
     "CENTRAL DE EVENTOS": "Central de Eventos", "EVENTOS": "Central de Eventos"
 }
@@ -92,6 +94,19 @@ st.markdown(
         .main-header h1 { color: #ffffff !important; margin: 0; font-size: 24px; font-weight: 700; }
         .main-header p { color: #b3d1ff !important; margin: 4px 0 0 0; font-size: 13px; }
         
+        .fonte-pill {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
+            display: inline-block;
+            margin-right: 6px;
+            margin-top: 8px;
+        }
+
         .section-banner {
             background: #ffffff;
             border-left: 5px solid #002060;
@@ -150,7 +165,7 @@ def get_db_engine():
                 db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
             engine = create_engine(db_url, pool_pre_ping=True)
             
-            # Auto-Migração do Esquema (Cria colunas sv, fop, rloc_cia se não existirem)
+            # Auto-Migração do Esquema
             try:
                 with engine.begin() as conn:
                     conn.execute(text("""
@@ -171,7 +186,7 @@ def get_db_engine():
             except Exception: pass
             return engine
     except Exception as e:
-        st.error(f"Erro na ligação ao banco de dados: {e}")
+        st.error(f"Erro na conexão com o banco de dados: {e}")
     return None
 
 def carregar_tratativas_db():
@@ -211,8 +226,8 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
             setor_val = str(r.get("Setor", r.get("setor", "-"))).strip()
             gerente_val = padronizar_nome_gerente(r.get("Gerentes", r.get("gerentes", ar_val)))
             
-            sv_val = str(r.get("SV", r.get("sv", r.get("Solicitação", r.get("Solicitacao", "-"))))).strip()
-            fop_val = str(r.get("FOP", r.get("fop", r.get("Forma de Recebimento", r.get("Pagto", "-"))))).strip()
+            sv_val = str(r.get("SV", r.get("sv", r.get("Solicitação", "-")))).strip()
+            fop_val = str(r.get("FOP", r.get("fop", r.get("Pagto", "-")))).strip()
             rloc_val = str(r.get("Rloc_CIA", r.get("rloc_cia", r.get("Rloc_Cia", "-")))).strip()
             
             if st_val in ["-", "", "None", "nan"]:
@@ -314,7 +329,7 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     return output_buffer.getvalue()
 
 # ==============================================================================
-# 4. AUTENTICAÇÃO DE USUÁRIOS
+# 4. AUTENTICAÇÃO DE USUÁRIOS & PERSISTÊNCIA DE SESSÃO COM EXPIRAÇÃO AUTOMÁTICA
 # ==============================================================================
 def carregar_usuarios_supabase():
     dict_u = {}
@@ -336,6 +351,47 @@ if "usuario_atual" not in st.session_state: st.session_state["usuario_atual"] = 
 if "perfil_atual" not in st.session_state: st.session_state["perfil_atual"] = None
 if "login_user_id" not in st.session_state: st.session_state["login_user_id"] = None
 
+def validar_sessao_url():
+    """Valida a sessão gravada na URL e verifica se não ultrapassou o tempo de inatividade."""
+    session_user_param = st.query_params.get("session_user")
+    session_time_param = st.query_params.get("session_time")
+    
+    if not session_user_param or not session_time_param:
+        return False, None
+        
+    try:
+        ts_login = float(session_time_param)
+        ts_atual = time.time()
+        horas_decorridas = (ts_atual - ts_login) / 3600.0
+        
+        if horas_decorridas > TEMPO_MAXIMO_SESSAO_HORAS:
+            st.query_params.clear()
+            st.warning(f"⚠️ Sua sessão expirou após {int(TEMPO_MAXIMO_SESSAO_HORAS)} horas de inatividade. Por favor, faça login novamente.")
+            return False, None
+        else:
+            # Atualiza o timestamp para renovar a validade da sessão a cada nova ação
+            st.query_params["session_time"] = str(ts_atual)
+            return True, str(session_user_param).strip().lower()
+    except Exception:
+        st.query_params.clear()
+        return False, None
+
+# VERIFICAÇÃO AUTOMÁTICA DA SESSÃO AO CARREGAR / DAR REFRESH (F5)
+if not st.session_state["autenticado"]:
+    sessao_valida, u_key = validar_sessao_url()
+    if sessao_valida and u_key:
+        usuarios_db = carregar_usuarios_supabase()
+        if u_key in usuarios_db:
+            st.session_state["autenticado"] = True
+            st.session_state["usuario_atual"] = usuarios_db[u_key]["nome"]
+            st.session_state["perfil_atual"] = usuarios_db[u_key]["perfil"]
+            st.session_state["login_user_id"] = u_key
+        elif u_key == "mribeiro":
+            st.session_state["autenticado"] = True
+            st.session_state["usuario_atual"] = "Marcos Ribeiro"
+            st.session_state["perfil_atual"] = "Master"
+            st.session_state["login_user_id"] = "mribeiro"
+
 def e_master():
     u_id = st.session_state.get("login_user_id", "")
     perfil = st.session_state.get("perfil_atual", "")
@@ -354,18 +410,22 @@ if not st.session_state["autenticado"]:
                 st.session_state["usuario_atual"] = usuarios_db[u_input]["nome"]
                 st.session_state["perfil_atual"] = usuarios_db[u_input]["perfil"]
                 st.session_state["login_user_id"] = u_input
+                st.query_params["session_user"] = u_input
+                st.query_params["session_time"] = str(time.time())
                 st.rerun()
             elif u_input == "mribeiro" and p_input in ["14052013", "123"]:
                 st.session_state["autenticado"] = True
                 st.session_state["usuario_atual"] = "Marcos Ribeiro"
                 st.session_state["perfil_atual"] = "Master"
                 st.session_state["login_user_id"] = "mribeiro"
+                st.query_params["session_user"] = "mribeiro"
+                st.query_params["session_time"] = str(time.time())
                 st.rerun()
             else: st.error("Usuário ou senha incorretos.")
     st.stop()
 
 # ==============================================================================
-# 5. ROTEADOR DE BASES, COMPATIBILIDADE DE COLUNAS & MAPEAMENTO SV/FOP/RLOC
+# 5. ROTEADOR DE BASES & TRATAMENTO ROBUSTO DE AGING / DATAS
 # ==============================================================================
 def clean_str(val):
     if pd.isna(val) or val is None: return "-"
@@ -417,9 +477,26 @@ def padronizar_df(df):
             
     df_out["Tarifa Total Emitida"] = df_out["A vista"] + df_out["A credito"]
     df_out["Receita Total Emitida"] = df_out["Comissão"] + df_out["Taxa DU"] + df_out["Incentivo"]
-    df_out["Dt_Parsed"] = pd.to_datetime(df_out.get("Data Emissão"), format="mixed", dayfirst=True, errors="coerce")
     
-    # Agrupamento de Aging
+    # TRATAMENTO ROBUSTO DE AGING
+    def converter_data_flexivel(val):
+        if pd.isna(val) or val in ["-", "", "nan", "None", None]:
+            return pd.NaT
+        if isinstance(val, (int, float)):
+            try:
+                return pd.to_datetime('1899-12-30') + pd.to_timedelta(val, unit='D')
+            except Exception:
+                return pd.NaT
+        try:
+            return pd.to_datetime(val, dayfirst=True, errors="coerce")
+        except Exception:
+            return pd.NaT
+
+    if "Data Emissão" in df_out.columns:
+        df_out["Dt_Parsed"] = df_out["Data Emissão"].apply(converter_data_flexivel)
+    else:
+        df_out["Dt_Parsed"] = pd.NaT
+
     hoje = pd.to_datetime(datetime.date.today())
     dias = (hoje - df_out["Dt_Parsed"]).dt.days
     df_out["Dias_Pendente"] = dias
@@ -472,24 +549,31 @@ def reordenar_colunas(df, modo="completo"):
     
     if modo == "falta_lancamento":
         cols_desejadas = [
-            "Bilhetes", "Área Resp. Operação", "Código Iata", "SV", "Rloc_CIA", "Ponto de venda", "Emissor / Consultor",
+            "Bilhetes", "Área Resp. Operação", "Código Iata", "SV", "Rloc_CIA", "Ponto de venda", "Cliente", "Emissor / Consultor",
             "CIA", "Data Emissão", "FOP", "Status_Geral", "Obs. Operação",
             "A vista", "A credito", "Tarifa Total Emitida", "Taxa", "Comissão", "Taxa DU", "Incentivo", "Receita Total Emitida"
         ]
     else:
         cols_desejadas = [
-            "Bilhetes", "Área Resp. Operação", "Código Iata", "SV", "Rloc_CIA", "Ponto de venda", "Emissor / Consultor",
+            "Bilhetes", "Área Resp. Operação", "Código Iata", "SV", "Rloc_CIA", "Ponto de venda", "Cliente", "Emissor / Consultor",
             "CIA", "Localizador_Sistema", "Data Emissão", "FOP", "Status_Geral", "Status_Divergencia", "Status_Cia", "Obs. Operação",
             "A vista", "A credito", "Tarifa Total Emitida", "Taxa", "Comissão", "Taxa DU", "Incentivo", "Receita Total Emitida",
             "Fornecedor_Sistema", "Status_Sistema", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita"
         ]
         
     cols_finais = [c for c in cols_desejadas if c in df.columns]
-    cols_sobra = [c for c in df.columns if c not in cols_finais and c not in ["Dt_Parsed", "Bilhete_Clean", "Aba_Origem", "Fornecedor_Sistema", "Localizador_Sistema", "Status_Sistema", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita", "Aba_Destino", "Dias_Pendente", "Faixa_Aging"]]
+    
+    # PRESERVAÇÃO EXPLÍCITA DAS COLUNAS DE AGING E SUPORTE DO DASHBOARD
+    cols_protegidas = ["Dt_Parsed", "Dias_Pendente", "Faixa_Aging", "Bilhete_Clean", "Aba_Origem"]
+    cols_sobra = [c for c in df.columns if c not in cols_finais and c not in cols_protegidas]
     
     if modo != "falta_lancamento":
         cols_finais.extend(cols_sobra)
         
+    for cp in cols_protegidas:
+        if cp in df.columns and cp not in cols_finais:
+            cols_finais.append(cp)
+            
     return df[cols_finais]
 
 def rotear_bases_mestra(df_master):
@@ -589,12 +673,22 @@ df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_
 df_todos_unificados = pd.concat([df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
 st.sidebar.title("Grupo Arbaitman")
-st.sidebar.caption("Conciliação Aérea FP&A v4.2")
+st.sidebar.caption("Conciliação Aérea FP&A v4.5")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 
-if st.sidebar.button("🔄 Recarregar Dados"):
-    st.cache_data.clear()
-    st.rerun()
+col_sb1, col_sb2 = st.sidebar.columns(2)
+with col_sb1:
+    if st.button("🔄 Recarregar", key="btn_recarregar_sb"):
+        st.cache_data.clear()
+        st.rerun()
+with col_sb2:
+    if st.button("🚪 Sair", key="btn_logout_sb"):
+        st.session_state["autenticado"] = False
+        st.session_state["usuario_atual"] = None
+        st.session_state["perfil_atual"] = None
+        st.session_state["login_user_id"] = None
+        st.query_params.clear()
+        st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔍 Filtros Operacionais")
@@ -623,13 +717,20 @@ f_lemon_virt = aplicar_filtros(df_lemon_virt)
 f_sem_div = aplicar_filtros(df_sem_div)
 
 # ==============================================================================
-# 7. BANNER PRINCIPAL E METRICAS DE RESUMO
+# 7. BANNER PRINCIPAL COM FONTES DE DADOS E MÉTRICAS
 # ==============================================================================
 st.markdown(
     """
     <div class='main-header'>
         <h1>✈️ Grupo Arbaitman | Portal Executivo de Conciliação Aérea (FP&A)</h1>
         <p>Painel Estratégico de Revenue Assurance & Gestão Unificada de Pendências</p>
+        <div style='margin-top: 10px;'>
+            <span class='fonte-pill'>🏢 ERP Benner (Acumulado)</span>
+            <span class='fonte-pill'>🤖 OBT Lemontech (Extrato)</span>
+            <span class='fonte-pill'>✈️ Cias Aéreas (AZUL, GOL, BSP, HOT)</span>
+            <span class='fonte-pill'>🌐 GDS Sabre</span>
+            <span class='fonte-pill'>☁️ Supabase PostgreSQL</span>
+        </div>
     </div>
     """,
     unsafe_allow_html=True
@@ -662,7 +763,7 @@ if e_master():
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO C-LEVEL (INCRÍVEL / CFO & CEO READY)
+# ABA 0: DASHBOARD EXECUTIVO C-LEVEL
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.markdown("<div class='section-banner'><h3>📊 Visão Financeira Global & Indicadores de Performance (FP&A)</h3></div>", unsafe_allow_html=True)
@@ -689,7 +790,7 @@ with aba_sel[0]:
     
     st.markdown("---")
     
-    # LINHA 1 DE GRÁFICOS: DISTRIBUIÇÃO POR ABA (NOVO!) + TOP CIAS
+    # LINHA 1 DE GRÁFICOS: DISTRIBUIÇÃO POR ABA + TOP CIAS
     g1, g2 = st.columns(2)
     with g1:
         st.markdown('<div class="chart-card"><h5>📊 Distribuição de Bilhetes Pendentes por Aba do Sistema</h5>', unsafe_allow_html=True)
@@ -737,19 +838,18 @@ with aba_sel[0]:
         else: st.info("Sem pendências.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # LINHA 2 DE GRÁFICOS: AGING / CURVA DE ENVELHECIMENTO + EXPOSIÇÃO POR GERENTE
-    g3, g4 = st.columns(2)
-    with g3:
-        st.markdown('<div class="chart-card"><h5>⏳ Aging / Curva de Envelhecimento das Pendências</h5>', unsafe_allow_html=True)
-        if not df_pendentes.empty and "Faixa_Aging" in df_pendentes.columns:
-            df_aging = df_pendentes["Faixa_Aging"].value_counts().reset_index()
-            df_aging.columns = ["Faixa", "Quantidade"]
-            
-            # Ordenação temporal correta
-            ordem_aging = ["Até 30 dias", "31 a 60 dias", "61 a 90 dias", "> 90 dias (Crítico)", "Sem Data"]
-            df_aging["Faixa"] = pd.Categorical(df_aging["Faixa"], categories=ordem_aging, ordered=True)
-            df_aging = df_aging.sort_values("Faixa")
-            
+    # LINHA 2 DE GRÁFICOS: AGING CORRIGIDO + QUADRO COMPLEMENTAR
+    st.markdown('<div class="chart-card"><h5>⏳ Aging / Curva de Envelhecimento das Pendências</h5>', unsafe_allow_html=True)
+    if not df_pendentes.empty and "Faixa_Aging" in df_pendentes.columns:
+        df_aging = df_pendentes["Faixa_Aging"].value_counts().reset_index()
+        df_aging.columns = ["Faixa", "Quantidade"]
+        
+        ordem_aging = ["Até 30 dias", "31 a 60 dias", "61 a 90 dias", "> 90 dias (Crítico)", "Sem Data"]
+        df_aging["Faixa"] = pd.Categorical(df_aging["Faixa"], categories=ordem_aging, ordered=True)
+        df_aging = df_aging.sort_values("Faixa")
+        
+        g_ag1, g_ag2 = st.columns([2.2, 1])
+        with g_ag1:
             fig_aging = px.bar(df_aging, x="Faixa", y="Quantidade", text="Quantidade", color="Faixa",
                                color_discrete_map={
                                    "Até 30 dias": "#52c41a",
@@ -759,12 +859,22 @@ with aba_sel[0]:
                                    "Sem Data": "#bfbfbf"
                                })
             fig_aging.update_traces(textposition='outside', texttemplate='%{value:,}')
-            fig_aging.update_layout(height=330, margin=dict(l=10, r=10, t=25, b=10), showlegend=False, xaxis_title="", yaxis_title="Qtd Bilhetes")
+            fig_aging.update_layout(height=300, margin=dict(l=10, r=10, t=25, b=10), showlegend=False, xaxis_title="", yaxis_title="Qtd Bilhetes")
             st.plotly_chart(fig_aging, use_container_width=True)
-        else: st.info("Sem dados de aging.")
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-    with g4:
+            
+        with g_ag2:
+            st.write("**Resumo Financeiro por Aging:**")
+            df_pendentes["Valor_Total_Tmp"] = df_pendentes["A vista"] + df_pendentes["A credito"] + df_pendentes["Taxa"]
+            df_aging_fin = df_pendentes.groupby("Faixa_Aging", observed=False)["Valor_Total_Tmp"].sum().reset_index()
+            df_aging_fin.columns = ["Faixa", "Valor (R$)"]
+            df_aging_fin["Valor (R$)"] = df_aging_fin["Valor (R$)"].apply(lambda x: f"R$ {x:,.2f}")
+            st.dataframe(df_aging_fin, use_container_width=True, hide_index=True)
+    else: st.info("Sem dados de aging disponíveis.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # LINHA 3 DE GRÁFICOS: VISÃO DUAL POR GERENTE (EXPOSIÇÃO R$ + QUANTIDADE DE EMISSÕES)
+    g3, g4 = st.columns(2)
+    with g3:
         st.markdown('<div class="chart-card"><h5>💼 Exposição Financeira (R$) Pendente por Gerente</h5>', unsafe_allow_html=True)
         if not df_pendentes.empty:
             df_pendentes["Valor_Total"] = df_pendentes["A vista"] + df_pendentes["A credito"] + df_pendentes["Taxa"]
@@ -778,9 +888,22 @@ with aba_sel[0]:
             st.plotly_chart(fig_fin, use_container_width=True)
         else: st.info("Sem pendências.")
         st.markdown('</div>', unsafe_allow_html=True)
+        
+    with g4:
+        st.markdown('<div class="chart-card"><h5>🎫 Quantidade de Emissões Pendentes por Gerente</h5>', unsafe_allow_html=True)
+        if not df_pendentes.empty:
+            df_qtd_ger = df_pendentes["Área Resp. Operação"].value_counts().reset_index()
+            df_qtd_ger.columns = ["Gerente", "Quantidade"]
+            
+            fig_qtd = px.bar(df_qtd_ger, x="Gerente", y="Quantidade", text="Quantidade", color_discrete_sequence=["#003366"])
+            fig_qtd.update_traces(textposition='outside', texttemplate='%{value:,}', hovertemplate='<b>%{x}</b><br>Emissões Pendentes: %{y:,}')
+            fig_qtd.update_layout(height=330, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Qtd Emissões")
+            st.plotly_chart(fig_qtd, use_container_width=True)
+        else: st.info("Sem pendências.")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
-# MÓDULO REUTILIZÁVEL DE TABELAS (CORREÇÃO COMPLETA DO BUG DE ARRAYS)
+# MÓDULO REUTILIZÁVEL DE TABELAS
 # ------------------------------------------------------------------------------
 def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
     if df_tab.empty:
@@ -789,7 +912,7 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
         
     c_s1, c_s2 = st.columns([3, 1])
     with c_s1:
-        termo = st.text_input("🔍 Buscar por Bilhete, Gerente, Emissor ou Localizador:", key=f"src_{key_pfx}")
+        termo = st.text_input("🔍 Buscar por Bilhete, Gerente, Cliente, Emissor ou Localizador:", key=f"src_{key_pfx}")
     with c_s2:
         st.write("")
         st.download_button(
@@ -802,7 +925,7 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
     df_exib = df_tab.copy()
     if termo.strip():
         t_low = termo.strip().lower()
-        cols_s = [c for c in ["Bilhetes", "Localizador_Sistema", "Área Resp. Operação", "Emissor / Consultor", "Ponto de venda", "SV", "Rloc_CIA"] if c in df_exib.columns]
+        cols_s = [c for c in ["Bilhetes", "Localizador_Sistema", "Área Resp. Operação", "Emissor / Consultor", "Ponto de venda", "Cliente", "SV", "Rloc_CIA"] if c in df_exib.columns]
         m_s = pd.Series(False, index=df_exib.index)
         for col in cols_s:
             m_s |= df_exib[col].astype(str).str.lower().str.contains(t_low, na=False)
@@ -835,7 +958,6 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
                 usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
                 n_items = len(df_sel)
                 
-                # CORREÇÃO DO BUG: Garantir que todas as colunas tenham exatos n_items elementos
                 setor_vals = df_sel["Setor"].values if "Setor" in df_sel.columns else ["-"] * n_items
                 sv_vals = df_sel["SV"].values if "SV" in df_sel.columns else ["-"] * n_items
                 fop_vals = df_sel["FOP"].values if "FOP" in df_sel.columns else ["-"] * n_items

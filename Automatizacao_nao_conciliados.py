@@ -73,6 +73,8 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
         status_sistema VARCHAR(255),
         data_emissao VARCHAR(255),
         pagto VARCHAR(255),
+        sv VARCHAR(255),
+        fop VARCHAR(255),
         a_vista NUMERIC(15,2) DEFAULT 0.00,
         a_credito NUMERIC(15,2) DEFAULT 0.00,
         tarifa_sistema NUMERIC(15,2) DEFAULT 0.00,
@@ -111,6 +113,10 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
         data_processamento TIMESTAMP DEFAULT NOW()
     );
 
+    -- Garantia de adição das novas colunas em tabelas legadas no Supabase
+    ALTER TABLE tb_conciliacao_base ADD COLUMN IF NOT EXISTS sv VARCHAR(255);
+    ALTER TABLE tb_conciliacao_base ADD COLUMN IF NOT EXISTS fop VARCHAR(255);
+
     CREATE TABLE IF NOT EXISTS tratativas (
         bilhete VARCHAR(255) PRIMARY KEY,
         status_geral VARCHAR(255),
@@ -118,6 +124,9 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
         obs_operacao TEXT,
         setor VARCHAR(255),
         gerentes VARCHAR(255),
+        sv VARCHAR(255),
+        fop VARCHAR(255),
+        rloc_cia VARCHAR(255),
         usuario_modificacao VARCHAR(255),
         data_modificacao TIMESTAMP DEFAULT NOW()
     );
@@ -127,14 +136,16 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
         b.bilhete AS "Bilhetes",
         b.ponto_venda AS "Ponto de venda",
         b.codigo_iata AS "Código Iata",
+        COALESCE(t.sv, b.sv, '-') AS "SV",
+        COALESCE(t.rloc_cia, b.rloc_cia, '-') AS "Rloc_Cia",
         COALESCE(t.gerentes, t.area_resp, b.gerente_sugerido, 'Não Mapeado') AS "Gerentes",
         b.cia AS "CIA",
         b.fornecedor_sistema AS "Fornecedor_Sistema",
         b.status_cia AS "Status_Cia",
         b.localizador AS "Localizador_Sistema",
-        b.rloc_cia AS "Rloc_Cia",
         b.status_sistema AS "Status_Sistema",
         b.data_emissao AS "Data Emissão",
+        COALESCE(t.fop, b.fop, b.pagto, '-') AS "FOP",
         b.pagto AS "Pagto",
         b.a_vista AS "A vista",
         b.a_credito AS "A credito",
@@ -333,6 +344,9 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                                 "Gerentes": r.get("Gerentes"),
                                 "Ponto de venda": r.get("Ponto de venda"),
                                 "Código Iata": r.get("Código Iata"),
+                                "SV": r.get("SV"),
+                                "FOP": r.get("FOP"),
+                                "Rloc_Cia": r.get("Rloc_Cia") or r.get("Rloc_CIA"),
                             })
         except Exception as e:
             print(f"⚠️ Aviso ao carregar histórico do Excel: {e}")
@@ -340,7 +354,7 @@ def carregar_tratativas_e_logs_anteriores(out_file):
     engine_sb = obter_engine_supabase()
     if engine_sb:
         try:
-            df_sb = pd.read_sql("SELECT bilhete, status_geral, area_resp, obs_operacao, setor, gerentes FROM tratativas", engine_sb)
+            df_sb = pd.read_sql("SELECT bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, sv, fop, rloc_cia FROM tratativas", engine_sb)
             if not df_sb.empty:
                 for r in df_sb.to_dict("records"):
                     b_key = clean_str_strict(r.get("bilhete"))
@@ -352,6 +366,9 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                             "Obs. Operação": obs_limpa,
                             "Setor": r.get("setor"),
                             "Gerentes": r.get("gerentes"),
+                            "SV": r.get("sv"),
+                            "FOP": r.get("fop"),
+                            "Rloc_Cia": r.get("rloc_cia"),
                         })
                 print(f"☁️ Supabase conectado! {len(df_sb)} tratativas resgatadas com sucesso.")
         except Exception as e:
@@ -393,7 +410,7 @@ def sincronizar_supabase_tudo(df_master):
     upsert_base_sql = text("""
         INSERT INTO tb_conciliacao_base (
             bilhete, localizador, rloc_cia, cia, fornecedor_sistema, status_cia, status_sistema,
-            data_emissao, pagto, a_vista, a_credito, tarifa_sistema, dif_tarifa, taxa_emitida,
+            data_emissao, pagto, sv, fop, a_vista, a_credito, tarifa_sistema, dif_tarifa, taxa_emitida,
             taxa_sistema, dif_taxa, comissao, taxa_du, desconto, incentivo, receita_sistema,
             dif_receita, vl_liquido, status_divergencia, consultor, emissor, sistema_reserva,
             cliente, ponto_venda, codigo_iata, gerente_sugerido, setor_sugerido, aba_destino,
@@ -402,7 +419,7 @@ def sincronizar_supabase_tudo(df_master):
             emissao_online_lemon, source_lemon, ponto_venda_lemon, data_processamento
         ) VALUES (
             :bilhete, :localizador, :rloc_cia, :cia, :fornecedor_sistema, :status_cia, :status_sistema,
-            :data_emissao, :pagto, :a_vista, :a_credito, :tarifa_sistema, :dif_tarifa, :taxa_emitida,
+            :data_emissao, :pagto, :sv, :fop, :a_vista, :a_credito, :tarifa_sistema, :dif_tarifa, :taxa_emitida,
             :taxa_sistema, :dif_taxa, :comissao, :taxa_du, :desconto, :incentivo, :receita_sistema,
             :dif_receita, :vl_liquido, :status_divergencia, :consultor, :emissor, :sistema_reserva,
             :cliente, :ponto_venda, :codigo_iata, :gerente_sugerido, :setor_sugerido, :aba_destino,
@@ -418,6 +435,8 @@ def sincronizar_supabase_tudo(df_master):
             status_sistema = EXCLUDED.status_sistema,
             data_emissao = EXCLUDED.data_emissao,
             pagto = EXCLUDED.pagto,
+            sv = EXCLUDED.sv,
+            fop = EXCLUDED.fop,
             a_vista = EXCLUDED.a_vista,
             a_credito = EXCLUDED.a_credito,
             tarifa_sistema = EXCLUDED.tarifa_sistema,
@@ -463,13 +482,15 @@ def sincronizar_supabase_tudo(df_master):
             lote_base.append({
                 "bilhete": b_val,
                 "localizador": clean_str_strict(r.get("Localizador_Sistema")),
-                "rloc_cia": clean_str_strict(r.get("Rloc_Cia")),
+                "rloc_cia": clean_str_strict(r.get("Rloc_Cia") or r.get("Rloc_CIA")),
                 "cia": clean_str_strict(r.get("CIA")),
                 "fornecedor_sistema": clean_str_strict(r.get("Fornecedor_Sistema")),
                 "status_cia": clean_str_strict(r.get("Status_Cia")),
                 "status_sistema": clean_str_strict(r.get("Status_Sistema")),
                 "data_emissao": clean_str_strict(r.get("Data Emissão")),
                 "pagto": clean_str_strict(r.get("Pagto")),
+                "sv": clean_str_strict(r.get("SV")),
+                "fop": clean_str_strict(r.get("FOP")),
                 "a_vista": clean_num(r.get("A vista")),
                 "a_credito": clean_num(r.get("A credito")),
                 "tarifa_sistema": clean_num(r.get("Tarifa_Sistema")),
@@ -514,7 +535,7 @@ def sincronizar_supabase_tudo(df_master):
                 chunk = lote_base[i:i + tam_lote]
                 with engine_sb.begin() as conn:
                     conn.execute(upsert_base_sql, chunk)
-            print(f"☁️ {len(lote_base)} registos sincronizados na 'tb_conciliacao_base' do Supabase!")
+            print(f"☁️ {len(lote_base)} registros sincronizados na 'tb_conciliacao_base' do Supabase!")
         except Exception as e:
             print(f"⚠️ Erro ao sincronizar lote na 'tb_conciliacao_base': {e}")
 
@@ -549,14 +570,19 @@ def executar_auditoria():
                     "Gerente_Responsavel": clean_str_strict(r.get(col_gerente)),
                 }
 
-    print("\n[2/5] Indexando Extrato OBT Lemontech...")
+    print("\n[2/5] Indexando Extrato OBT Lemontech (Lendo SV e dados do cliente)...")
     caminho_lemon = encontrar_arquivo(["Extrato_Bilhetes_lemontech.xlsx", "Extrato_Bilhetes_lemontech.XLSX"])
     lemon_index = {}
     if caminho_lemon:
         df_lemon = pd.read_excel(caminho_lemon, engine="openpyxl")
         for idx, r in tqdm(df_lemon.iterrows(), total=len(df_lemon), desc="Indexando Lemontech", unit="reg"):
             cc_desc = f"{clean_str_strict(r.get('Centro de Custo'))} - {clean_str_strict(r.get('Descrição Centro de Custo'))}".strip(" -")
+            
+            # CAPTURA DO CAMPO SV (Solicitação no relatório Lemontech)
+            sv_lemon = clean_str_strict(r.get("Solicitação") or r.get("Solicitacao") or r.get("Nº Pedido"))
+            
             info_lemon = {
+                "Lemon_SV": sv_lemon if sv_lemon else "-",
                 "Lemon_Solicitante": clean_str_strict(r.get("Solicitante")) or "-",
                 "Lemon_Passageiro": clean_str_strict(r.get("Passageiro")) or "-",
                 "Lemon_Consultor": clean_str_strict(r.get("Consultor")) or "-",
@@ -575,7 +601,7 @@ def executar_auditoria():
                     if k not in lemon_index:
                         lemon_index[k] = info_lemon
 
-    print("\n[3/5] Indexando ERP Benner com suporte a Data de Emissão...")
+    print("\n[3/5] Indexando ERP Benner (Lendo FOP e Cliente oficial)...")
     if os.path.exists("Acumulado.parquet"):
         df_benner = pd.read_parquet("Acumulado.parquet")
     else:
@@ -592,6 +618,12 @@ def executar_auditoria():
             rloc_cia_val = clean_str_strict(r.get("Rloc Cia") or r.get("Rloc CIA") or r.get("Código Rloc") or r.get("Localizador")) or "-"
             dt_benner_raw = clean_str_strict(r.get("Data Emissão") or r.get("Data") or r.get("Data Emissao") or "")
             
+            # CAPTURA DO CAMPO FOP (Forma de Recebimento no Acumulado.xlsx)
+            fop_benner = clean_str_strict(r.get("Forma de Recebimento") or r.get("Bandeira") or r.get("Forma de Pagamento")) or "-"
+            
+            # CAPTURA DO CAMPO CLIENTE (Cliente / Apelido Cliente no Acumulado.xlsx)
+            cliente_benner = clean_str_strict(r.get("Cliente") or r.get("Apelido Cliente")) or "-"
+            
             info = {
                 "Benner_Index": idx,
                 "Benner_Situação": clean_str_strict(r.get("Situação")) or "ATIVO",
@@ -602,7 +634,8 @@ def executar_auditoria():
                 "Benner_Tarifa": clean_num(r.get("Tarifa")),
                 "Benner_Taxas": clean_num(r.get("Taxas")) + clean_num(r.get("Taxa BR")),
                 "Benner_Receita": clean_num(r.get("Comissão")) + clean_num(r.get("Taxa DU")) + clean_num(r.get("Incentivo")) + clean_num(r.get("Fee")) + clean_num(r.get("RAV")),
-                "Benner_Cliente": clean_str_strict(r.get("Cliente") or r.get("Apelido Cliente")) or "-",
+                "Benner_Cliente": cliente_benner,
+                "Benner_FOP": fop_benner,
                 "Benner_Emissor": clean_str_strict(r.get("Emissor") or r.get("Agente Criação")) or "-",
                 "Benner_Passageiro": clean_str_strict(r.get("Passageiro")) or "-",
                 "Benner_Sistema_Reserva": clean_str_strict(r.get("Sistema Reserva")) or "-",
@@ -795,6 +828,26 @@ def executar_auditoria():
                 receita_emitida = comissao + taxa_du + incentivo
                 vl_liquido = get_val_dinamico(["VL. Líquido", "VL. LÍQUIDO", "VL. Liquido"])
                 
+                # DEFINIÇÃO DOS NOVOS CAMPOS EXCLUSIVOS
+                sv_final = l_match["Lemon_SV"] if l_match and l_match.get("Lemon_SV") != "-" else (hist_data.get("SV") or "-")
+                
+                if b_match and b_match.get("Benner_FOP") and b_match["Benner_FOP"] != "-":
+                    fop_final = b_match["Benner_FOP"]
+                elif l_match and l_match.get("Lemon_Forma_Pagto") and l_match["Lemon_Forma_Pagto"] != "-":
+                    fop_final = l_match["Lemon_Forma_Pagto"]
+                elif pagto and pagto != "-":
+                    fop_final = pagto
+                else:
+                    fop_final = hist_data.get("FOP") or "-"
+                
+                # CLIENTE OFICIAL
+                if b_match and b_match.get("Benner_Cliente") and b_match["Benner_Cliente"] != "-":
+                    cliente_final = b_match["Benner_Cliente"]
+                elif l_match and l_match.get("Lemon_Solicitante") and l_match["Lemon_Solicitante"] != "-":
+                    cliente_final = l_match["Lemon_Solicitante"]
+                else:
+                    cliente_final = ponto_venda_final
+                
                 if b_match:
                     status_sistema = b_match["Benner_Situação"]
                     fornec_sistema = b_match["Benner_Fornecedor"]
@@ -803,7 +856,6 @@ def executar_auditoria():
                     tarifa_sistema = b_match["Benner_Tarifa"]
                     taxa_sistema = b_match["Benner_Taxas"]
                     receita_sistema = b_match["Benner_Receita"]
-                    cliente_sistema = b_match["Benner_Cliente"]
                     emissor_sistema = b_match["Benner_Emissor"]
                     sist_reserva = b_match["Benner_Sistema_Reserva"]
                     sigla_cia = col1.strip().upper()
@@ -849,7 +901,6 @@ def executar_auditoria():
                         else "-"
                     )
                     tarifa_sistema, taxa_sistema, receita_sistema = 0.0, 0.0, 0.0
-                    cliente_sistema = ponto_venda_final
                     emissor_sistema, sist_reserva = "-", "-"
                     status_cia = "Pendente"
                     dif_tarifa, dif_taxa, dif_receita = tarifa_emitida, taxa_emitida, receita_emitida
@@ -862,6 +913,8 @@ def executar_auditoria():
                 rec = {
                     "Ponto de venda": ponto_venda_final,
                     "Código Iata": iata_final,
+                    "SV": sv_final,
+                    "FOP": fop_final,
                     "Gerentes": gerente_resp,
                     "CIA": col1,
                     "Fornecedor_Sistema": fornec_sistema,
@@ -869,6 +922,7 @@ def executar_auditoria():
                     "Bilhetes": clean_str_strict(bilhete_chave),
                     "Localizador_Sistema": clean_str_strict(loc_sistema),
                     "Rloc_Cia": clean_str_strict(rloc_cia_sistema),
+                    "Rloc_CIA": clean_str_strict(rloc_cia_sistema),
                     "Status_Sistema": status_sistema,
                     "Data Emissão": dt_emissao,
                     "Pagto": pagto,
@@ -893,7 +947,7 @@ def executar_auditoria():
                     "Obs. Operação": obs_op,
                     "Emissor": emissor_sistema if b_match else (l_match["Lemon_Emissor_Reserva"] if l_match else "-"),
                     "Sistema Reserva": sist_reserva if b_match else (l_match["Lemon_Source"] if l_match else "-"),
-                    "Cliente": cliente_sistema,
+                    "Cliente": cliente_final,
                     "Setor": setor_final,
                     "Aba_Destino": aba_destino,
                     "Fonte_Relatorio": fonte_rel,
@@ -932,7 +986,7 @@ def executar_auditoria():
             df_log_acumulado.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
 
     salvar_csv_atomico(
-        df_master[["Bilhetes", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Ponto de venda", "Código Iata"]].drop_duplicates(subset=["Bilhetes"]),
+        df_master[["Bilhetes", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Ponto de venda", "Código Iata", "SV", "FOP", "Rloc_Cia"]].drop_duplicates(subset=["Bilhetes"]),
         "Historico_Tratativas.csv"
     )
 
