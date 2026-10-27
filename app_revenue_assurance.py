@@ -75,7 +75,7 @@ def consolidar_emissor_consultor(row):
                 elementos.append(val_clean)
     return " / ".join(elementos) if elementos else "-"
 
-# Injeção de CSS
+# Injeção de CSS com Design Premium para st.tabs e Interface C-Level
 st.markdown(
     """
     <style>
@@ -105,6 +105,41 @@ st.markdown(
             display: inline-block;
             margin-right: 6px;
             margin-top: 8px;
+        }
+
+        /* ESTILIZAÇÃO CUSTOMIZADA DE ALTO PADRÃO PARA AS ABAS (ST.TABS) */
+        div[data-baseweb="tab-list"] {
+            gap: 8px;
+            background-color: #f1f5f9;
+            padding: 8px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+        button[data-baseweb="tab"] {
+            height: 40px;
+            border-radius: 8px !important;
+            padding: 8px 16px !important;
+            background-color: transparent !important;
+            color: #334155 !important;
+            font-weight: 600 !important;
+            font-size: 13px !important;
+            border: 1px solid transparent !important;
+            transition: all 0.2s ease-in-out !important;
+        }
+        button[data-baseweb="tab"]:hover {
+            background-color: #e2e8f0 !important;
+            color: #002060 !important;
+        }
+        button[data-baseweb="tab"][aria-selected="true"] {
+            background-color: #002060 !important;
+            color: #ffffff !important;
+            border-radius: 8px !important;
+            box-shadow: 0 4px 12px rgba(0, 32, 96, 0.25) !important;
+        }
+        div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {
+            display: none !important;
         }
 
         .section-banner {
@@ -148,7 +183,7 @@ st.markdown(
 )
 
 # ==============================================================================
-# 2. CONEXÃO COM SUPABASE & MIGRAÇÃO AUTOMÁTICA DE ESQUEMA
+# 2. CONEXÃO COM BANCO DE DADOS & MIGRAÇÃO AUTOMÁTICA DE ESQUEMA
 # ==============================================================================
 def sanitizar_bilhete(val):
     if pd.isna(val) or val is None: return ""
@@ -165,7 +200,6 @@ def get_db_engine():
                 db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
             engine = create_engine(db_url, pool_pre_ping=True)
             
-            # Auto-Migração do Esquema
             try:
                 with engine.begin() as conn:
                     conn.execute(text("""
@@ -508,7 +542,6 @@ def padronizar_df(df):
             "matriz", "filial", "subsidiaria", "subsidiária", "agencia", "agência"
         ]
         
-        # Se for idêntico ao ponto de venda ou contiver palavras-chave de filial/agência interna
         if (pv and cli_low == pv) or any(t in cli_low for t in termos_filial):
             return ""
             
@@ -722,7 +755,7 @@ df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_
 df_todos_unificados = pd.concat([df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
 st.sidebar.title("Grupo Arbaitman")
-st.sidebar.caption("Conciliação Aérea FP&A v4.6")
+st.sidebar.caption("Conciliação Aérea FP&A v4.7")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 
 col_sb1, col_sb2 = st.sidebar.columns(2)
@@ -781,7 +814,6 @@ st.markdown(
             <span class='fonte-pill'>🤖 OBT Lemontech (Extrato)</span>
             <span class='fonte-pill'>✈️ Cias Aéreas (AZUL, GOL, BSP, HOT)</span>
             <span class='fonte-pill'>🌐 GDS Sabre</span>
-            <span class='fonte-pill'>☁️ Supabase PostgreSQL</span>
         </div>
     </div>
     """,
@@ -956,7 +988,7 @@ with aba_sel[0]:
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
-# MÓDULO REUTILIZÁVEL DE TABELAS
+# MÓDULO REUTILIZÁVEL DE TABELAS (COM AUTO-PREENCHIMENTO)
 # ------------------------------------------------------------------------------
 def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
     if df_tab.empty:
@@ -990,24 +1022,40 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
     
     if bilhet_sel:
         df_sel = df_exib[df_exib["Bilhetes"].isin(bilhet_sel)]
-        st.info(f"🎯 **{len(df_sel)} bilhete(s) selecionado(s)** para atualização no Supabase.")
+        st.info(f"🎯 **{len(df_sel)} bilhete(s) selecionado(s)** para atualização de tratativa.")
+        
+        # PREENCHIMENTO AUTOMÁTICO DOS DADOS EXISTENTES (AUTO-FILL)
+        primeira_linha = df_sel.iloc[0]
+        
+        opts_st = [
+            "Já Lançado no ERP", "Emitido e Lançado", "Pendente de Lançamento (Não Consta)",
+            "Erro de Integração Concur", "Em Análise Backoffice", "Divergência de Tarifa", "Divergência de Taxa", "Cancelado / Reembolsado"
+        ]
+        st_atual = str(primeira_linha.get("Status_Geral", "")).strip()
+        idx_st = opts_st.index(st_atual) if st_atual in opts_st else 2
+        
+        opts_g = sorted(list(set(DEPARA_GERENTES.values())))
+        ar_atual = padronizar_nome_gerente(primeira_linha.get("Área Resp. Operação", primeira_linha.get("Gerentes", "")))
+        idx_g = opts_g.index(ar_atual) if ar_atual in opts_g else 0
+        
+        rloc_atual = str(primeira_linha.get("Rloc_CIA", "")).strip()
+        if rloc_atual in ["-", "None", "nan", "null"]: rloc_atual = ""
+        
+        obs_atual = str(primeira_linha.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
+        if obs_atual in ["-", "None", "nan", "null"]: obs_atual = ""
         
         with st.form(f"form_{key_pfx}"):
             c1, c2, c3 = st.columns(3)
             with c1:
-                st_novo = st.selectbox("Novo Status:", [
-                    "Já Lançado no ERP", "Emitido e Lançado", "Pendente de Lançamento (Não Consta)",
-                    "Erro de Integração Concur", "Em Análise Backoffice", "Divergência de Tarifa", "Divergência de Taxa", "Cancelado / Reembolsado"
-                ], key=f"st_{key_pfx}")
+                st_novo = st.selectbox("Novo Status:", opts_st, index=idx_st, key=f"st_{key_pfx}")
             with c2:
-                opts_g = sorted(list(set(DEPARA_GERENTES.values())))
-                ar_nova = st.selectbox("Nova Área Responsável / Gerente:", opts_g, key=f"ar_{key_pfx}")
+                ar_nova = st.selectbox("Nova Área Responsável / Gerente:", opts_g, index=idx_g, key=f"ar_{key_pfx}")
             with c3:
-                rloc_novo = st.text_input("Novo Rloc_CIA (Opcional):", key=f"rloc_{key_pfx}")
+                rloc_novo = st.text_input("Novo Rloc_CIA (Opcional):", value=rloc_atual, key=f"rloc_{key_pfx}")
                 
-            obs_nova = st.text_area("Observação / Justificativa Detalhada:", key=f"obs_{key_pfx}")
+            obs_nova = st.text_area("Observação / Justificativa Detalhada:", value=obs_atual, key=f"obs_{key_pfx}")
             
-            if st.form_submit_button("💾 Salvar Tratativa no Supabase"):
+            if st.form_submit_button("💾 Salvar Tratativa"):
                 usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
                 n_items = len(df_sel)
                 
@@ -1087,7 +1135,7 @@ if e_master():
             st.dataframe(df_usr[["Usuário", "Nome", "Perfil", "Status"]], use_container_width=True, hide_index=True)
 
     with aba_sel[9]:
-        st.subheader("📜 Log de Histórico Supabase")
+        st.subheader("📜 Log de Histórico de Alterações")
         engine_sb = get_db_engine()
         if engine_sb:
             try:
@@ -1097,7 +1145,7 @@ if e_master():
 
     with aba_sel[10]:
         st.subheader("📥 Carga de Retornos de Cobrança em Lote Avançada")
-        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização massiva no Supabase.")
+        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização massiva no banco de dados.")
         
         arq_up = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "csv"], key="upl_lote_adv")
         
@@ -1107,12 +1155,12 @@ if e_master():
                 st.success(f"📂 **Arquivo carregado:** `{arq_up.name}` | Total de **{len(df_lote_raw):,} linhas** encontradas.")
                 st.dataframe(df_lote_raw.head(10), use_container_width=True, hide_index=True)
                 
-                if st.button("🚀 Confirmar e Processar Lote no Supabase", type="primary"):
+                if st.button("🚀 Confirmar e Processar Lote", type="primary"):
                     progress_bar = st.progress(0, text="Iniciando leitura e validação dos bilhetes...")
                     
                     for idx in range(1, 101, 20):
                         time.sleep(0.08)
-                        progress_bar.progress(idx, text=f"Sincronizando registros com o Supabase... ({idx}%)")
+                        progress_bar.progress(idx, text=f"Sincronizando registros com a base de dados... ({idx}%)")
                         
                     usr_str = f"CargaLote_{st.session_state['usuario_atual']}"
                     ok, msg, n_at, n_nv, n_err = salvar_tratativas_lote_supabase(df_lote_raw, usr_str)
