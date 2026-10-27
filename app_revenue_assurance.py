@@ -14,10 +14,10 @@ import streamlit as st
 from sqlalchemy import create_engine, text
 
 # ==============================================================================
-# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS EXECUTIVOS
+# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS RECOMPACTADOS (CABEÇALHO E BOTÕES)
 # ==============================================================================
 st.set_page_config(
-    page_title="Grupo Arbaitman | Portal de Conciliação Aérea & Bilhetes Pendentes",
+    page_title="Grupo Arbaitman | Portal de Conciliação Aérea FP&A",
     page_icon="✈️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -26,31 +26,14 @@ st.set_page_config(
 ARQUIVO_DASHBOARD_PADRAO = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 
 DEPARA_CIAS = {
-    "G3": "GOL (G3)",
-    "AD": "AZUL (AD)",
-    "LA": "LATAM (LA)",
-    "JJ": "LATAM (JJ)",
-    "TP": "TAP Portugal (TP)",
-    "AA": "American Airlines (AA)",
-    "AF": "Air France (AF)",
-    "KL": "KLM (KL)",
-    "LH": "Lufthansa (LH)",
-    "UA": "United Airlines (UA)",
-    "DL": "Delta Air Lines (DL)",
-    "AM": "Aeromexico (AM)",
-    "AV": "Avianca (AV)",
-    "AR": "Aerolíneas Argentinas (AR)",
-    "CM": "Copa Airlines (CM)",
-    "IB": "Iberia (IB)",
-    "EK": "Emirates (EK)",
-    "QR": "Qatar Airways (QR)",
-    "LX": "Swiss Air (LX)",
-    "AZ": "ITA Airways (AZ)",
-    "AC": "Air Canada (AC)",
-    "SA": "South African (SA)",
-    "OB": "Boliviana de Aviación (OB)",
-    "HR": "Hahn Air (HR)",
-    "15": "15 - Outras CIAs"
+    "G3": "GOL (G3)", "AD": "AZUL (AD)", "LA": "LATAM (LA)", "JJ": "LATAM (JJ)",
+    "TP": "TAP Portugal (TP)", "AA": "American Airlines (AA)", "AF": "Air France (AF)",
+    "KL": "KLM (KL)", "LH": "Lufthansa (LH)", "UA": "United Airlines (UA)",
+    "DL": "Delta Air Lines (DL)", "AM": "Aeromexico (AM)", "AV": "Avianca (AV)",
+    "AR": "Aerolíneas Argentinas (AR)", "CM": "Copa Airlines (CM)", "IB": "Iberia (IB)",
+    "EK": "Emirates (EK)", "QR": "Qatar Airways (QR)", "LX": "Swiss Air (LX)",
+    "AZ": "ITA Airways (AZ)", "AC": "Air Canada (AC)", "SA": "South African (SA)",
+    "OB": "Boliviana de Aviación (OB)", "HR": "Hahn Air (HR)", "15": "15 - Outras CIAs"
 }
 
 st.markdown(
@@ -58,114 +41,115 @@ st.markdown(
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
-        .stApp { background-color: #f4f6f9; }
+        .stApp { background-color: #f8fafc; }
         
-        .main-header {
-            background: linear-gradient(135deg, #001e4d 0%, #003366 50%, #004080 100%);
-            padding: 24px 32px;
-            border-radius: 14px;
-            color: white;
-            margin-bottom: 24px;
-            box-shadow: 0 10px 25px -5px rgba(0, 32, 96, 0.25);
+        /* Redução de Padding da Página */
+        .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 1rem !important;
+            max-width: 98% !important;
         }
-        .main-header h1 { color: #ffffff !important; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
-        .main-header p { color: #b3d1ff !important; margin: 6px 0 0 0; font-size: 14px; font-weight: 400; }
         
-        .datasource-badge {
-            background-color: #ffffff;
-            border: 1px solid #cbd5e1;
-            border-left: 5px solid #002060;
-            border-radius: 10px;
-            padding: 12px 18px;
-            margin-bottom: 20px;
+        /* Cabeçalho Compacto C-Level */
+        .main-header {
+            background: linear-gradient(135deg, #001e4d 0%, #003366 100%);
+            padding: 14px 24px !important;
+            border-radius: 8px;
+            color: white;
+            margin-bottom: 12px !important;
+            box-shadow: 0 4px 14px rgba(0, 32, 96, 0.15);
             display: flex;
             align-items: center;
             justify-content: space-between;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
         }
-        .datasource-badge .title { font-weight: 700; color: #002060; font-size: 13px; }
-        .datasource-badge .info { font-size: 12px; color: #475569; }
+        .main-header h1 { 
+            color: #ffffff !important; 
+            margin: 0; 
+            font-size: 20px !important; 
+            font-weight: 700; 
+            letter-spacing: -0.3px;
+        }
+        .main-header p { 
+            color: #93c5fd !important; 
+            margin: 2px 0 0 0; 
+            font-size: 12px !important; 
+        }
+        
+        /* Badge Fontes de Dados Compacto */
+        .datasource-badge {
+            background-color: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-left: 4px solid #002060;
+            border-radius: 6px;
+            padding: 8px 14px !important;
+            margin-bottom: 12px !important;
+            font-size: 12px !important;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.02);
+        }
+        
+        /* Banners das Abas Operacionais */
         .section-banner {
             background: #ffffff;
-            border-left: 6px solid #002060;
-            padding: 16px 24px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            border-left: 4px solid #002060;
+            padding: 8px 14px !important;
+            border-radius: 6px;
+            margin-bottom: 12px !important;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.02);
         }
-        .section-banner h3 { margin: 0; color: #002060; font-size: 19px; font-weight: 700; }
-        .section-banner p { margin: 4px 0 0 0; color: #64748b; font-size: 13px; }
-        .chart-card {
-            background-color: #ffffff;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.05);
-            border: 1px solid #e2e8f0;
-            margin-bottom: 20px;
-        }
-        .chart-card h5 {
-            color: #002060;
-            font-weight: 700;
-            font-size: 16px;
-            margin-top: 0;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        div[data-testid="stDataFrame"] {
-            background-color: #ffffff;
-            border-radius: 12px !important;
-            padding: 8px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-            border: 1px solid #cbd5e1;
-        }
-        div[data-testid="stDataFrame"] iframe {
-            border-radius: 10px;
-        }
-        .dgrid-header, [data-testid="stDataFrame"] th, div[role="columnheader"] {
-            background-color: #002060 !important;
-            color: #ffffff !important;
-            font-weight: 700 !important;
-            font-size: 13px !important;
-            letter-spacing: 0.3px !important;
-            text-transform: uppercase !important;
-            border-bottom: 3px solid #001030 !important;
-        }
+        .section-banner h3 { margin: 0; color: #002060; font-size: 15px !important; font-weight: 700; }
+        .section-banner p { margin: 2px 0 0 0; color: #64748b; font-size: 11px !important; }
+        
+        /* Métricas Compactas */
         div[data-testid="stMetric"] {
             background: #ffffff;
-            border-radius: 10px;
-            padding: 16px;
-            border-top: 4px solid #002060;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border-radius: 8px;
+            padding: 10px 14px !important;
+            border-top: 3px solid #002060;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
-        div[data-testid="stMetric"]:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-        }
+        div[data-testid="stMetricLabel"] { font-size: 11px !important; color: #64748b; font-weight: 500; }
+        div[data-testid="stMetricValue"] { font-size: 20px !important; font-weight: 700; color: #002060; }
+        
+        /* Botões Principais */
         div.stButton > button {
             background: linear-gradient(135deg, #002060 0%, #003366 100%) !important;
             color: #ffffff !important;
             border: none !important;
-            border-radius: 8px !important;
+            border-radius: 6px !important;
             font-weight: 600 !important;
-            padding: 8px 18px !important;
-            box-shadow: 0 4px 10px rgba(0,32,96,0.2) !important;
+            font-size: 12px !important;
+            padding: 6px 16px !important;
+            box-shadow: 0 2px 6px rgba(0,32,96,0.15) !important;
             transition: all 0.2s ease-in-out !important;
         }
         div.stButton > button:hover {
             background: linear-gradient(135deg, #003366 0%, #004080 100%) !important;
-            box-shadow: 0 6px 14px rgba(0,32,96,0.3) !important;
+            box-shadow: 0 4px 10px rgba(0,32,96,0.25) !important;
             transform: translateY(-1px);
         }
-        .highlight-card {
-            background: #f0f7ff;
-            border: 1px solid #bae0ff;
-            border-left: 6px solid #0050b3;
-            border-radius: 10px;
-            padding: 18px;
-            margin-bottom: 20px;
+        
+        /* Botões de Download */
+        div[data-testid="stDownloadButton"] > button {
+            background: #ffffff !important;
+            color: #002060 !important;
+            border: 1px solid #002060 !important;
+            border-radius: 6px !important;
+            font-weight: 600 !important;
+            font-size: 12px !important;
+            padding: 6px 14px !important;
+        }
+        div[data-testid="stDownloadButton"] > button:hover {
+            background: #f1f5f9 !important;
+            color: #001030 !important;
+        }
+
+        /* Tabela Dataframe */
+        div[data-testid="stDataFrame"] {
+            background-color: #ffffff;
+            border-radius: 8px !important;
+            padding: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            border: 1px solid #cbd5e1;
         }
     </style>
 """,
@@ -173,16 +157,8 @@ st.markdown(
 )
 
 # ==============================================================================
-# 2. FUNÇÃO DE SANITIZAÇÃO E CONEXÃO COM SUPABASE
+# 2. CONEXÃO DIRETA COM SUPABASE & CACHE AUTOMÁTICO
 # ==============================================================================
-def sanitizar_bilhete(val):
-    if pd.isna(val) or val is None:
-        return ""
-    s = str(val).strip()
-    s = re.sub(r"[\[\]]", "", s)
-    s = re.sub(r"\.0$", "", s)
-    return s.strip()
-
 def get_db_engine():
     try:
         if "postgres" in st.secrets and "url" in st.secrets["postgres"]:
@@ -191,8 +167,33 @@ def get_db_engine():
                 db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
             return create_engine(db_url, pool_pre_ping=True)
     except Exception as e:
-        st.error(f"Erro na ligação ao banco de dados: {e}")
+        st.error(f"Erro na ligação ao banco de dados Supabase: {e}")
     return None
+
+def sanitizar_bilhete(val):
+    if pd.isna(val) or val is None:
+        return ""
+    s = str(val).strip()
+    s = re.sub(r"[\[\]]", "", s)
+    s = re.sub(r"\.0$", "", s)
+    return s.strip()
+
+@st.cache_data(ttl=180, show_spinner="Carregando base unificada do Supabase...")
+def carregar_dados_supabase_direto():
+    engine = get_db_engine()
+    if not engine:
+        return pd.DataFrame()
+    
+    query = "SELECT * FROM vw_conciliacao_mestra;"
+    try:
+        df = pd.read_sql(query, engine)
+        if not df.empty and "Bilhetes" in df.columns:
+            df["Bilhete_Clean"] = df["Bilhetes"].apply(sanitizar_bilhete)
+            df = df.drop_duplicates("Bilhete_Clean", keep="first").reset_index(drop=True)
+        return df
+    except Exception as e:
+        st.warning(f"⚠️ Não foi possível ler a visão 'vw_conciliacao_mestra': {e}")
+        return pd.DataFrame()
 
 def carregar_tratativas_db():
     engine = get_db_engine()
@@ -212,18 +213,18 @@ def carregar_tratativas_db():
             df_db.drop(columns=["bilhete_clean"], inplace=True, errors="ignore")
         return df_db
     except Exception as e:
-        st.error(f"⚠️ Erro ao consultar a tabela 'tratativas' no Supabase: {e}")
         return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "data_modificacao"])
 
 def salvar_tratativas_lote_supabase(df_lote, usuario):
     engine = get_db_engine()
     if not engine or df_lote.empty:
-        return False, "Conexão com a base de dados indisponível.", 0, 0, 0
+        return False, "Conexão com o Supabase indisponível.", 0, 0, 0
+    
     df_existentes = carregar_tratativas_db()
     set_existentes = set(df_existentes["bilhete"].apply(sanitizar_bilhete).tolist()) if not df_existentes.empty else set()
+    
     dados_lote = []
-    qtd_atualizados = 0
-    qtd_novos = 0
+    qtd_atualizados, qtd_novos = 0, 0
     for _, r in df_lote.iterrows():
         b_clean = sanitizar_bilhete(r.get("Bilhetes", r.get("bilhete", "")))
         if b_clean and b_clean.lower() not in ["nan", "none", "", "-"]:
@@ -239,10 +240,12 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 ar_val = "Operação"
             if gerente_val in ["-", "", "None", "nan"]:
                 gerente_val = ar_val
+                
             if b_clean in set_existentes:
                 qtd_atualizados += 1
             else:
                 qtd_novos += 1
+                
             dados_lote.append({
                 "bilhete": b_clean,
                 "status_geral": st_val,
@@ -252,8 +255,10 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
                 "gerentes": gerente_val,
                 "usuario": str(usuario)
             })
+            
     if not dados_lote:
         return False, "Nenhum bilhete válido para atualização.", 0, 0, 0
+        
     sql_upsert = text("""
         INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
         VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :usuario, NOW())
@@ -270,7 +275,7 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
         with engine.begin() as conn:
             conn.execute(sql_upsert, dados_lote)
         st.cache_data.clear()
-        msg = f"✅ Sincronização rápida concluída! {qtd_atualizados} bilhete(s) atualizado(s) e {qtd_novos} novo(s) inserido(s)."
+        msg = f"✅ Sincronização concluída! {qtd_atualizados} atualizado(s) e {qtd_novos} novo(s) inserido(s) no Supabase."
         return True, msg, qtd_atualizados, qtd_novos, 0
     except Exception as e:
         return False, f"Erro ao salvar tratativas: {e}", 0, 0, len(dados_lote)
@@ -281,38 +286,18 @@ def registrar_log_supabase(logs_list):
         return
     df_logs = pd.DataFrame(logs_list)
     df_logs.rename(columns={
-        "Data_Hora": "data_hora",
-        "Bilhete": "bilhete",
-        "Usuario_Acao": "usuario_acao",
-        "Status_Anterior": "status_anterior",
-        "Novo_Status": "novo_status",
-        "Area_Anterior": "area_anterior",
-        "Nova_Area": "nova_area",
-        "Observacao": "observacao",
-        "Tipo_Interacao": "tipo_interacao"
+        "Data_Hora": "data_hora", "Bilhete": "bilhete", "Usuario_Acao": "usuario_action",
+        "Status_Anterior": "status_anterior", "Novo_Status": "novo_status",
+        "Area_Anterior": "area_anterior", "Nova_Area": "nova_area",
+        "Observacao": "observacao", "Tipo_Interacao": "tipo_interacao"
     }, inplace=False)
     try:
-        with engine.begin() as conn:
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS log_auditoria (
-                    id SERIAL PRIMARY KEY,
-                    data_hora TIMESTAMP,
-                    bilhete VARCHAR(255),
-                    usuario_acao VARCHAR(255),
-                    status_anterior VARCHAR(255),
-                    novo_status VARCHAR(255),
-                    area_anterior VARCHAR(255),
-                    nova_area VARCHAR(255),
-                    observacao TEXT,
-                    tipo_interacao VARCHAR(255)
-                );
-            """))
         df_logs.to_sql("log_auditoria", engine, if_exists="append", index=False)
     except Exception:
         pass
 
 # ==============================================================================
-# 3. GESTÃO DE USUÁRIOS
+# 3. GESTÃO DE USUÁRIOS & AUTENTICAÇÃO
 # ==============================================================================
 def carregar_usuarios_supabase():
     dict_u = {}
@@ -326,16 +311,14 @@ def carregar_usuarios_supabase():
                         "nome": str(v.get("nome", "")).strip(),
                         "perfil": str(v.get("perfil", "Operacao")).strip(),
                         "status": str(v.get("status", "APROVADO")).strip().upper(),
-                        "data_solicitacao": str(v.get("data_solicitacao", ""))
                     }
         except Exception:
             pass
             
     engine = get_db_engine()
     if engine:
-        query = "SELECT usuario, senha, nome, perfil, status, data_solicitacao FROM usuarios"
         try:
-            df_u = pd.read_sql(query, engine)
+            df_u = pd.read_sql("SELECT usuario, senha, nome, perfil, status FROM usuarios", engine)
             for _, row in df_u.iterrows():
                 u_key = str(row["usuario"]).strip().lower()
                 dict_u[u_key] = {
@@ -343,26 +326,20 @@ def carregar_usuarios_supabase():
                     "nome": str(row["nome"]).strip(),
                     "perfil": str(row["perfil"]).strip(),
                     "status": str(row["status"]).strip().upper(),
-                    "data_solicitacao": str(row["data_solicitacao"])
                 }
         except Exception:
             pass
-            
     return dict_u
 
 def salvar_usuario_supabase(u_id, senha, nome, perfil, status="PENDENTE"):
     engine = get_db_engine()
     if not engine:
         return False, "Conexão com a base de dados indisponível."
-    
     sql = text("""
         INSERT INTO usuarios (usuario, senha, nome, perfil, status, data_solicitacao)
         VALUES (:u, :p, :n, :perf, :st, CURRENT_DATE)
         ON CONFLICT (usuario) DO UPDATE SET
-            senha = EXCLUDED.senha,
-            nome = EXCLUDED.nome,
-            perfil = EXCLUDED.perfil,
-            status = EXCLUDED.status;
+            senha = EXCLUDED.senha, nome = EXCLUDED.nome, perfil = EXCLUDED.perfil, status = EXCLUDED.status;
     """)
     try:
         with engine.begin() as conn:
@@ -370,32 +347,6 @@ def salvar_usuario_supabase(u_id, senha, nome, perfil, status="PENDENTE"):
         return True, "Operação realizada com sucesso."
     except Exception as e:
         return False, f"Erro no banco: {e}"
-
-def atualizar_senha_supabase(u_id, nova_senha):
-    engine = get_db_engine()
-    if not engine:
-        return False, "Conexão com a base de dados indisponível."
-    
-    sql = text("UPDATE usuarios SET senha = :p WHERE usuario = :u;")
-    try:
-        with engine.begin() as conn:
-            conn.execute(sql, {"u": u_id, "p": nova_senha})
-        return True, "Senha redefinida com sucesso."
-    except Exception as e:
-        return False, f"Erro no banco: {e}"
-
-def atualizar_status_usuario_supabase(u_id, novo_status):
-    engine = get_db_engine()
-    if not engine:
-        return False
-    
-    sql = text("UPDATE usuarios SET status = :st WHERE usuario = :u;")
-    try:
-        with engine.begin() as conn:
-            conn.execute(sql, {"u": u_id, "st": novo_status})
-        return True
-    except Exception:
-        return False
 
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
@@ -417,21 +368,20 @@ if not st.session_state["autenticado"]:
         st.markdown(
             """
             <div class='main-header'>
-                <h1>✈️ Grupo Arbaitman</h1>
-                <p>Portal de Conciliação Aérea & Gestão de Bilhetes Pendentes (FP&A)</p>
+                <div>
+                    <h1>✈️ Grupo Arbaitman</h1>
+                    <p>Portal de Conciliação Aérea & Gestão de Bilhetes Pendentes (FP&A)</p>
+                </div>
             </div>
             """,
             unsafe_allow_html=True
         )
-        tab_log, tab_pwd, tab_req = st.tabs(["🔐 Entrar", "🔑 Esqueci a Senha", "📝 Solicitar Acesso"])
-        
+        tab_log, tab_req = st.tabs(["🔐 Entrar no Portal", "📝 Solicitar Acesso"])
         with tab_log:
             u_input = st.text_input("Usuário:", key="l_user").strip().lower()
             p_input = str(st.text_input("Senha:", type="password", key="l_pass")).strip()
-            
             if st.button("Acessar Portal", type="primary"):
                 usuarios_db = carregar_usuarios_supabase()
-                
                 if u_input in usuarios_db and usuarios_db[u_input]["senha"] == p_input:
                     if usuarios_db[u_input].get("status") == "APROVADO":
                         st.session_state["autenticado"] = True
@@ -447,82 +397,24 @@ if not st.session_state["autenticado"]:
                     st.session_state["perfil_atual"] = "Master"
                     st.session_state["login_user_id"] = "mribeiro"
                     st.rerun()
-                elif u_input in ["fellipe", "ffernandes"] and p_input == "123":
-                    st.session_state["autenticado"] = True
-                    st.session_state["usuario_atual"] = "Fellipe Fernandes"
-                    st.session_state["perfil_atual"] = "Master"
-                    st.session_state["login_user_id"] = u_input
-                    st.rerun()
-                elif u_input == "compliance1" and p_input == "123":
-                    st.session_state["autenticado"] = True
-                    st.session_state["usuario_atual"] = "Compliance FP&A"
-                    st.session_state["perfil_atual"] = "Compliance"
-                    st.session_state["login_user_id"] = "compliance1"
-                    st.rerun()
-                elif u_input == "backoffice" and p_input == "123":
-                    st.session_state["autenticado"] = True
-                    st.session_state["usuario_atual"] = "Atendimento Backoffice"
-                    st.session_state["perfil_atual"] = "Operacao"
-                    st.session_state["login_user_id"] = "backoffice"
-                    st.rerun()
-                elif u_input == "operacao" and p_input == "123":
-                    st.session_state["autenticado"] = True
-                    st.session_state["usuario_atual"] = "Equipe Operacional"
-                    st.session_state["perfil_atual"] = "Operacao"
-                    st.session_state["login_user_id"] = "operacao"
-                    st.rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
-        with tab_pwd:
-            u_reset = st.text_input("Usuário cadastrado:").strip().lower()
-            n_pass = str(st.text_input("Nova Senha Alfanumérica:", type="password")).strip()
-            c_pass = str(st.text_input("Confirme a Nova Senha:", type="password")).strip()
-            if st.button("Redefinir Senha"):
-                usuarios_db = carregar_usuarios_supabase()
-                if u_reset in usuarios_db and n_pass and n_pass == c_pass:
-                    ok, msg = atualizar_senha_supabase(u_reset, n_pass)
-                    if ok:
-                        st.success("✅ Senha redefinida no Supabase!")
-                    else:
-                        st.error(f"Erro ao atualizar: {msg}")
-                else:
-                    st.error("Verifique se o usuário existe e se as senhas coincidem.")
         with tab_req:
             r_nome = st.text_input("Nome Completo:")
             r_user = st.text_input("Usuário Desejado:").strip().lower()
             r_pass = str(st.text_input("Senha de Acesso:", type="password")).strip()
-            r_perf = st.selectbox("Perfil Solicitado:", ["Operacao"])
             if st.button("Enviar Solicitação"):
                 if r_user and r_pass and r_nome:
-                    ok, msg = salvar_usuario_supabase(r_user, r_pass, r_nome, r_perf, status="PENDENTE")
+                    ok, msg = salvar_usuario_supabase(r_user, r_pass, r_nome, "Operacao", status="PENDENTE")
                     if ok:
                         st.success("✅ Solicitação enviada!")
                     else:
-                        st.error(f"Erro ao salvar solicitação: {msg}")
+                        st.error(msg)
     st.stop()
 
 # ==============================================================================
-# 4. PADRONIZAÇÃO, DEPARA DE CIAS E IDENTIFICAÇÃO DAS FONTES DE DADOS
+# 4. ROTEAMENTO DE BASES & PROCESSAMENTO
 # ==============================================================================
-def identificar_fonte_relatorio(row):
-    aba = str(row.get("Aba_Origem", "")).lower()
-    cia_raw = str(row.get("CIA", "")).upper()
-    fornecedor = str(row.get("Fornecedor_Sistema", "")).upper()
-    emissor = str(row.get("Emissor", "")).lower() + " " + str(row.get("Emissor_Reserva_Lemon", "")).lower()
-    
-    if "lemontech" in emissor or "virtual" in emissor:
-        return "🤖 Relatório Lemontech (Virtual)"
-    if "G3" in cia_raw or "GOL" in cia_raw or "GOL" in fornecedor or "127" in aba:
-        return "✈️ Relatório GOL Direct"
-    if "AD" in cia_raw or "AZUL" in cia_raw or "AZUL" in fornecedor:
-        return "✈️ Relatório AZUL Direct"
-    if any(x in cia_raw for x in ["LA", "JJ", "LATAM"]) or "LATAM" in fornecedor:
-        return "✈️ Relatório LATAM Direct"
-    cias_bsp = ["TP", "AA", "AF", "KL", "LH", "UA", "DL", "AM", "AV", "AR", "CM", "IB", "EK", "QR", "LX", "AZ", "AC", "15", "H2", "24", "OB"]
-    if "bsp" in aba or "iata" in aba or "bsp" in fornecedor or any(x in cia_raw for x in cias_bsp):
-        return "🌐 Relatório BSP (IATA)"
-    return "🏢 Relatório ERP Benner"
-
 def clean_str(val):
     if pd.isna(val) or val is None: 
         return "-"
@@ -538,381 +430,103 @@ def padronizar_df(df):
             "Bilhetes", "Ponto de venda", "Status_Geral", "Área Resp. Operação",
             "Obs. Operação", "Setor", "Data Emissão", "CIA", "Taxa", "A vista", "A credito",
             "Data_Modificacao", "Usuario_Modificacao", "Ultima_Alteracao", "Emissor", 
-            "Emissor_Reserva_Lemon", "Consultor_Lemon", "Consultor", "Status_Sistema", 
-            "Status_Divergencia", "Gerentes", "Fornecedor_Sistema", "Status_Cia", "Fonte_Relatorio"
+            "Consultor", "Status_Sistema", "Status_Divergencia", "Gerentes", "Fornecedor_Sistema", "Fonte_Relatorio"
         ])
-    
     df_out = df.copy().loc[:, ~df.columns.duplicated()].reset_index(drop=True)
-    
-    if "Bilhetes" not in df_out.columns:
-        cols_b = [c for c in df_out.columns if "bilhete" in str(c).lower() or "ticket" in str(c).lower()]
-        df_out = df_out.rename(columns={cols_b[0]: "Bilhetes"}) if cols_b else df_out.assign(Bilhetes="")
-    
     for c in df_out.columns:
         if df_out[c].dtype == object or df_out[c].dtype == 'string':
             df_out[c] = df_out[c].apply(clean_str)
-            
-    if "Obs. Operação" in df_out.columns:
-        df_out["Obs. Operação"] = df_out["Obs. Operação"].astype(str).str.replace("Sem tratativa na operação", "", regex=False).str.strip()
-        
-    status_map = ["nao_consta", "não_consta", "nan", "-", "", "none"]
-    df_out["Status_Geral"] = df_out["Status_Geral"].apply(
-        lambda x: "Pendente de Lançamento (Não Consta)" if str(x).lower().strip() in status_map else str(x)
-    )
-    df_out["Fonte_Relatorio"] = df_out.apply(identificar_fonte_relatorio, axis=1)
+    
     if "CIA" in df_out.columns:
         df_out["CIA"] = df_out["CIA"].astype(str).str.upper().str.strip().replace(DEPARA_CIAS)
-    if "Status_Divergencia" in df_out.columns:
-        df_out["Status_Divergencia"] = df_out["Status_Divergencia"].astype(str).str.replace(
-            "Divergência de Receita", "Analisar Receita", case=False, regex=False
-        ).str.replace(
-            "Divergencia de Receita", "Analisar Receita", case=False, regex=False
-        )
-    for c in ["Taxa", "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita", "Tarifa_Total", "Comissão", "Taxa DU", "Incentivo"]:
-        if c in df_out.columns: 
+        
+    for c in ["Taxa", "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita", "Comissão", "Taxa DU", "Incentivo"]:
+        if c in df_out.columns:
             df_out[c] = pd.to_numeric(df_out[c], errors="coerce").fillna(0.0)
             
     df_out["Dt_Parsed"] = pd.to_datetime(df_out["Data Emissão"], format="mixed", dayfirst=True, errors="coerce")
-    df_out["Dt_Mod_Parsed"] = pd.to_datetime(df_out.get("Data_Modificacao"), format="mixed", dayfirst=True, errors="coerce")
-    
     return df_out
-
-def mesclar_com_supabase(df_excel):
-    if df_excel is None or df_excel.empty:
-        return df_excel
-    df_db = carregar_tratativas_db()
-    if df_db.empty:
-        return df_excel
-    
-    df_excel["Bilhete_Clean"] = df_excel["Bilhetes"].apply(sanitizar_bilhete)
-    df_db["Bilhete_Clean"] = df_db["bilhete"].apply(sanitizar_bilhete)
-    
-    if "data_modificacao" in df_db.columns:
-        df_db = df_db.sort_values("data_modificacao", ascending=False)
-    df_db = df_db.drop_duplicates("Bilhete_Clean", keep="first")
-    
-    cols_sup_desejadas = ["status_geral", "area_resp", "obs_operacao", "setor", "gerentes"]
-    cols_presentes = [c for c in cols_sup_desejadas if c in df_db.columns]
-    
-    df_merged = pd.merge(
-        df_excel,
-        df_db[["Bilhete_Clean"] + cols_presentes],
-        on="Bilhete_Clean",
-        how="left"
-    )
-    
-    muta_map = [
-        ("Status_Geral", "status_geral"),
-        ("Área Resp. Operação", "area_resp"),
-        ("Obs. Operação", "obs_operacao"),
-        ("Setor", "setor"),
-        ("Gerentes", "gerentes")
-    ]
-    for col_excel, col_sb in muta_map:
-        if col_sb in df_merged.columns and col_excel in df_merged.columns:
-            mask_valido = df_merged[col_sb].notna() & ~df_merged[col_sb].astype(str).str.strip().isin(["-", "", "None", "nan", "NULL", "EMPTY"])
-            df_merged[col_excel] = df_merged[col_sb].where(mask_valido, df_merged[col_excel])
-            
-    cols_drop = [c for c in cols_presentes if c in df_merged.columns]
-    df_merged = df_merged.drop(columns=cols_drop)
-    
-    # SOBREPOSIÇÃO AUTOMÁTICA DE TRATATIVAS RESOLVIDAS
-    st_geral_str = df_merged["Status_Geral"].astype(str).str.lower().str.strip()
-    termos_ok = ["já lançado", "ja lancado", "emitido e lançado", "emitido e lancado", "lançado", "lancado", "conciliado", "valores corretos", "regularizado", "ok"]
-    mask_resolvido = st_geral_str.apply(lambda s: any(t in s for t in termos_ok))
-    
-    if "Status_Divergencia" in df_merged.columns:
-        df_merged.loc[mask_resolvido, "Status_Divergencia"] = "Valores Corretos"
-    if "Status_Cia" in df_merged.columns:
-        df_merged.loc[mask_resolvido, "Status_Cia"] = "OK"
-    return df_merged
 
 def rotear_bases_mestra(df_master):
     if df_master is None or df_master.empty:
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        vazio = padronizar_df(None)
+        return vazio, vazio, vazio, vazio, vazio, vazio
         
     df_master = padronizar_df(df_master)
     
-    def e_apenas_analisar_receita(st_div):
-        s = str(st_div).lower().strip()
-        if "analisar receita" in s or ("receita" in s and not any(x in s for x in ["tarifa", "taxa", "cia", "companhia"])):
-            return True
-        return False
-        
     st_geral_str = df_master["Status_Geral"].astype(str).str.lower().str.strip()
     st_div_str = df_master["Status_Divergencia"].astype(str).str.lower().str.strip()
     
     termos_ok = ["já lançado", "ja lancado", "emitido e lançado", "emitido e lancado", "lançado", "lancado", "conciliado", "valores corretos", "regularizado", "ok"]
     
-    mask_status_lancado = (
-        st_geral_str.apply(lambda s: any(t in s for t in termos_ok)) |
-        st_div_str.str.contains("valores corretos|sem divergência|sem divergencia", na=False)
-    )
-    
-    mask_tem_divergencia_real = st_div_str.str.contains("divergência|divergencia|erro", na=False) & \
-                                ~df_master["Status_Divergencia"].apply(e_apenas_analisar_receita) & \
-                                ~mask_status_lancado
-                                
-    mask_ok = (mask_status_lancado | df_master["Status_Divergencia"].apply(e_apenas_analisar_receita)) & ~mask_tem_divergencia_real
+    mask_ok = st_geral_str.apply(lambda s: any(t in s for t in termos_ok)) | st_div_str.str.contains("valores corretos|sem divergência", na=False)
     
     df_ok = df_master[mask_ok].copy()
     df_rest = df_master[~mask_ok].copy()
     
-    def e_bo_flexivel(r):
+    def e_bo(r):
         ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
         obs_val = str(r.get("Obs. Operação", "")).strip().lower()
-        st_val = str(r.get("Status_Geral", "")).strip().lower()
-        ger_val = str(r.get("Gerentes", "")).strip().lower()
-        return any(k in ar_val or k in ger_val or k in obs_val or k in st_val
-                   for k in ["katia", "kátia", "backoffice", "suporte"])
-                    
-    mask_bo = df_rest.apply(e_bo_flexivel, axis=1)
+        return any(k in ar_val or k in obs_val for k in ["katia", "kátia", "backoffice", "suporte"])
+        
+    mask_bo = df_rest.apply(e_bo, axis=1)
     df_bo = df_rest[mask_bo].copy()
     df_rest = df_rest[~mask_bo].copy()
     
-    def e_eventos_estrito(r):
+    def e_eventos(r):
         ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
-        ger_val = str(r.get("Gerentes", "")).strip().lower()
-        return "eventos" in ar_val or "eventos" in ger_val
+        return "eventos" in ar_val
         
-    mask_evt = df_rest.apply(e_eventos_estrito, axis=1)
+    mask_evt = df_rest.apply(e_eventos, axis=1)
     df_eventos = df_rest[mask_evt].copy()
     df_rest = df_rest[~mask_evt].copy()
     
-    def e_emissao(r):
+    def e_falta(r):
         st_val = str(r.get("Status_Geral", "")).strip().lower()
-        ar_val = str(r.get("Área Resp. Operação", "")).strip().lower()
-        return "falta de lançamento" in st_val or "não consta" in st_val or "emissão" in ar_val or "emissao" in ar_val
+        return "falta de lançamento" in st_val or "não consta" in st_val
         
-    mask_falta = df_rest.apply(e_emissao, axis=1)
+    mask_falta = df_rest.apply(e_falta, axis=1)
     df_falta = df_rest[mask_falta].copy()
     df_erros = df_rest[~mask_falta].copy()
     
     df_lemontech = pd.DataFrame()
-    
     return df_falta, df_erros, df_bo, df_eventos, df_lemontech, df_ok
 
-@st.cache_data(ttl=600, show_spinner=False)
-def ler_excel_bruto_normalizado(caminho_ou_bytes):
-    try:
-        xls = pd.ExcelFile(caminho_ou_bytes, engine="openpyxl")
-        frames = []
-        for sheet in xls.sheet_names:
-            if sheet.startswith("99_") or sheet.startswith("98_"):
-                df_sheet = pd.read_excel(xls, sheet_name=sheet)
-                df_sheet["Aba_Origem"] = sheet
-                frames.append(df_sheet)
-                
-        df_log_arq = pd.read_excel(xls, "00_Log_Auditoria") if "00_Log_Auditoria" in xls.sheet_names else pd.DataFrame()
-        
-        if not frames:
-            return pd.DataFrame(), df_log_arq
-            
-        df_m = pd.concat(frames, ignore_index=True)
-        
-        if "Bilhetes" in df_m.columns:
-            df_m["Bilhete_Clean"] = df_m["Bilhetes"].apply(sanitizar_bilhete)
-            df_m = df_m[df_m["Bilhete_Clean"].astype(str).str.len() > 3]
-            df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
-            
-        return df_m, df_log_arq
-    except Exception as e:
-        return pd.DataFrame(), pd.DataFrame()
-
-def carregar_bases():
-    if "planilha_master_bytes" in st.session_state and st.session_state["planilha_master_bytes"]:
-        fonte = io.BytesIO(st.session_state["planilha_master_bytes"])
-    elif os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
-        fonte = ARQUIVO_DASHBOARD_PADRAO
-    else:
-        vazio = padronizar_df(None)
-        return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
-    try:
-        df_m, df_log_arq = ler_excel_bruto_normalizado(fonte)
-        
-        if df_m.empty:
-            vazio = padronizar_df(None)
-            return vazio, vazio, vazio, vazio, vazio, vazio, df_log_arq
-            
-        df_m = mesclar_com_supabase(df_m)
-        
-        if "Bilhete_Clean" in df_m.columns:
-            df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
-        f_falta, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
-        return f_falta, f_erros, f_bo, f_evt, f_lem, f_ok, df_log_arq
-    except Exception as e:
-        st.error(f"⚠️ Erro ao carregar as bases do Dashboard: {e}")
-        vazio = padronizar_df(None)
-        return vazio, vazio, vazio, vazio, vazio, vazio, pd.DataFrame()
-
-def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
-    buffer = io.BytesIO()
-    if df_export is None or df_export.empty:
-        df_export = pd.DataFrame(columns=["Aviso"], data=[["Nenhum registro encontrado para os filtros selecionados"]])
-    
-    cols_remover = [c for c in ["Dt_Parsed", "Dt_Mod_Parsed", "Aba_Origem", "Bilhete_Clean"] if c in df_export.columns]
-    df_clean = df_export.drop(columns=cols_remover) if cols_remover else df_export.copy()
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        df_clean.to_excel(writer, sheet_name=nome_aba[:30], index=False)
-    
-    buffer.seek(0)
-    wb = openpyxl.load_workbook(buffer)
-    ws = wb.active
-    ws.views.sheetView[0].showGridLines = True
-    header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
-    header_font = Font(color="FFFFFF", bold=True, size=11)
-    thin_border = Border(
-        left=Side(style="thin", color="CCCCCC"),
-        right=Side(style="thin", color="CCCCCC"),
-        top=Side(style="thin", color="CCCCCC"),
-        bottom=Side(style="thin", color="CCCCCC")
-    )
-    fill_alerta = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-    font_alerta = Font(color="9C0006", bold=True)
-    currency_cols = ["A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa", "Taxa_Sistema", "Dif_Taxa", "Comissão", "Taxa DU", "Desc.", "Incentivo", "Receita_Sistema", "Dif_Receita", "VL. Líquido", "Tarifa_Total"]
-    for cell in ws[1]:
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        cell.border = thin_border
-    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
-        for cell in row:
-            cell.border = thin_border
-            col_name = str(ws.cell(row=1, column=cell.column).value or "")
-            if col_name in currency_cols and cell.value not in ["-", None, ""]:
-                try:
-                    cell.value = float(cell.value)
-                    cell.number_format = "R$ #,##0.00"
-                except (ValueError, TypeError):
-                    pass
-            if col_name.startswith("Dif_") and cell.value not in ["-", None, ""]:
-                try:
-                    if abs(float(cell.value)) >= 0.01:
-                        cell.fill = fill_alerta
-                        cell.font = font_alerta
-                except (ValueError, TypeError):
-                    pass
-    for col_idx in range(1, ws.max_column + 1):
-        col_letter = get_column_letter(col_idx)
-        len_vals = [len(str(ws.cell(row=r, column=col_idx).value or "")) for r in range(1, min(ws.max_row + 1, 100))]
-        max_len = max(len_vals) if len_vals else 10
-        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
-    output_buffer = io.BytesIO()
-    wb.save(output_buffer)
-    output_buffer.seek(0)
-    return output_buffer.getvalue()
-
-def aplicar_estilo_colunas_df(df_input):
-    if df_input.empty:
-        return df_input
-        
-    styles = pd.DataFrame('', index=df_input.index, columns=df_input.columns)
-    cols_sistema = [c for c in df_input.columns if 'sistema' in str(c).lower()]
-    for c in cols_sistema:
-        styles[c] = 'background-color: #e6f0fa; color: #002060; font-weight: 600;'
-        
-    cols_dif = [c for c in df_input.columns if str(c).startswith('Dif_') or 'divergencia' in str(c).lower()]
-    for c in cols_dif:
-        for idx in df_input.index:
-            val = df_input.loc[idx, c]
-            try:
-                val_num = float(val)
-                if abs(val_num) >= 0.01:
-                    styles.loc[idx, c] = 'background-color: #ffe6e6; color: #9c0006; font-weight: bold;'
-                else:
-                    styles.loc[idx, c] = 'background-color: #fff7f7; color: #666666;'
-            except:
-                if str(val).strip() and str(val).strip() not in ['-', '0', '0.0', 'R$ 0,00']:
-                    styles.loc[idx, c] = 'background-color: #ffe6e6; color: #9c0006; font-weight: bold;'
-                else:
-                    styles.loc[idx, c] = 'background-color: #fff7f7;'
-                    
-    return df_input.style.apply(lambda _: styles, axis=None)
-
 # ==============================================================================
-# 5. SIDEBAR E FILTROS OPERACIONAIS
+# 5. SIDEBAR & FILTROS
 # ==============================================================================
 st.sidebar.title("Grupo Arbaitman")
-st.sidebar.caption("Conciliação Aérea FP&A v3.6 (Espelho Fiel)")
+st.sidebar.caption("Conciliação Aérea FP&A v3.7 (Integração Supabase Direct)")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
-if e_master():
-    with st.sidebar.expander("📂 Atualizar Planilha Espelho Principal"):
-        arq_espelho = st.file_uploader("Subir Dashboard_Revenue_Assurance_Consolidado.xlsx:", type=["xlsx"], key="uploader_dash_espelho")
-        if arq_espelho:
-            bytes_data = arq_espelho.getvalue()
-            st.session_state["planilha_master_bytes"] = bytes_data
-            try:
-                with open(ARQUIVO_DASHBOARD_PADRAO, "wb") as f:
-                    f.write(bytes_data)
-            except Exception:
-                pass
-            st.success("✅ Planilha Espelho atualizada e fixa na sessão!")
-            time.sleep(1)
-            st.rerun()
 
-if st.sidebar.button("🔄 Recarregar e Atualizar Dados"):
+if st.sidebar.button("🔄 Sincronizar / Atualizar"):
+    st.cache_data.clear()
     st.rerun()
-
-with st.sidebar.expander("🔑 Alterar Minha Senha"):
-    with st.form("form_pwd_side"):
-        s_atu = str(st.text_input("Senha Atual:", type="password")).strip()
-        s_nov = str(st.text_input("Nova Senha Alfanumérica:", type="password")).strip()
-        if st.form_submit_button("Salvar Nova Senha"):
-            u_id = st.session_state["login_user_id"]
-            usuarios_db = carregar_usuarios_supabase()
-            if u_id in usuarios_db and usuarios_db[u_id]["senha"] == s_atu and s_nov:
-                ok, msg = atualizar_senha_supabase(u_id, s_nov)
-                if ok:
-                    st.success("✅ Senha alterada com sucesso!")
-                else:
-                    st.error(f"Erro ao salvar senha: {msg}")
-            else:
-                st.error("Senha atual incorreta.")
 
 if st.sidebar.button("🔒 Sair"):
     st.session_state["autenticado"] = False
-    st.session_state.pop("planilha_master_bytes", None)
     st.rerun()
 
 st.sidebar.markdown("---")
-df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div, df_log = carregar_bases()
-df_todos_unificados = pd.concat([df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
-dt_min_default = datetime.date(2024, 1, 1)
-dt_max_default = datetime.date(2026, 12, 31)
-if not df_todos_unificados.empty and "Dt_Parsed" in df_todos_unificados.columns:
-    dts_validas = df_todos_unificados["Dt_Parsed"].dropna()
-    if not dts_validas.empty:
-        dt_min_default = dts_validas.min().date()
-        dt_max_default = dts_validas.max().date()
+df_mestra = carregar_dados_supabase_direto()
+df_falta, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div = rotear_bases_mestra(df_mestra)
 
 st.sidebar.subheader("🔍 Filtros Operacionais")
-d_inicio = st.sidebar.date_input("Data Inicial:", value=dt_min_default, format="DD/MM/YYYY")
-d_fim = st.sidebar.date_input("Data Final:", value=dt_max_default, format="DD/MM/YYYY")
-opts_fonte_rel = sorted(df_todos_unificados["Fonte_Relatorio"].dropna().unique()) if "Fonte_Relatorio" in df_todos_unificados.columns else []
-filtro_fonte_rel = st.sidebar.multiselect("Fonte do Relatório (GOL/BSP/AZUL/LATAM/ERP):", options=opts_fonte_rel, placeholder="Todas as fontes")
-filtro_gerente = st.sidebar.multiselect("Gerente / Área Resp.:", options=sorted(df_todos_unificados["Área Resp. Operação"].dropna().unique()), placeholder="Todos")
-filtro_setor = st.sidebar.multiselect("Setor:", options=sorted(df_todos_unificados["Setor"].dropna().unique()), placeholder="Todos")
-filtro_cia = st.sidebar.multiselect("Companhia Aérea:", options=sorted(df_todos_unificados["CIA"].dropna().unique()), placeholder="Todas")
+opts_fonte_rel = sorted(df_mestra["Fonte_Relatorio"].dropna().unique()) if "Fonte_Relatorio" in df_mestra.columns else []
+filtro_fonte_rel = st.sidebar.multiselect("Fonte do Relatório:", options=opts_fonte_rel, placeholder="Todas")
+filtro_gerente = st.sidebar.multiselect("Gerente / Área Resp.:", options=sorted(df_mestra["Área Resp. Operação"].dropna().unique()) if "Área Resp. Operação" in df_mestra.columns else [], placeholder="Todos")
+filtro_cia = st.sidebar.multiselect("Companhia Aérea:", options=sorted(df_mestra["CIA"].dropna().unique()) if "CIA" in df_mestra.columns else [], placeholder="Todas")
 
 def aplicar_filtros(df):
     if df is None or df.empty:
         return df
     m = pd.Series(True, index=df.index)
-    if "Dt_Parsed" in df.columns and d_inicio and d_fim:
-        has_dt = df["Dt_Parsed"].notna()
-        m_dt = pd.Series(True, index=df.index)
-        if has_dt.any():
-            dt_dates = df.loc[has_dt, "Dt_Parsed"].dt.date
-            m_dt.loc[has_dt] = (dt_dates >= d_inicio) & (dt_dates <= d_fim)
-        m = m & m_dt
     if filtro_fonte_rel and "Fonte_Relatorio" in df.columns:
         m = m & df["Fonte_Relatorio"].isin(filtro_fonte_rel)
-    if filtro_gerente:
+    if filtro_gerente and "Área Resp. Operação" in df.columns:
         m = m & df["Área Resp. Operação"].isin(filtro_gerente)
-    if filtro_setor:
-        m = m & df["Setor"].isin(filtro_setor)
-    if filtro_cia:
+    if filtro_cia and "CIA" in df.columns:
         m = m & df["CIA"].isin(filtro_cia)
     return df[m].reset_index(drop=True)
 
@@ -924,23 +538,14 @@ f_lemon_virt = aplicar_filtros(df_lemon_virt)
 f_sem_div = aplicar_filtros(df_sem_div)
 
 # ==============================================================================
-# 6. HEADER PRINCIPAL E ABAS
+# 6. HEADER PRINCIPAL E METRICAS COMPACTAS
 # ==============================================================================
 st.markdown(
     """
     <div class='main-header'>
-        <h1>✈️ Grupo Arbaitman | Portal de Conciliação Aérea & Gestão de Bilhetes Pendentes (FP&A)</h1>
-        <p>Plataforma Executiva Integrada: Relatórios GOL, BSP IATA, AZUL, LATAM e ERP Benner</p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-st.markdown(
-    """
-    <div class="datasource-badge">
         <div>
-            <span class="title">📄 Relatórios Fonte Mapeados:</span> 
-            <span class="info">✈️ <strong>Relatório GOL Direct</strong> | 🌐 <strong>Relatório BSP (IATA)</strong> | ✈️ <strong>AZUL Direct & LATAM Direct</strong> | 🏢 <strong>ERP Benner</strong> | 🤖 <strong>Lemontech</strong></span>
+            <h1>✈️ Grupo Arbaitman | Portal de Conciliação Aérea (FP&A)</h1>
+            <p>Leitura Direta da Visão Unificada 'vw_conciliacao_mestra' no Supabase PostgreSQL</p>
         </div>
     </div>
     """,
@@ -948,630 +553,112 @@ st.markdown(
 )
 
 c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("Pendentes ERP (Maringá)", f"{len(f_falta):,}")
-c2.metric("Erros Val/CIA (Maringá)", f"{len(f_erros):,}")
+c1.metric("Pendentes ERP", f"{len(f_falta):,}")
+c2.metric("Erros Val/CIA", f"{len(f_erros):,}")
 c3.metric("Backoffice", f"{len(f_backoffice):,}")
-c4.metric("Central de Eventos", f"{len(f_eventos):,}")
+c4.metric("Central Eventos", f"{len(f_eventos):,}")
 c5.metric("Emissor Virtual", f"{len(f_lemon_virt):,}")
 c6.metric("Conciliados (OK)", f"{len(f_sem_div):,}")
+
 st.markdown("---")
 
 abas = [
     "📊 Dashboard Executivo",
-    "📋 1. Falta de Lançamento (Maringá Turismo)",
-    "⚠️ 2. Erros de Valores & CIA (Maringá Turismo)",
+    "📋 1. Falta de Lançamento (Maringá)",
+    "⚠️ 2. Erros de Valores & CIA (Maringá)",
     "🎧 3. Suporte Backoffice",
     "🎪 4. Central de Eventos",
     "🤖 5. Emissor Virtual Lemontech",
     "✅ 6. Bilhetes Conciliados (Sem Divergência)"
 ]
 if e_master():
-    abas.extend(["⚙️ Gestão de Acessos", "📜 Log de Histórico", "📥 Carga em Lote Avançada"])
+    abas.extend(["⚙️ Gestão de Acessos", "📜 Log de Histórico"])
+
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO
+# DASHBOARD EXECUTIVO
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
-    st.markdown(
-        """
-        <div class='section-banner'>
-            <h3>📊 Painel Executivo C-Level & Análise Financeira FP&A</h3>
-            <p>Visão estratégica com 6 gráficos do volume de pendências, evolução temporal, distribuição por setor/gerente e exposição financeira R$.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-    
+    st.markdown("<div class='section-banner'><h3>📊 Painel Executivo C-Level FP&A</h3></div>", unsafe_allow_html=True)
     df_pendentes_todas = pd.concat([f_falta, f_erros, f_backoffice, f_eventos, f_lemon_virt], ignore_index=True)
-    df_todas_casos = pd.concat([df_pendentes_todas, f_sem_div], ignore_index=True)
-    
-    total_casos = len(df_todas_casos)
-    total_conciliado = len(f_sem_div)
-    total_pendente = len(df_pendentes_todas)
-    taxa_resolucao = (total_conciliado / total_casos * 100) if total_casos > 0 else 0.0
-    
-    for col_fin in ["A vista", "A credito", "Taxa", "Comissão", "Taxa DU", "Incentivo"]:
-        if col_fin in df_pendentes_todas.columns:
-            df_pendentes_todas[col_fin] = pd.to_numeric(df_pendentes_todas[col_fin], errors="coerce").fillna(0.0)
-            
-    val_a_vista = df_pendentes_todas["A vista"].sum() if "A vista" in df_pendentes_todas.columns else 0.0
-    val_a_credito = df_pendentes_todas["A credito"].sum() if "A credito" in df_pendentes_todas.columns else 0.0
-    total_tarifa_pendente = val_a_vista + val_a_credito
-    total_taxa_pendente = df_pendentes_todas["Taxa"].sum() if "Taxa" in df_pendentes_todas.columns else 0.0
-    val_pendente_total = total_tarifa_pendente + total_taxa_pendente
-    
-    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
-    kpi1.metric("Total Bilhetes Processados", f"{total_casos:,}")
-    kpi2.metric("Bilhetes Conciliados (OK)", f"{total_conciliado:,}")
-    kpi3.metric("Bilhetes Pendentes", f"{total_pendente:,}")
-    kpi4.metric("Índice de Conciliação (%)", f"{taxa_resolucao:.1f}%")
-    kpi5.metric("Valor Total Pendente (R$)", f"R$ {val_pendente_total:,.2f}")
-    
-    st.markdown("---")
     
     col_d1, col_d2 = st.columns(2)
     with col_d1:
-        st.markdown('<div class="chart-card"><h5>📅 1. Evolução Temporal das Pendências (Por Mês de Emissão)</h5>', unsafe_allow_html=True)
-        if not df_pendentes_todas.empty and "Dt_Parsed" in df_pendentes_todas.columns:
-            df_temp = df_pendentes_todas.copy()
-            df_temp_valid = df_temp[df_temp["Dt_Parsed"].notna()].copy()
-            
-            if not df_temp_valid.empty:
-                df_temp_valid["AnoMes"] = df_temp_valid["Dt_Parsed"].dt.strftime("%Y-%m")
-                df_temp_valid["AnoMes_Label"] = df_temp_valid["Dt_Parsed"].dt.strftime("%m/%Y")
-                df_evol = df_temp_valid.groupby(["AnoMes", "AnoMes_Label"]).size().reset_index(name="Volume")
-                df_evol = df_evol.sort_values("AnoMes")
-                
-                fig_evol = px.line(df_evol, x="AnoMes_Label", y="Volume", text="Volume", markers=True)
-                fig_evol.update_traces(
-                    line_color="#002060",
-                    line_width=3,
-                    marker=dict(size=8, color="#0050b3"),
-                    textposition="top center",
-                    textfont=dict(size=11, color="#002060", family="Inter, sans-serif"),
-                    hovertemplate='<b>Mês: %{x}</b><br>Pendências: %{y:,} bilhete(s)'
-                )
-                fig_evol.update_layout(
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    margin=dict(l=10, r=10, t=30, b=20),
-                    height=320,
-                    xaxis=dict(title="", showgrid=False),
-                    yaxis=dict(title="Qtd. Bilhetes", showgrid=True, gridcolor="#f0f0f0"),
-                    font=dict(family="Inter, sans-serif", size=12, color="#334155")
-                )
-                st.plotly_chart(fig_evol, use_container_width=True)
-            else:
-                st.info("Nenhuma data válida para evolução temporal.")
-        else:
-            st.info("Nenhum dado temporal disponível.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with col_d2:
-        st.markdown('<div class="chart-card"><h5>⚠️ 2. Distribuição por Status Operacional</h5>', unsafe_allow_html=True)
         if not df_pendentes_todas.empty and "Status_Geral" in df_pendentes_todas.columns:
-            df_st_chart = df_pendentes_todas["Status_Geral"].value_counts().reset_index()
-            df_st_chart.columns = ["Status", "Quantidade"]
-            
-            fig_pie = px.pie(
-                df_st_chart, values="Quantidade", names="Status", hole=0.55,
-                color_discrete_sequence=["#002060", "#0050b3", "#0086c0", "#13c2c2", "#fa8c16", "#d90429"]
-            )
-            fig_pie.update_traces(
-                textposition='inside', textinfo='percent',
-                hovertemplate='<b>%{label}</b><br>Volume: %{value:,} bilhete(s)<br>Representação: %{percent}',
-                marker=dict(line=dict(color='#ffffff', width=2))
-            )
-            fig_pie.update_layout(
-                showlegend=True,
-                legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5),
-                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=10, b=40), height=320,
-                font=dict(family="Inter, sans-serif", size=12, color="#334155")
-            )
+            fig_pie = px.pie(df_pendentes_todas["Status_Geral"].value_counts().reset_index(), values="count", names="Status_Geral", title="Pendências por Status")
+            fig_pie.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=10))
             st.plotly_chart(fig_pie, use_container_width=True)
-        else:
-            st.info("Nenhuma pendência registrada.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    col_d3, col_d4 = st.columns(2)
-    with col_d3:
-        st.markdown('<div class="chart-card"><h5>✈️ 3. Pendências por Companhia Aérea (Top 8)</h5>', unsafe_allow_html=True)
+    with col_d2:
         if not df_pendentes_todas.empty and "CIA" in df_pendentes_todas.columns:
-            df_cia_chart = df_pendentes_todas["CIA"].value_counts().head(8).reset_index()
-            df_cia_chart.columns = ["Companhia", "Bilhetes Pendentes"]
-            
-            fig_cia = px.bar(
-                df_cia_chart, x="Companhia", y="Bilhetes Pendentes", text="Bilhetes Pendentes",
-                color="Bilhetes Pendentes", color_continuous_scale=["#69c0ff", "#002060"]
-            )
-            fig_cia.update_traces(
-                textposition="outside",
-                textfont=dict(size=12, color="#002060", family="Inter, sans-serif"),
-                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
-            )
-            fig_cia.update_layout(
-                coloraxis_showscale=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=25, b=20), height=320,
-                xaxis=dict(title="", showgrid=False, tickangle=-15),
-                yaxis=dict(title="Bilhetes", showgrid=True, gridcolor="#f0f0f0"),
-                font=dict(family="Inter, sans-serif", size=12, color="#334155")
-            )
+            fig_cia = px.bar(df_pendentes_todas["CIA"].value_counts().head(8).reset_index(), x="CIA", y="count", title="Top 8 CIAs com Pendências")
+            fig_cia.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=10))
             st.plotly_chart(fig_cia, use_container_width=True)
-        else:
-            st.info("Nenhuma companhia aérea registrada.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with col_d4:
-        st.markdown('<div class="chart-card"><h5>👤 4. Volume de Pendências por Gerente / Área (Top 8)</h5>', unsafe_allow_html=True)
-        if not df_pendentes_todas.empty and "Área Resp. Operação" in df_pendentes_todas.columns:
-            df_ger_chart = df_pendentes_todas["Área Resp. Operação"].value_counts().head(8).reset_index()
-            df_ger_chart.columns = ["Gerente", "Quantidade"]
-            
-            fig_ger = px.bar(
-                df_ger_chart, x="Gerente", y="Quantidade", text="Quantidade",
-                color="Quantidade", color_continuous_scale=["#91d5ff", "#003366"]
-            )
-            fig_ger.update_traces(
-                textposition="outside",
-                textfont=dict(size=12, color="#002060", family="Inter, sans-serif"),
-                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
-            )
-            fig_ger.update_layout(
-                coloraxis_showscale=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=25, b=20), height=320,
-                xaxis=dict(title="", showgrid=False, tickangle=-15),
-                yaxis=dict(title="Quantidade", showgrid=True, gridcolor="#f0f0f0"),
-                font=dict(family="Inter, sans-serif", size=12, color="#334155")
-            )
-            st.plotly_chart(fig_ger, use_container_width=True)
-        else:
-            st.info("Nenhum dado de gerente disponível.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    col_d5, col_d6 = st.columns(2)
-    with col_d5:
-        st.markdown('<div class="chart-card"><h5>🏢 5. Volume de Pendências por Setor / Unidade (Top 8)</h5>', unsafe_allow_html=True)
-        if not df_pendentes_todas.empty and "Setor" in df_pendentes_todas.columns:
-            df_setor_chart = df_pendentes_todas["Setor"].value_counts().head(8).reset_index()
-            df_setor_chart.columns = ["Setor", "Quantidade"]
-            
-            fig_setor = px.bar(
-                df_setor_chart, x="Setor", y="Quantidade", text="Quantidade",
-                color="Quantidade", color_continuous_scale=["#adc6ff", "#1d39c4"]
-            )
-            fig_setor.update_traces(
-                textposition="outside",
-                textfont=dict(size=12, color="#002060", family="Inter, sans-serif"),
-                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,} bilhetes'
-            )
-            fig_setor.update_layout(
-                coloraxis_showscale=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=25, b=20), height=330,
-                xaxis=dict(title="", showgrid=False, tickangle=-15),
-                yaxis=dict(title="Quantidade", showgrid=True, gridcolor="#f0f0f0"),
-                font=dict(family="Inter, sans-serif", size=12, color="#334155")
-            )
-            st.plotly_chart(fig_setor, use_container_width=True)
-        else:
-            st.info("Nenhum dado de setor disponível.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with col_d6:
-        st.markdown('<div class="chart-card"><h5>💼 6. Exposição Financeira (R$) por Gerente / Área</h5>', unsafe_allow_html=True)
-        if not df_pendentes_todas.empty and "Área Resp. Operação" in df_pendentes_todas.columns:
-            df_pendentes_todas["Val_Total_Linha"] = df_pendentes_todas["A vista"] + df_pendentes_todas["A credito"] + df_pendentes_todas["Taxa"]
-            df_fin_ger = df_pendentes_todas.groupby("Área Resp. Operação")["Val_Total_Linha"].sum().reset_index()
-            df_fin_ger = df_fin_ger.sort_values("Val_Total_Linha", ascending=False).head(8)
-            df_fin_ger["Val_Fmt"] = df_fin_ger["Val_Total_Linha"].apply(lambda x: f"R$ {x:,.0f}")
-            
-            fig_fin_ger = px.bar(
-                df_fin_ger, x="Área Resp. Operação", y="Val_Total_Linha", text="Val_Fmt",
-                color="Val_Total_Linha", color_continuous_scale=["#ffe7ba", "#fa8c16", "#d96a00"]
-            )
-            fig_fin_ger.update_traces(
-                textposition="outside",
-                textfont=dict(size=11, color="#d96a00", family="Inter, sans-serif"),
-                hovertemplate='<b>%{x}</b><br>Exposição: R$ %{y:,.2f}'
-            )
-            fig_fin_ger.update_layout(
-                coloraxis_showscale=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=25, b=20), height=330,
-                xaxis=dict(title="", showgrid=False, tickangle=-15),
-                yaxis=dict(title="Valor Pendente (R$)", showgrid=True, gridcolor="#f0f0f0"),
-                font=dict(family="Inter, sans-serif", size=12, color="#334155")
-            )
-            st.plotly_chart(fig_fin_ger, use_container_width=True)
-        else:
-            st.info("Nenhum dado financeiro por gerente disponível.")
-        st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
-# FUNÇÃO REUTILIZÁVEL DE TRATATIVA E ESTILIZAÇÃO DE TABELAS
+# MÓDULO DE TRATATIVA DIRETA LINHA A LINHA
 # ------------------------------------------------------------------------------
 def renderizar_modulo_tratativa(df_filtrado, nome_base, key_prefix):
     if df_filtrado.empty:
         st.info("Nenhum bilhete pendente nesta categoria.")
         return
         
-    col_h1, col_h2 = st.columns([3, 1])
-    with col_h1:
-        termo_busca = st.text_input("🔍 Buscar nesta tela (por Bilhete, LOC, Cliente, Passageiro, Gerente ou Relatório):", key=f"src_{key_prefix}")
-    with col_h2:
-        st.write("")
-        st.write("")
-        st.download_button(
-            f"📥 Extrair Relatório ({nome_base})",
-            data=gerar_excel_estilizado(df_filtrado, nome_base),
-            file_name=f"{nome_base}_Filtrado.xlsx",
-            key=f"btn_dl_{key_prefix}"
-        )
-        
+    termo_busca = st.text_input("🔍 Buscar nesta tela (Bilhete, LOC, Cliente, Gerente):", key=f"src_{key_prefix}")
     df_exib = df_filtrado.copy()
     if termo_busca.strip():
         term = termo_busca.strip().lower()
-        cols_search = [c for c in ["Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Ponto de venda", "Gerentes", "Área Resp. Operação", "Consultor", "Cliente", "Setor", "Fonte_Relatorio"] if c in df_exib.columns]
-        mask_src = pd.Series(False, index=df_exib.index)
-        for col in cols_search:
-            mask_src |= df_exib[col].astype(str).str.lower().str.contains(term, na=False)
-        df_exib = df_exib[mask_src]
+        cols_s = [c for c in ["Bilhetes", "Localizador_Sistema", "Ponto de venda", "Área Resp. Operação", "CIA"] if c in df_exib.columns]
+        m_s = pd.Series(False, index=df_exib.index)
+        for col in cols_s:
+            m_s |= df_exib[col].astype(str).str.lower().str.contains(term, na=False)
+        df_exib = df_exib[m_s]
         
     st.markdown(f"**Registros Visíveis:** {len(df_exib)}")
     bilhetes_lista = df_exib["Bilhetes"].tolist() if "Bilhetes" in df_exib.columns else []
     
-    bilhet_sel = st.multiselect(
-        "Selecione um ou mais Bilhetes para Tratativa Linha a Linha:",
-        options=bilhetes_lista,
-        placeholder="Selecione um ou mais bilhetes para atualizar...",
-        key=f"ms_{key_prefix}"
-    )
+    bilhet_sel = st.multiselect("Selecione Bilhetes para Atualizar:", options=bilhetes_lista, key=f"ms_{key_prefix}")
     
     if bilhet_sel:
-        df_sel_cards = df_exib[df_exib["Bilhetes"].isin(bilhet_sel)]
-        st.markdown('<div class="highlight-card">', unsafe_allow_html=True)
-        st.markdown(f"#### 🎯 Informações do(s) Bilhete(s) Selecionado(s) ({len(df_sel_cards)})")
-        for _, r_card in df_sel_cards.iterrows():
-            obs_card = str(r_card.get('Obs. Operação', '')).replace("Sem tratativa na operação", "").strip() or '-'
-            fonte_card = r_card.get('Fonte_Relatorio', 'Relatório Consolidado')
-            st.markdown(f"""
-            * **Bilhete:** `{r_card.get('Bilhetes')}` | **Relatório Fonte:** `{fonte_card}` | **CIA:** {r_card.get('CIA')}
-            * **Gerente Atual:** {r_card.get('Área Resp. Operação')} | **Setor:** {r_card.get('Setor')} | **Status Atual:** `{r_card.get('Status_Geral')}`
-            * **Obs. Atual:** {obs_card}
-            """)
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        df_primeiro = df_sel_cards.iloc[0]
+        df_sel = df_exib[df_exib["Bilhetes"].isin(bilhet_sel)]
+        df_pr = df_sel.iloc[0]
         with st.form(f"form_trat_{key_prefix}"):
-            c_s1, c_s2 = st.columns(2)
-            with c_s1:
-                opcoes_factiveis = [
-                    "Já Lançado no ERP",
-                    "Emitido e Lançado",
-                    "Pendente de Lançamento (Não Consta)",
-                    "Em Análise Backoffice",
-                    "Divergência de Tarifa",
-                    "Divergência de Taxa",
-                    "Divergência de CIA Aérea",
-                    "Cancelado / Reembolsado"
-                ]
-                status_atual_val = str(df_primeiro.get("Status_Geral", "Pendente de Lançamento (Não Consta)"))
-                idx_default = opcoes_factiveis.index(status_atual_val) if status_atual_val in opcoes_factiveis else 2
-                n_status = st.selectbox("Novo Status (Obrigatório):", options=opcoes_factiveis, index=idx_default, key=f"st_{key_prefix}")
-            
-            with c_s2:
-                lista_gerentes = sorted(list(set(df_todos_unificados["Área Resp. Operação"].dropna().unique()))) if "Área Resp. Operação" in df_todos_unificados.columns else ["Operação"]
-                idx_ger = lista_gerentes.index(df_primeiro.get("Área Resp. Operação")) if df_primeiro.get("Área Resp. Operação") in lista_gerentes else 0
-                n_area = st.selectbox("Nova Área Responsável / Gerente:", options=lista_gerentes, index=idx_ger, key=f"ar_{key_prefix}")
-            
-            obs_init = str(df_primeiro.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
-            n_obs = st.text_area("Observação / Justificativa Detalhada:", value=obs_init, key=f"obs_{key_prefix}")
+            c1, c2 = st.columns(2)
+            with c1:
+                n_status = st.selectbox("Novo Status:", ["Já Lançado no ERP", "Emitido e Lançado", "Pendente de Lançamento (Não Consta)", "Em Análise Backoffice", "Divergência de Tarifa", "Cancelado / Reembolsado"], key=f"st_{key_prefix}")
+            with c2:
+                n_area = st.text_input("Nova Área Responsável / Gerente:", value=str(df_pr.get("Área Resp. Operação", "Operação")), key=f"ar_{key_prefix}")
+            n_obs = st.text_area("Observação / Justificativa:", key=f"obs_{key_prefix}")
             
             if st.form_submit_button("💾 Salvar Tratativa no Supabase"):
                 usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
-                agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                
                 df_up = pd.DataFrame({
-                    "Bilhetes": df_sel_cards["Bilhetes"].values,
-                    "Status_Geral": [n_status] * len(df_sel_cards),
-                    "Área Resp. Operação": [n_area] * len(df_sel_cards),
-                    "Obs. Operação": [n_obs] * len(df_sel_cards),
-                    "Setor": df_sel_cards["Setor"].values,
-                    "Gerentes": [n_area] * len(df_sel_cards)
+                    "Bilhetes": df_sel["Bilhetes"].values,
+                    "Status_Geral": [n_status] * len(df_sel),
+                    "Área Resp. Operação": [n_area] * len(df_sel),
+                    "Obs. Operação": [n_obs] * len(df_sel),
+                    "Setor": df_sel["Setor"].values if "Setor" in df_sel.columns else ["Operação"] * len(df_sel),
+                    "Gerentes": [n_area] * len(df_sel)
                 })
-                
                 ok, msg, _, _, _ = salvar_tratativas_lote_supabase(df_up, usuario=usr_str)
                 if ok:
-                    logs_lote = []
-                    for _, row_b in df_sel_cards.iterrows():
-                        logs_lote.append({
-                            "Data_Hora": agora_str, "Bilhete": row_b.get("Bilhetes"), "Usuario_Acao": usr_str,
-                            "Status_Anterior": row_b.get("Status_Geral", "-"), "Novo_Status": n_status,
-                            "Area_Anterior": row_b.get("Área Resp. Operação", "-"), "Nova_Area": n_area,
-                            "Observacao": n_obs, "Tipo_Interacao": f"Tratativa Direta ({nome_base})"
-                        })
-                    registrar_log_supabase(logs_lote)
                     st.success(msg)
+                    st.cache_data.clear()
                     time.sleep(1)
                     st.rerun()
                 else:
                     st.error(msg)
                     
-    df_tbl_final = df_exib.copy()
-    if bilhet_sel:
-        df_tbl_final["🎯 Destaque"] = df_tbl_final["Bilhetes"].isin(bilhet_sel).map({True: "⭐ SELECIONADO", False: ""})
-        cols_order = ["🎯 Destaque"] + [c for c in df_tbl_final.columns if c != "🎯 Destaque"]
-        df_tbl_final = df_tbl_final[cols_order].sort_values("🎯 Destaque", ascending=False)
-        
-    st.markdown("---")
-    
-    config_colunas = {
-        "Fonte_Relatorio": st.column_config.TextColumn("📄 Fonte do Relatório"),
-        "A vista": st.column_config.NumberColumn("A vista", format="R$ %.2f"),
-        "A credito": st.column_config.NumberColumn("A credito", format="R$ %.2f"),
-        "Tarifa_Sistema": st.column_config.NumberColumn("Tarifa (Sistema)", format="R$ %.2f"),
-        "Dif_Tarifa": st.column_config.NumberColumn("⚠️ Dif. Tarifa", format="R$ %.2f"),
-        "Taxa": st.column_config.NumberColumn("Taxa", format="R$ %.2f"),
-        "Taxa_Sistema": st.column_config.NumberColumn("Taxa (Sistema)", format="R$ %.2f"),
-        "Dif_Taxa": st.column_config.NumberColumn("⚠️ Dif. Taxa", format="R$ %.2f"),
-        "Comissão": st.column_config.NumberColumn("Comissão", format="R$ %.2f"),
-        "Taxa DU": st.column_config.NumberColumn("Taxa DU", format="R$ %.2f"),
-        "Desc.": st.column_config.NumberColumn("Desc.", format="R$ %.2f"),
-        "Incentivo": st.column_config.NumberColumn("Incentivo", format="R$ %.2f"),
-        "Receita_Sistema": st.column_config.NumberColumn("Receita (Sistema)", format="R$ %.2f"),
-        "Dif_Receita": st.column_config.NumberColumn("⚠️ Dif. Receita", format="R$ %.2f"),
-        "VL. Líquido": st.column_config.NumberColumn("VL. Líquido", format="R$ %.2f"),
-        "Tarifa_Total": st.column_config.NumberColumn("Tarifa Total", format="R$ %.2f"),
-        "Bilhetes": st.column_config.TextColumn("Bilhetes"),
-        "CIA": st.column_config.TextColumn("CIA Aérea"),
-        "Status_Geral": st.column_config.TextColumn("Status Geral"),
-        "Área Resp. Operação": st.column_config.TextColumn("Área Resp."),
-    }
-    
-    df_estilizado = aplicar_estilo_colunas_df(df_tbl_final)
-    st.dataframe(df_estilizado, use_container_width=True, hide_index=True, column_config=config_colunas)
+    st.dataframe(df_exib, use_container_width=True, hide_index=True)
 
-# ------------------------------------------------------------------------------
-# ABAS OPERACIONAIS
-# ------------------------------------------------------------------------------
 with aba_sel[1]:
-    st.markdown("<div class='section-banner'><h3>📋 1. Falta de Lançamento no ERP (Maringá Turismo)</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_falta, "Falta_de_Lancamento", "fl")
 with aba_sel[2]:
-    st.markdown("<div class='section-banner'><h3>⚠️ 2. Erros de Valores & CIA (Maringá Turismo)</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_erros, "Erros_Valores_CIA", "ev")
 with aba_sel[3]:
-    st.markdown("<div class='section-banner'><h3>🎧 3. Suporte Backoffice</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_backoffice, "Suporte_Backoffice", "sb")
 with aba_sel[4]:
-    st.markdown("<div class='section-banner'><h3>🎪 4. Central de Eventos</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_eventos, "Central_de_Eventos", "ce")
 with aba_sel[5]:
-    st.markdown("<div class='section-banner'><h3>🤖 5. Emissor Virtual Lemontech</h3></div>", unsafe_allow_html=True)
     renderizar_modulo_tratativa(f_lemon_virt, "Emissor_Virtual_Lemontech", "evl")
-
-# ------------------------------------------------------------------------------
-# ABA 6: BILHETES DIRECIONADOS À CONCILIAÇÃO
-# ------------------------------------------------------------------------------
 with aba_sel[6]:
-    st.markdown(
-        """
-        <div class='section-banner'>
-            <h3>✅ 6. Módulo de Bilhetes Voltado para a Conciliação</h3>
-            <p>Base de bilhetes validados, sem divergências ativas e integrados no ERP. Utilize os filtros avançados abaixo para análises manuais e extração de relatórios.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-    
-    f_c1, f_c2, f_c3 = st.columns(3)
-    with f_c1:
-        opts_ger = sorted(f_sem_div["Área Resp. Operação"].dropna().unique().tolist()) if "Área Resp. Operação" in f_sem_div.columns else []
-        filtro_ok_ger = st.multiselect("Filtrar por Gerente:", options=opts_ger, key="f_ok_ger")
-    with f_c2:
-        opts_cia = sorted(f_sem_div["CIA"].dropna().unique().tolist()) if "CIA" in f_sem_div.columns else []
-        filtro_ok_cia = st.multiselect("Filtrar por CIA Aérea:", options=opts_cia, key="f_ok_cia")
-    with f_c3:
-        opts_setor = sorted(f_sem_div["Setor"].dropna().unique().tolist()) if "Setor" in f_sem_div.columns else []
-        filtro_ok_setor = st.multiselect("Filtrar por Setor:", options=opts_setor, key="f_ok_setor")
-        
-    df_ok_view = f_sem_div.copy()
-    if filtro_ok_ger:
-        df_ok_view = df_ok_view[df_ok_view["Área Resp. Operação"].isin(filtro_ok_ger)]
-    if filtro_ok_cia:
-        df_ok_view = df_ok_view[df_ok_view["CIA"].isin(filtro_ok_cia)]
-    if filtro_ok_setor:
-        df_ok_view = df_ok_view[df_ok_view["Setor"].isin(filtro_ok_setor)]
-        
-    col_ok1, col_ok2 = st.columns([3, 1])
-    with col_ok1:
-        s_ok = st.text_input("🔍 Buscar em Bilhetes Conciliados (por Bilhete, LOC ou Passageiro):", key="s_ok")
-    with col_ok2:
-        st.write("")
-        st.write("")
-        st.download_button(
-            "📥 Extrair Relatório Executivo (Sem Divergência)",
-            data=gerar_excel_estilizado(df_ok_view, "Bilhetes_Conciliados"),
-            file_name="Bilhetes_Conciliados_Filtrado.xlsx",
-            key="btn_dl_ok"
-        )
-        
-    if s_ok.strip():
-        term = s_ok.strip().lower()
-        cols_ok_s = [c for c in ["Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Ponto de venda", "Gerentes", "Consultor", "Fonte_Relatorio"] if c in df_ok_view.columns]
-        m_s_ok = pd.Series(False, index=df_ok_view.index)
-        for col in cols_ok_s:
-            m_s_ok |= df_ok_view[col].astype(str).str.lower().str.contains(term, na=False)
-        df_ok_view = df_ok_view[m_s_ok]
-    st.markdown(f"**Bilhetes Conciliados Exibidos:** {len(df_ok_view):,}")
-    
-    config_colunas_ok = {
-        "Fonte_Relatorio": st.column_config.TextColumn("📄 Fonte do Relatório"),
-        "A vista": st.column_config.NumberColumn("A vista", format="R$ %.2f"),
-        "A credito": st.column_config.NumberColumn("A credito", format="R$ %.2f"),
-        "Tarifa_Sistema": st.column_config.NumberColumn("Tarifa (Sistema)", format="R$ %.2f"),
-        "Dif_Tarifa": st.column_config.NumberColumn("⚠️ Dif. Tarifa", format="R$ %.2f"),
-        "Taxa": st.column_config.NumberColumn("Taxa", format="R$ %.2f"),
-        "Taxa_Sistema": st.column_config.NumberColumn("Taxa (Sistema)", format="R$ %.2f"),
-        "Dif_Taxa": st.column_config.NumberColumn("⚠️ Dif. Taxa", format="R$ %.2f"),
-        "Comissão": st.column_config.NumberColumn("Comissão", format="R$ %.2f"),
-        "Taxa DU": st.column_config.NumberColumn("Taxa DU", format="R$ %.2f"),
-        "Desc.": st.column_config.NumberColumn("Desc.", format="R$ %.2f"),
-        "Incentivo": st.column_config.NumberColumn("Incentivo", format="R$ %.2f"),
-        "Receita_Sistema": st.column_config.NumberColumn("Receita (Sistema)", format="R$ %.2f"),
-        "Dif_Receita": st.column_config.NumberColumn("⚠️ Dif. Receita", format="R$ %.2f"),
-        "VL. Líquido": st.column_config.NumberColumn("VL. Líquido", format="R$ %.2f"),
-        "Tarifa_Total": st.column_config.NumberColumn("Tarifa Total", format="R$ %.2f"),
-    }
-    df_ok_estilizado = aplicar_estilo_colunas_df(df_ok_view)
-    st.dataframe(df_ok_estilizado, use_container_width=True, hide_index=True, column_config=config_colunas_ok)
-
-# ------------------------------------------------------------------------------
-# ABAS EXCLUSIVAS DO MASTER
-# ------------------------------------------------------------------------------
-if e_master():
-    with aba_sel[7]:
-        st.subheader("⚙️ Central de Aprovação de Acessos")
-        usuarios_db = carregar_usuarios_supabase()
-        pendentes = {k: v for k, v in usuarios_db.items() if v.get("status") == "PENDENTE"}
-        if pendentes:
-            for u_k, u_v in pendentes.items():
-                st.write(f"👤 **{u_v['nome']}** (`{u_k}`) | Perfil: **{u_v['perfil']}**")
-                ca1, ca2, _ = st.columns([1, 1, 4])
-                if ca1.button(f"✅ Aprovar {u_k}"):
-                    if atualizar_status_usuario_supabase(u_k, "APROVADO"):
-                        st.success(f"Usuário {u_k} aprovado!")
-                        st.rerun()
-                if ca2.button(f"❌ Rejeitar {u_k}"):
-                    if atualizar_status_usuario_supabase(u_k, "REJEITADO"):
-                        st.success(f"Usuário {u_k} rejeitado.")
-                        st.rerun()
-        else:
-            st.info("Nenhuma solicitação de acesso pendente.")
-            
-    with aba_sel[8]:
-        st.subheader("📜 Histórico de Modificações no Supabase")
-        engine_sb = get_db_engine()
-        if engine_sb:
-            try:
-                df_log_db = pd.read_sql("SELECT * FROM log_auditoria ORDER BY id DESC LIMIT 500", engine_sb)
-                st.dataframe(df_log_db, use_container_width=True, hide_index=True)
-            except Exception:
-                st.info("Nenhum registro de histórico encontrado na tabela log_auditoria do Supabase.")
-                
-    with aba_sel[9]:
-        st.subheader("📥 Carga de Relatórios de Retorno (Processamento em Lote Avançado)")
-        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização massiva no Supabase com análise estatística prévia.")
-        st.warning("🔒 **Sincronização em Lote Ativa:** Os bilhetes e seus campos serão atualizados diretamente no Supabase mantendo a última versão.")
-        
-        arq_upload = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "xls", "csv"], key="uploader_lote")
-        if arq_upload:
-            try:
-                if arq_upload.name.endswith(".csv"):
-                    df_up_raw = pd.read_csv(arq_upload, dtype=str)
-                else:
-                    df_up_raw = pd.read_excel(arq_upload, dtype=str)
-                cols_up = df_up_raw.columns.tolist()
-                
-                col_b = next((c for c in cols_up if c in ["Bilhetes", "Bilhete"] or any(x in str(c).lower() for x in ["bilhete", "ticket"])), None)
-                col_st = next((c for c in cols_up if str(c).strip().lower() in ["status_geral", "status geral", "status", "novo status"]), None)
-                col_ar = next((c for c in cols_up if any(x in str(c).lower() for x in ["área resp", "area resp", "responsavel", "gerente", "área"])), None)
-                col_obs = next((c for c in cols_up if any(x in str(c).lower() for x in ["obs", "observação", "observacao", "justificativa"])), None)
-                col_setor = next((c for c in cols_up if str(c).lower() == "setor"), None)
-                col_gerentes = next((c for c in cols_up if str(c).lower() in ["gerentes", "gerente"]), None)
-                
-                if not col_b:
-                    st.error("⚠️ O arquivo precisa conter ao menos uma coluna identificadora de 'Bilhete'.")
-                else:
-                    df_up_raw["Bilhete_Clean"] = df_up_raw[col_b].apply(sanitizar_bilhete)
-                    df_existentes = carregar_tratativas_db()
-                    set_existentes = set(df_existentes["bilhete"].apply(sanitizar_bilhete).tolist()) if not df_existentes.empty else set()
-                    lote_alteracoes = []
-                    novos_logs = []
-                    agora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
-                    
-                    tot_lote = 0
-                    tot_para_atualizar = 0
-                    tot_novos = 0
-                    for _, r_v in df_up_raw.iterrows():
-                        b_code = r_v["Bilhete_Clean"]
-                        if not b_code or b_code.lower() in ["nan", "none", "-", ""]:
-                            continue
-                            
-                        tot_lote += 1
-                        if b_code in set_existentes:
-                            tot_para_atualizar += 1
-                            tipo_registro = "Atualização de Existente"
-                        else:
-                            tot_novos += 1
-                            tipo_registro = "Novo Registro"
-                        st_novo = str(r_v.get(col_st, "Pendente de Lançamento (Não Consta)")).strip() if col_st else "Pendente de Lançamento (Não Consta)"
-                        ar_novo = str(r_v.get(col_ar, "Operação")).strip() if col_ar else "Operação"
-                        obs_novo = str(r_v.get(col_obs, "")).replace("Sem tratativa na operação", "").strip() if col_obs else ""
-                        setor_novo = str(r_v.get(col_setor, "-")).strip() if col_setor else "-"
-                        gerentes_novo = str(r_v.get(col_gerentes, ar_novo)).strip() if col_gerentes else ar_novo
-                        
-                        lote_alteracoes.append({
-                            "Bilhetes": b_code,
-                            "Status_Geral": st_novo,
-                            "Área Resp. Operação": ar_novo,
-                            "Obs. Operação": obs_novo,
-                            "Setor": setor_novo,
-                            "Gerentes": gerentes_novo,
-                            "Ação no Supabase": tipo_registro
-                        })
-                        novos_logs.append({
-                            "Data_Hora": agora_str,
-                            "Bilhete": b_code,
-                            "Usuario_Acao": usr_str,
-                            "Status_Anterior": "-",
-                            "Novo_Status": st_novo,
-                            "Area_Anterior": "-",
-                            "Nova_Area": ar_novo,
-                            "Observacao": obs_novo,
-                            "Tipo_Interacao": f"Carga em Lote ({tipo_registro})"
-                        })
-                            
-                    df_lote_prep = pd.DataFrame(lote_alteracoes)
-                    
-                    st.markdown("### 📊 Relatório Estatístico Pré-Carga")
-                    m1, m2, m3, m4 = st.columns(4)
-                    m1.metric("Total de Bilhetes", tot_lote)
-                    m2.metric("Bilhetes a Atualizar no Supabase", tot_para_atualizar)
-                    m3.metric("Novos Bilhetes a Inserir", tot_novos)
-                    
-                    duplicados_arquivo = df_lote_prep.duplicated(subset=["Bilhetes"]).sum() if not df_lote_prep.empty else 0
-                    m4.metric("Duplicados no Arquivo", duplicados_arquivo)
-                    
-                    if not df_lote_prep.empty:
-                        st.markdown("#### 📈 Estatísticas do Arquivo Importado")
-                        col_e1, col_e2 = st.columns(2)
-                        with col_e1:
-                            st.markdown("**Distribuição por Status de Destino:**")
-                            df_st_lote = df_lote_prep["Status_Geral"].value_counts().reset_index()
-                            df_st_lote.columns = ["Status", "Quantidade"]
-                            st.dataframe(df_st_lote, use_container_width=True, hide_index=True)
-                        with col_e2:
-                            st.markdown("**Distribuição por Área Responsável / Gerente:**")
-                            df_ar_lote = df_lote_prep["Área Resp. Operação"].value_counts().reset_index()
-                            df_ar_lote.columns = ["Gerente", "Quantidade"]
-                            st.dataframe(df_ar_lote, use_container_width=True, hide_index=True)
-                        st.markdown("**Amostra dos Dados a Serem Sincronizados no Supabase:**")
-                        st.dataframe(df_lote_prep, use_container_width=True)
-                        
-                        if st.button("🚀 Confirmar e Enviar Atualizações para o Supabase", key="btn_confirmar_lote"):
-                            bar_prog = st.progress(0, text="Sincronizando com o banco de dados Supabase...")
-                            
-                            ok, msg, n_at, n_nv, n_err = salvar_tratativas_lote_supabase(df_lote_prep, usuario=f"Carga_Lote_{usr_str}")
-                            
-                            bar_prog.progress(50, text="Gravando trilha de histórico...")
-                            registrar_log_supabase(novos_logs)
-                            
-                            bar_prog.progress(100, text="Concluído!")
-                            st.success(msg)
-                            
-                            time.sleep(1.5)
-                            st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao processar o arquivo: {e}")
+    st.dataframe(f_sem_div, use_container_width=True, hide_index=True)

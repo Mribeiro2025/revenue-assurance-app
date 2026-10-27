@@ -23,7 +23,6 @@ print(" MOTOR DE AUDITORIA FP&A ADVANCED - REVENUE ASSURANCE ".center(75, "="))
 print("=" * 75)
 
 PASTA_ENVIO = "Envio"
-
 MAPA_CIAS = {
     "JJ": "LATAM", "LA": "LATAM", "PZ": "LATAM", "4C": "LATAM", "XL": "LATAM", "4M": "LATAM",
     "G3": "GOL", "AD": "AZUL", "TP": "TAP", "CM": "COPA", "AA": "AMERICAN", "UA": "UNITED",
@@ -34,11 +33,8 @@ MAPA_CIAS = {
     "PY": "PARAGUAY", "HR": "HAHN", "AZ": "ITA AIRWAYS", "JA": "JETSMART",
 }
 
-# ==============================================================================
-# CONEXÃO E AUXILIARES DO SUPABASE / BANCO DE DADOS NUVEM
-# ==============================================================================
 def obter_engine_supabase():
-    """Obtém a conexão com o Supabase com suporte multiplataforma a versões do Python."""
+    """Obtém a conexão SQLAlchemy com o Supabase."""
     try:
         from sqlalchemy import create_engine
         try:
@@ -61,8 +57,134 @@ def obter_engine_supabase():
         pass
     return None
 
+def criar_tabelas_supabase_se_nao_existirem(engine):
+    """Garante a criação de todas as tabelas e views necessárias no Supabase."""
+    if not engine:
+        return
+    from sqlalchemy import text
+    ddl_script = """
+    CREATE TABLE IF NOT EXISTS tb_conciliacao_base (
+        bilhete VARCHAR(255) PRIMARY KEY,
+        localizador VARCHAR(255),
+        rloc_cia VARCHAR(255),
+        cia VARCHAR(255),
+        fornecedor_sistema VARCHAR(255),
+        status_cia VARCHAR(255),
+        status_sistema VARCHAR(255),
+        data_emissao VARCHAR(255),
+        pagto VARCHAR(255),
+        a_vista NUMERIC(15,2) DEFAULT 0.00,
+        a_credito NUMERIC(15,2) DEFAULT 0.00,
+        tarifa_sistema NUMERIC(15,2) DEFAULT 0.00,
+        dif_tarifa NUMERIC(15,2) DEFAULT 0.00,
+        taxa_emitida NUMERIC(15,2) DEFAULT 0.00,
+        taxa_sistema NUMERIC(15,2) DEFAULT 0.00,
+        dif_taxa NUMERIC(15,2) DEFAULT 0.00,
+        comissao NUMERIC(15,2) DEFAULT 0.00,
+        taxa_du NUMERIC(15,2) DEFAULT 0.00,
+        desconto NUMERIC(15,2) DEFAULT 0.00,
+        incentivo NUMERIC(15,2) DEFAULT 0.00,
+        receita_sistema NUMERIC(15,2) DEFAULT 0.00,
+        dif_receita NUMERIC(15,2) DEFAULT 0.00,
+        vl_liquido NUMERIC(15,2) DEFAULT 0.00,
+        status_divergencia VARCHAR(255),
+        consultor VARCHAR(255),
+        emissor VARCHAR(255),
+        sistema_reserva VARCHAR(255),
+        cliente VARCHAR(255),
+        ponto_venda VARCHAR(255),
+        codigo_iata VARCHAR(255),
+        gerente_sugerido VARCHAR(255),
+        setor_sugerido VARCHAR(255),
+        aba_destino VARCHAR(255),
+        fonte_relatorio VARCHAR(255),
+        tipo_emissao_lemon VARCHAR(255),
+        consultor_lemon VARCHAR(255),
+        emissor_reserva_lemon VARCHAR(255),
+        centro_custo_lemon VARCHAR(255),
+        forma_pagto_lemon VARCHAR(255),
+        autorizacao_cartao_lemon VARCHAR(255),
+        modalidade_lemon VARCHAR(255),
+        emissao_online_lemon VARCHAR(255),
+        source_lemon VARCHAR(255),
+        ponto_venda_lemon VARCHAR(255),
+        data_processamento TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS tratativas (
+        bilhete VARCHAR(255) PRIMARY KEY,
+        status_geral VARCHAR(255),
+        area_resp VARCHAR(255),
+        obs_operacao TEXT,
+        setor VARCHAR(255),
+        gerentes VARCHAR(255),
+        usuario_modificacao VARCHAR(255),
+        data_modificacao TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE OR REPLACE VIEW vw_conciliacao_mestra AS
+    SELECT 
+        b.bilhete AS "Bilhetes",
+        b.ponto_venda AS "Ponto de venda",
+        b.codigo_iata AS "Código Iata",
+        COALESCE(t.gerentes, t.area_resp, b.gerente_sugerido, 'Não Mapeado') AS "Gerentes",
+        b.cia AS "CIA",
+        b.fornecedor_sistema AS "Fornecedor_Sistema",
+        b.status_cia AS "Status_Cia",
+        b.localizador AS "Localizador_Sistema",
+        b.rloc_cia AS "Rloc_Cia",
+        b.status_sistema AS "Status_Sistema",
+        b.data_emissao AS "Data Emissão",
+        b.pagto AS "Pagto",
+        b.a_vista AS "A vista",
+        b.a_credito AS "A credito",
+        b.tarifa_sistema AS "Tarifa_Sistema",
+        b.dif_tarifa AS "Dif_Tarifa",
+        b.taxa_emitida AS "Taxa",
+        b.taxa_sistema AS "Taxa_Sistema",
+        b.dif_taxa AS "Dif_Taxa",
+        b.comissao AS "Comissão",
+        b.taxa_du AS "Taxa DU",
+        b.desconto AS "Desc.",
+        b.incentivo AS "Incentivo",
+        b.receita_sistema AS "Receita_Sistema",
+        b.dif_receita AS "Dif_Receita",
+        b.vl_liquido AS "VL. Líquido",
+        b.status_divergencia AS "Status_Divergencia",
+        b.consultor AS "Consultor",
+        COALESCE(t.status_geral, b.status_divergencia, 'Pendente de Lançamento (Não Consta)') AS "Status_Geral",
+        COALESCE(t.area_resp, b.gerente_sugerido, 'Operação') AS "Área Resp. Operação",
+        COALESCE(t.obs_operacao, '') AS "Obs. Operação",
+        t.data_modificacao AS "Data_Modificacao",
+        t.usuario_modificacao AS "Usuario_Modificacao",
+        t.data_modificacao AS "Ultima_Alteracao",
+        b.emissor AS "Emissor",
+        b.sistema_reserva AS "Sistema Reserva",
+        b.cliente AS "Cliente",
+        COALESCE(t.setor, b.setor_sugerido, 'Operação') AS "Setor",
+        b.tipo_emissao_lemon AS "Tipo_Emissao_Lemon",
+        b.consultor_lemon AS "Consultor_Lemon",
+        b.emissor_reserva_lemon AS "Emissor_Reserva_Lemon",
+        b.centro_custo_lemon AS "Centro_Custo_Lemon",
+        b.forma_pagto_lemon AS "Forma_Pagto_Lemon",
+        b.autorizacao_cartao_lemon AS "Autorizacao_Cartao_Lemon",
+        b.modalidade_lemon AS "Modalidade_Lemon",
+        b.emissao_online_lemon AS "Emissao_Online_Lemon",
+        b.source_lemon AS "Source_Lemon",
+        b.ponto_venda_lemon AS "Ponto_Venda_Lemon",
+        b.aba_destino AS "Aba_Destino",
+        b.fonte_relatorio AS "Fonte_Relatorio"
+    FROM tb_conciliacao_base b
+    LEFT JOIN tratativas t ON b.bilhete = t.bilhete;
+    """
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(ddl_script))
+        print("⚡ Estrutura do Supabase (Tabelas e Visão) validada com sucesso!")
+    except Exception as e:
+        print(f"⚠️ Aviso ao verificar estrutura no Supabase: {e}")
+
 def auto_converter_benner_parquet():
-    """Garante conversão e atualização automática do Acumulado.xlsx -> Parquet."""
     arq_xlsx = "Acumulado.xlsx"
     arq_parquet = "Acumulado.parquet"
     if not os.path.exists(arq_xlsx):
@@ -71,9 +193,7 @@ def auto_converter_benner_parquet():
     if not os.path.exists(arq_parquet):
         precisa_converter = True
     else:
-        mtime_xlsx = os.path.getmtime(arq_xlsx)
-        mtime_parquet = os.path.getmtime(arq_parquet)
-        if mtime_xlsx > mtime_parquet:
+        if os.path.getmtime(arq_xlsx) > os.path.getmtime(arq_parquet):
             precisa_converter = True
     if precisa_converter:
         print("\n⏳ [AUTO-CONVERTER] Atualizando 'Acumulado.parquet' a partir de 'Acumulado.xlsx'...")
@@ -112,8 +232,8 @@ def clean_iata(val):
     if pd.isna(val) or val is None:
         return ""
     s = str(val).strip()
-    s = re.sub(r"\.0$", "", s)            # Remove .0 caso o Pandas leia como float
-    s = re.sub(r"[^A-Za-z0-9]", "", s)    # Remove hífens, espaços e caracteres especiais
+    s = re.sub(r"\.0$", "", s)
+    s = re.sub(r"[^A-Za-z0-9]", "", s)
     return s.upper()
 
 def safe_get_col(row, idx, default=""):
@@ -156,12 +276,23 @@ def extract_keys(val):
     return list(keys)
 
 def gerar_chave_composta(codigo, data_str):
-    """Gera chave composta Codigo_Data para desambiguar reemissões/LOCs reutilizados."""
     cod_limpo = clean_str_strict(codigo).upper()
     dt_limpa = clean_str_strict(data_str).replace("/", "").replace("-", "")
     if cod_limpo and dt_limpa:
         return f"{cod_limpo}_{dt_limpa}"
     return cod_limpo
+
+def identificar_fonte_relatorio(nome_fonte, emissor_str=""):
+    s_em = str(emissor_str).lower()
+    if "lemontech" in s_em or "virtual" in s_em:
+        return "🤖 Relatório Lemontech (Virtual)"
+    if "GOL" in nome_fonte.upper():
+        return "✈️ Relatório GOL Direct"
+    if "AZUL" in nome_fonte.upper():
+        return "✈️ Relatório AZUL Direct"
+    if "BSP" in nome_fonte.upper() or "HOT" in nome_fonte.upper():
+        return "🌐 Relatório BSP (IATA)"
+    return "🏢 Relatório ERP Benner"
 
 def carregar_tratativas_e_logs_anteriores(out_file):
     dict_historico = {}
@@ -200,40 +331,11 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                                 "Obs. Operação": obs_limpa,
                                 "Setor": r.get("Setor"),
                                 "Gerentes": r.get("Gerentes"),
-                                "Obs_Auditoria_Replica": r.get("Obs_Auditoria_Replica"),
                                 "Ponto de venda": r.get("Ponto de venda"),
                                 "Código Iata": r.get("Código Iata"),
-                                "Data_Modificacao": r.get("Data_Modificacao"),
-                                "Usuario_Modificacao": r.get("Usuario_Modificacao"),
-                                "Ultima_Alteracao": r.get("Ultima_Alteracao"),
                             })
         except Exception as e:
             print(f"⚠️ Aviso ao carregar histórico do Excel: {e}")
-
-    file_memoria = "Historico_Tratativas.csv"
-    if os.path.exists(file_memoria) and os.path.getsize(file_memoria) > 0:
-        try:
-            df_mem = pd.read_csv(file_memoria, dtype=str)
-            for r in df_mem.to_dict("records"):
-                b_key = clean_str_strict(r.get("Bilhetes", ""))
-                if b_key:
-                    obs_limpa = str(r.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
-                    indexar_memoria(b_key, {
-                        "Status_Geral": r.get("Status_Geral"),
-                        "Área Resp. Operação": r.get("Área Resp. Operação"),
-                        "Obs. Operação": obs_limpa,
-                        "Setor": r.get("Setor"),
-                        "Gerentes": r.get("Gerentes"),
-                        "Obs_Auditoria_Replica": r.get("Obs_Auditoria_Replica"),
-                        "Ponto de venda": r.get("Ponto de venda"),
-                        "Código Iata": r.get("Código Iata"),
-                        "Data_Modificacao": r.get("Data_Modificacao"),
-                        "Usuario_Modificacao": r.get("Usuario_Modificacao"),
-                        "Ultima_Alteracao": r.get("Ultima_Alteracao"),
-                    })
-            print(f"🛡️ Memória protegida '{file_memoria}' sincronizada com sucesso.")
-        except Exception as e:
-            print(f"⚠️ Erro ao ler memória CSV: {e}")
 
     engine_sb = obter_engine_supabase()
     if engine_sb:
@@ -251,11 +353,9 @@ def carregar_tratativas_e_logs_anteriores(out_file):
                             "Setor": r.get("setor"),
                             "Gerentes": r.get("gerentes"),
                         })
-                print(f"☁️ Supabase conectado! {len(df_sb)} tratativas resgatadas da nuvem com sucesso.")
+                print(f"☁️ Supabase conectado! {len(df_sb)} tratativas resgatadas com sucesso.")
         except Exception as e:
-            print(f"⚠️ Aviso ao conectar/carregar dados do Supabase: {e}")
-    else:
-        print("⚠️ Conexão com Supabase não estabelecida.")
+            print(f"⚠️ Aviso ao carregar dados do Supabase: {e}")
 
     return dict_historico, df_log_antigo
 
@@ -281,56 +381,148 @@ def salvar_csv_atomico(df, caminho_csv):
         os.remove(caminho_csv)
     os.rename(tmp_path, caminho_csv)
 
-def sincronizar_supabase_fim(df_master):
+def sincronizar_supabase_tudo(df_master):
+    """Envia todos os bilhetes auditados para a tb_conciliacao_base no Supabase em lote."""
     engine_sb = obter_engine_supabase()
     if not engine_sb or df_master.empty:
         return
-    try:
-        from sqlalchemy import text
-        cols_req = [c for c in ["Bilhetes", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Gerentes"] if c in df_master.columns]
-        df_trat = df_master[cols_req].dropna(subset=["Bilhetes"]).drop_duplicates(subset=["Bilhetes"])
+    
+    criar_tabelas_supabase_se_nao_existirem(engine_sb)
+    from sqlalchemy import text
+    
+    upsert_base_sql = text("""
+        INSERT INTO tb_conciliacao_base (
+            bilhete, localizador, rloc_cia, cia, fornecedor_sistema, status_cia, status_sistema,
+            data_emissao, pagto, a_vista, a_credito, tarifa_sistema, dif_tarifa, taxa_emitida,
+            taxa_sistema, dif_taxa, comissao, taxa_du, desconto, incentivo, receita_sistema,
+            dif_receita, vl_liquido, status_divergencia, consultor, emissor, sistema_reserva,
+            cliente, ponto_venda, codigo_iata, gerente_sugerido, setor_sugerido, aba_destino,
+            fonte_relatorio, tipo_emissao_lemon, consultor_lemon, emissor_reserva_lemon,
+            centro_custo_lemon, forma_pagto_lemon, autorizacao_cartao_lemon, modalidade_lemon,
+            emissao_online_lemon, source_lemon, ponto_venda_lemon, data_processamento
+        ) VALUES (
+            :bilhete, :localizador, :rloc_cia, :cia, :fornecedor_sistema, :status_cia, :status_sistema,
+            :data_emissao, :pagto, :a_vista, :a_credito, :tarifa_sistema, :dif_tarifa, :taxa_emitida,
+            :taxa_sistema, :dif_taxa, :comissao, :taxa_du, :desconto, :incentivo, :receita_sistema,
+            :dif_receita, :vl_liquido, :status_divergencia, :consultor, :emissor, :sistema_reserva,
+            :cliente, :ponto_venda, :codigo_iata, :gerente_sugerido, :setor_sugerido, :aba_destino,
+            :fonte_relatorio, :tipo_emissao_lemon, :consultor_lemon, :emissor_reserva_lemon,
+            :centro_custo_lemon, :forma_pagto_lemon, :autorizacao_cartao_lemon, :modalidade_lemon,
+            :emissao_online_lemon, :source_lemon, :ponto_venda_lemon, NOW()
+        ) ON CONFLICT (bilhete) DO UPDATE SET
+            localizador = EXCLUDED.localizador,
+            rloc_cia = EXCLUDED.rloc_cia,
+            cia = EXCLUDED.cia,
+            fornecedor_sistema = EXCLUDED.fornecedor_sistema,
+            status_cia = EXCLUDED.status_cia,
+            status_sistema = EXCLUDED.status_sistema,
+            data_emissao = EXCLUDED.data_emissao,
+            pagto = EXCLUDED.pagto,
+            a_vista = EXCLUDED.a_vista,
+            a_credito = EXCLUDED.a_credito,
+            tarifa_sistema = EXCLUDED.tarifa_sistema,
+            dif_tarifa = EXCLUDED.dif_tarifa,
+            taxa_emitida = EXCLUDED.taxa_emitida,
+            taxa_sistema = EXCLUDED.taxa_sistema,
+            dif_taxa = EXCLUDED.dif_taxa,
+            comissao = EXCLUDED.comissao,
+            taxa_du = EXCLUDED.taxa_du,
+            desconto = EXCLUDED.desconto,
+            incentivo = EXCLUDED.incentivo,
+            receita_sistema = EXCLUDED.receita_sistema,
+            dif_receita = EXCLUDED.dif_receita,
+            vl_liquido = EXCLUDED.vl_liquido,
+            status_divergencia = EXCLUDED.status_divergencia,
+            consultor = EXCLUDED.consultor,
+            emissor = EXCLUDED.emissor,
+            sistema_reserva = EXCLUDED.sistema_reserva,
+            cliente = EXCLUDED.cliente,
+            ponto_venda = EXCLUDED.ponto_venda,
+            codigo_iata = EXCLUDED.codigo_iata,
+            gerente_sugerido = EXCLUDED.gerente_sugerido,
+            setor_sugerido = EXCLUDED.setor_sugerido,
+            aba_destino = EXCLUDED.aba_destino,
+            fonte_relatorio = EXCLUDED.fonte_relatorio,
+            tipo_emissao_lemon = EXCLUDED.tipo_emissao_lemon,
+            consultor_lemon = EXCLUDED.consultor_lemon,
+            emissor_reserva_lemon = EXCLUDED.emissor_reserva_lemon,
+            centro_custo_lemon = EXCLUDED.centro_custo_lemon,
+            forma_pagto_lemon = EXCLUDED.forma_pagto_lemon,
+            autorizacao_cartao_lemon = EXCLUDED.autorizacao_cartao_lemon,
+            modalidade_lemon = EXCLUDED.modalidade_lemon,
+            emissao_online_lemon = EXCLUDED.emissao_online_lemon,
+            source_lemon = EXCLUDED.source_lemon,
+            ponto_venda_lemon = EXCLUDED.ponto_venda_lemon,
+            data_processamento = NOW();
+    """)
+    
+    lote_base = []
+    for _, r in df_master.iterrows():
+        b_val = clean_str_strict(r.get("Bilhetes"))
+        if b_val:
+            lote_base.append({
+                "bilhete": b_val,
+                "localizador": clean_str_strict(r.get("Localizador_Sistema")),
+                "rloc_cia": clean_str_strict(r.get("Rloc_Cia")),
+                "cia": clean_str_strict(r.get("CIA")),
+                "fornecedor_sistema": clean_str_strict(r.get("Fornecedor_Sistema")),
+                "status_cia": clean_str_strict(r.get("Status_Cia")),
+                "status_sistema": clean_str_strict(r.get("Status_Sistema")),
+                "data_emissao": clean_str_strict(r.get("Data Emissão")),
+                "pagto": clean_str_strict(r.get("Pagto")),
+                "a_vista": clean_num(r.get("A vista")),
+                "a_credito": clean_num(r.get("A credito")),
+                "tarifa_sistema": clean_num(r.get("Tarifa_Sistema")),
+                "dif_tarifa": clean_num(r.get("Dif_Tarifa")),
+                "taxa_emitida": clean_num(r.get("Taxa")),
+                "taxa_sistema": clean_num(r.get("Taxa_Sistema")),
+                "dif_taxa": clean_num(r.get("Dif_Taxa")),
+                "comissao": clean_num(r.get("Comissão")),
+                "taxa_du": clean_num(r.get("Taxa DU")),
+                "desconto": clean_num(r.get("Desc.")),
+                "incentivo": clean_num(r.get("Incentivo")),
+                "receita_sistema": clean_num(r.get("Receita_Sistema")),
+                "dif_receita": clean_num(r.get("Dif_Receita")),
+                "vl_liquido": clean_num(r.get("VL. Líquido")),
+                "status_divergencia": clean_str_strict(r.get("Status_Divergencia")),
+                "consultor": clean_str_strict(r.get("Consultor")),
+                "emissor": clean_str_strict(r.get("Emissor")),
+                "sistema_reserva": clean_str_strict(r.get("Sistema Reserva")),
+                "cliente": clean_str_strict(r.get("Cliente")),
+                "ponto_venda": clean_str_strict(r.get("Ponto de venda")),
+                "codigo_iata": clean_str_strict(r.get("Código Iata")),
+                "gerente_sugerido": clean_str_strict(r.get("Área Resp. Operação") or r.get("Gerentes")),
+                "setor_sugerido": clean_str_strict(r.get("Setor")),
+                "aba_destino": clean_str_strict(r.get("Aba_Destino")),
+                "fonte_relatorio": clean_str_strict(r.get("Fonte_Relatorio")),
+                "tipo_emissao_lemon": clean_str_strict(r.get("Tipo_Emissao_Lemon")),
+                "consultor_lemon": clean_str_strict(r.get("Consultor_Lemon")),
+                "emissor_reserva_lemon": clean_str_strict(r.get("Emissor_Reserva_Lemon")),
+                "centro_custo_lemon": clean_str_strict(r.get("Centro_Custo_Lemon")),
+                "forma_pagto_lemon": clean_str_strict(r.get("Forma_Pagto_Lemon")),
+                "autorizacao_cartao_lemon": clean_str_strict(r.get("Autorizacao_Cartao_Lemon")),
+                "modalidade_lemon": clean_str_strict(r.get("Modalidade_Lemon")),
+                "emissao_online_lemon": clean_str_strict(r.get("Emissao_Online_Lemon")),
+                "source_lemon": clean_str_strict(r.get("Source_Lemon")),
+                "ponto_venda_lemon": clean_str_strict(r.get("Ponto_Venda_Lemon"))
+            })
+            
+    if lote_base:
         try:
-            with engine_sb.begin() as conn:
-                conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS setor VARCHAR(255);"))
-                conn.execute(text("ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS gerentes VARCHAR(255);"))
-        except Exception:
-            pass
-
-        upsert_sql = text("""
-            INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, usuario_modificacao, data_modificacao)
-            VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, 'Motor_VSCode', NOW())
-            ON CONFLICT (bilhete) DO UPDATE SET
-                status_geral = EXCLUDED.status_geral,
-                area_resp = EXCLUDED.area_resp,
-                obs_operacao = EXCLUDED.obs_operacao,
-                setor = COALESCE(EXCLUDED.setor, tratativas.setor),
-                gerentes = COALESCE(EXCLUDED.gerentes, tratativas.gerentes),
-                data_modificacao = NOW();
-        """)
-        dados_lote = []
-        for _, r in df_trat.iterrows():
-            b_val = clean_str_strict(r["Bilhetes"])
-            if b_val:
-                obs_limpa = str(r.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
-                dados_lote.append({
-                    "bilhete": b_val,
-                    "status_geral": str(r.get("Status_Geral", "")),
-                    "area_resp": str(r.get("Área Resp. Operação", "")),
-                    "obs_operacao": obs_limpa,
-                    "setor": str(r.get("Setor", "-")),
-                    "gerentes": str(r.get("Gerentes", "-"))
-                })
-        if dados_lote:
-            with engine_sb.begin() as conn:
-                conn.execute(upsert_sql, dados_lote)
-            print(f"☁️ {len(dados_lote)} tratativas sincronizadas em lote no Supabase com Setor e Gerentes!")
-    except Exception as e:
-        print(f"⚠️ Aviso ao sincronizar com o Supabase: {e}")
+            tam_lote = 500
+            for i in range(0, len(lote_base), tam_lote):
+                chunk = lote_base[i:i + tam_lote]
+                with engine_sb.begin() as conn:
+                    conn.execute(upsert_base_sql, chunk)
+            print(f"☁️ {len(lote_base)} registos sincronizados na 'tb_conciliacao_base' do Supabase!")
+        except Exception as e:
+            print(f"⚠️ Erro ao sincronizar lote na 'tb_conciliacao_base': {e}")
 
 def executar_auditoria():
     auto_converter_benner_parquet()
     out_file_model = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
     dict_historico, df_log_acumulado = carregar_tratativas_e_logs_anteriores(out_file_model)
+    
     if os.path.exists(out_file_model):
         dt_bkp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         try:
@@ -389,7 +581,7 @@ def executar_auditoria():
     else:
         caminho_benner = encontrar_arquivo(["Acumulado.xlsx", "Acumulado.XLSX"])
         df_benner = pd.read_excel(caminho_benner, sheet_name="Planilha1") if caminho_benner else pd.DataFrame()
-
+    
     benner_index = {}
     key_cols_benner = [
         "Bilhete", "Localizador", "Rloc Cia", "Rloc CIA", "Código Rloc",
@@ -451,9 +643,9 @@ def executar_auditoria():
                 if k not in sabre_index:
                     sabre_index[k] = info
 
-    print("\n[5/5] Auditando e Conciliando Emissões das Cias Aéreas com MAPEAMENTO DINÂMICO DE VALORES E DOCUMENTOS...")
+    print("\n[5/5] Auditando e Conciliando Emissões das Cias Aéreas...")
     fontes = [
-        (["AZUL.XLSX", "AZUL.xlsx"], "Azul"),
+        (["AZUL.XLSX", "AZUL.xlsx"], "AZUL"),
         (["BSP.XLSX", "BSP.xlsx"], "BSP"),
         (["HOT.XLSX", "HOT.xlsx"], "HOT"),
         (["GOL.XLSX", "GOL.xlsx"], "GOL"),
@@ -490,7 +682,6 @@ def executar_auditoria():
                 if col4:
                     curr_ponto_venda = col4
                 continue
-
             if col3 != "" and col3 not in ["BILHETE\\RLOC", "BILHETE", "RLOC", "[]"] and col1 != "CIA":
                 if col3.upper() in ["BILHETE\\RLOC", "BILHETE", "RLOC"] or col5.upper() in ["EMISSÃO", "EMISSAO"]:
                     continue
@@ -511,7 +702,6 @@ def executar_auditoria():
                         pagto = col6
                 if not dt_emissao or dt_emissao.upper() in ["EMISSÃO", "EMISSAO"]:
                     continue
-
                 doc_col_idx = col_map.get("DOCUMENTO", 22)
                 doc_val = safe_get_col(row, doc_col_idx)
                 clean_doc = re.sub(r"[^0-9]", "", doc_val)
@@ -521,9 +711,8 @@ def executar_auditoria():
                 else:
                     bilhete_chave = col3
                     loc_reserva = doc_val
-
-                hist_data = buscar_memoria(dict_historico, bilhete_chave)
                 
+                hist_data = buscar_memoria(dict_historico, bilhete_chave)
                 iata_final = curr_iata or hist_data.get("Código Iata") or "DIRETO"
                 iata_clean = clean_iata(iata_final)
                 m_iata = iata_dict.get(iata_clean, {})
@@ -550,17 +739,15 @@ def executar_auditoria():
                     ponto_venda_final = ponto_oficial
                 else:
                     ponto_venda_final = "Não Mapeado"
-
+                
                 obs_op = str(hist_data.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
-                obs_replica = hist_data.get("Obs_Auditoria_Replica") or "-"
                 st_lower = str(hist_data.get("Status_Geral") or "").strip().lower()
                 area_lower = str(gerente_resp).strip().lower()
                 obs_lower = str(obs_op).strip().lower()
-
                 tem_gerente_bo = any(k in area_lower for k in ["katia martins", "kátia martins", "suporte backoffice", "backoffice"])
                 tem_chamado_obs = any(p in obs_lower or p in st_lower for p in ["ticket", "chamado", "suporte"])
                 e_suporte_backoffice = tem_gerente_bo and tem_chamado_obs
-
+                
                 if hist_data.get("Setor"):
                     setor_final = hist_data["Setor"]
                 elif e_suporte_backoffice:
@@ -576,7 +763,7 @@ def executar_auditoria():
                     setor_final = "Private"
                 else:
                     setor_final = "Operação"
-
+                
                 keys_emissao = set(extract_keys(bilhete_chave) + extract_keys(col3) + extract_keys(doc_val))
                 b_match = None
                 for ek in keys_emissao:
@@ -586,10 +773,10 @@ def executar_auditoria():
                         break
                     elif ek in benner_index:
                         b_match = benner_index[ek]
-
+                
                 s_match = next((sabre_index[ek] for ek in keys_emissao if ek in sabre_index), None)
                 l_match = next((lemon_index[ek] for ek in keys_emissao if ek in lemon_index), None)
-
+                
                 def get_val_dinamico(hdr_options):
                     for h in hdr_options:
                         h_up = h.upper()
@@ -607,31 +794,28 @@ def executar_auditoria():
                 incentivo = get_val_dinamico(["Incentivo", "INCENTIVO"])
                 receita_emitida = comissao + taxa_du + incentivo
                 vl_liquido = get_val_dinamico(["VL. Líquido", "VL. LÍQUIDO", "VL. Liquido"])
-
+                
                 if b_match:
                     status_sistema = b_match["Benner_Situação"]
                     fornec_sistema = b_match["Benner_Fornecedor"]
                     loc_sistema = b_match["Benner_Localizador"]
                     rloc_cia_sistema = b_match["Benner_Rloc_Cia"]
-                    bilhete_sistema = b_match["Benner_Bilhete"]
                     tarifa_sistema = b_match["Benner_Tarifa"]
                     taxa_sistema = b_match["Benner_Taxas"]
                     receita_sistema = b_match["Benner_Receita"]
                     cliente_sistema = b_match["Benner_Cliente"]
                     emissor_sistema = b_match["Benner_Emissor"]
                     sist_reserva = b_match["Benner_Sistema_Reserva"]
-
                     sigla_cia = col1.strip().upper()
                     nome_esperado_cia = MAPA_CIAS.get(sigla_cia, sigla_cia)
                     status_cia = (
                         "OK" if (nome_esperado_cia in fornec_sistema.upper() or sigla_cia in fornec_sistema.upper())
                         else "Divergência de Cia Aérea"
                     )
-
                     dif_tarifa = tarifa_emitida - tarifa_sistema
                     dif_taxa = taxa_emitida - taxa_sistema
                     dif_receita = receita_emitida - receita_sistema
-
+                    
                     if nome_fonte == "HOT":
                         if status_cia != "OK":
                             status_divergencia = "Divergência de Cia Aérea"
@@ -649,14 +833,12 @@ def executar_auditoria():
                             divs.append("Receita")
                         if status_cia != "OK":
                             divs.append("Cia Aérea")
-
                         if divs:
                             status_divergencia = f"Divergência de {' e '.join(divs)}"
                             aba_destino = "98_OK_Divergencia_Operacao"
                         else:
                             status_divergencia = "Valores Corretos"
                             aba_destino = "98_OK_Sem_Divergencia_Concil"
-
                     status_geral = hist_data.get("Status_Geral") or "Emitido e Lançado"
                 else:
                     status_sistema = "NAO_CONSTA"
@@ -666,7 +848,6 @@ def executar_auditoria():
                         col3 if (len(col3) <= 8 and not col3.isdigit() and col3.upper() not in ["[]", "NAN"])
                         else "-"
                     )
-                    bilhete_sistema = bilhete_chave
                     tarifa_sistema, taxa_sistema, receita_sistema = 0.0, 0.0, 0.0
                     cliente_sistema = ponto_venda_final
                     emissor_sistema, sist_reserva = "-", "-"
@@ -675,19 +856,9 @@ def executar_auditoria():
                     status_divergencia = "Pendente de Lançamento"
                     status_geral = hist_data.get("Status_Geral") or "Pendente de Lançamento (Não Consta)"
                     aba_destino = "99_Base_Divergencias_Geral"
-
-                # SOBREPOSIÇÃO INTELIGENTE DE TRATATIVA DO SUPABASE
-                sg_str = str(status_geral).lower().strip()
-                termos_resolvidos = [
-                    "já lançado", "ja lancado", "emitido e lançado", "emitido e lancado",
-                    "lançado", "lancado", "conciliado", "regularizado", "sem divergência",
-                    "sem divergencia", "valores corretos", "ok"
-                ]
-                if any(term in sg_str for term in termos_resolvidos):
-                    status_divergencia = "Valores Corretos"
-                    status_cia = "OK"
-                    aba_destino = "98_OK_Sem_Divergencia_Concil"
-
+                
+                fonte_rel = identificar_fonte_relatorio(nome_fonte, emissor_sistema)
+                
                 rec = {
                     "Ponto de venda": ponto_venda_final,
                     "Código Iata": iata_final,
@@ -720,15 +891,12 @@ def executar_auditoria():
                     "Status_Geral": status_geral,
                     "Área Resp. Operação": gerente_resp,
                     "Obs. Operação": obs_op,
-                    "Obs_Auditoria_Replica": obs_replica,
-                    "Data_Modificacao": hist_data.get("Data_Modificacao") or "-",
-                    "Usuario_Modificacao": hist_data.get("Usuario_Modificacao") or "-",
-                    "Ultima_Alteracao": hist_data.get("Ultima_Alteracao") or "-",
                     "Emissor": emissor_sistema if b_match else (l_match["Lemon_Emissor_Reserva"] if l_match else "-"),
                     "Sistema Reserva": sist_reserva if b_match else (l_match["Lemon_Source"] if l_match else "-"),
                     "Cliente": cliente_sistema,
                     "Setor": setor_final,
                     "Aba_Destino": aba_destino,
+                    "Fonte_Relatorio": fonte_rel,
                     "Tipo_Emissao_Lemon": l_match["Lemon_OnOff"] if l_match else "-",
                     "Consultor_Lemon": l_match["Lemon_Consultor"] if l_match else "-",
                     "Emissor_Reserva_Lemon": l_match["Lemon_Emissor_Reserva"] if l_match else "-",
@@ -750,184 +918,29 @@ def executar_auditoria():
     for col_str in ["Bilhetes", "Localizador_Sistema", "Data Emissão", "CIA", "Ponto de venda"]:
         if col_str in df_master.columns:
             df_master[col_str] = df_master[col_str].astype(str).str.strip()
-
+            
     df_master = df_master.drop_duplicates(
         subset=["Bilhetes", "Data Emissão", "A vista", "A credito", "Taxa", "Comissão"],
         keep="first"
     )
 
-    a_vista_col = df_master["A vista"] if "A vista" in df_master.columns else pd.Series(0.0, index=df_master.index)
-    a_credito_col = df_master["A credito"] if "A credito" in df_master.columns else pd.Series(0.0, index=df_master.index)
-    df_master["Tarifa_Total"] = pd.to_numeric(a_vista_col, errors="coerce").fillna(0.0) + pd.to_numeric(a_credito_col, errors="coerce").fillna(0.0)
-
-    inc_col = df_master["Incentivo"] if "Incentivo" in df_master.columns else pd.Series(0.0, index=df_master.index)
-    com_col = df_master["Comissão"] if "Comissão" in df_master.columns else pd.Series(0.0, index=df_master.index)
-    tdu_col = df_master["Taxa DU"] if "Taxa DU" in df_master.columns else pd.Series(0.0, index=df_master.index)
-    df_master["Receita_Total"] = (
-        pd.to_numeric(inc_col, errors="coerce").fillna(0.0)
-        + pd.to_numeric(com_col, errors="coerce").fillna(0.0)
-        + pd.to_numeric(tdu_col, errors="coerce").fillna(0.0)
-    )
-
-    pareto_df = (
-        df_master.groupby(["Setor", "Ponto de venda"])
-        .agg(
-            Qtd_Bilhetes=("Bilhetes", "count"),
-            Tarifa_Pendente_R_=("Tarifa_Total", "sum"),
-            Taxa_Pendente_R_=("Taxa", "sum"),
-            Receita_Pendente_R_=("Receita_Total", "sum"),
-        )
-        .reset_index()
-        .rename(
-            columns={
-                "Ponto de venda": "Cliente / Ponto de Venda",
-                "Tarifa_Pendente_R_": "Tarifa_Pendente_R$",
-                "Taxa_Pendente_R_": "Taxa_Pendente_R$",
-                "Receita_Pendente_R_": "Receita_Pendente_R$",
-            }
-        )
-        .sort_values(by=["Qtd_Bilhetes", "Tarifa_Pendente_R$"], ascending=False)
-    )
-
-    cols_35 = [
-        "Ponto de venda", "Código Iata", "Gerentes", "CIA", "Fornecedor_Sistema", "Status_Cia",
-        "Bilhetes", "Localizador_Sistema", "Rloc_Cia", "Status_Sistema", "Data Emissão", "Pagto",
-        "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa", "Taxa_Sistema", "Dif_Taxa",
-        "Comissão", "Taxa DU", "Desc.", "Incentivo", "Receita_Sistema", "Dif_Receita", "VL. Líquido",
-        "Status_Divergencia", "Consultor", "Status_Geral", "Área Resp. Operação", "Obs. Operação",
-        "Data_Modificacao", "Usuario_Modificacao", "Ultima_Alteracao",
-        "Emissor", "Sistema Reserva", "Cliente", "Setor",
-        "Modalidade_Lemon", "Emissao_Online_Lemon", "Source_Lemon", "Ponto_Venda_Lemon"
-    ]
-
-    cols_30_furo = [
-        "Ponto de venda", "Código Iata", "Gerentes", "CIA", "Bilhetes", "Localizador_Sistema",
-        "Rloc_Cia", "Status_Sistema", "Data Emissão", "Pagto", "A vista", "A credito", "Taxa",
-        "Comissão", "Taxa DU", "Desc.", "Incentivo", "VL. Líquido", "Status_Geral",
-        "Área Resp. Operação", "Obs. Operação", "Data_Modificacao", "Usuario_Modificacao", "Ultima_Alteracao",
-        "Tipo_Emissao_Lemon", "Consultor_Lemon", "Emissor_Reserva_Lemon", "Centro_Custo_Lemon",
-        "Forma_Pagto_Lemon", "Autorizacao_Cartao_Lemon", "Modalidade_Lemon", "Emissao_Online_Lemon", "Source_Lemon", "Ponto_Venda_Lemon", "Sistema Reserva", "Cliente", "Setor",
-    ]
-
-    cols_35_existentes = [c for c in cols_35 if c in df_master.columns]
-    cols_30_existentes = [c for c in cols_30_furo if c in df_master.columns]
-
-    df_98_div = df_master[df_master["Aba_Destino"] == "98_OK_Divergencia_Operacao"][cols_35_existentes] if len(df_master[df_master["Aba_Destino"] == "98_OK_Divergencia_Operacao"]) > 0 else pd.DataFrame(columns=cols_35_existentes)
-    df_98_ok = df_master[df_master["Aba_Destino"] == "98_OK_Sem_Divergencia_Concil"][cols_35_existentes] if len(df_master[df_master["Aba_Destino"] == "98_OK_Sem_Divergencia_Concil"]) > 0 else pd.DataFrame(columns=cols_35_existentes)
-    df_99_gen = df_master[df_master["Aba_Destino"] == "99_Base_Divergencias_Geral"][cols_30_existentes] if len(df_master[df_master["Aba_Destino"] == "99_Base_Divergencias_Geral"]) > 0 else pd.DataFrame(columns=cols_30_existentes)
-
-    df_99_suporte = df_99_gen[df_99_gen["Setor"] == "Suporte backoffice"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_existentes)
-    df_99_eventos = df_99_gen[df_99_gen["Setor"] == "Central de Eventos"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_existentes)
-    df_99_lazer = df_99_gen[df_99_gen["Setor"] == "Concierge/Lazer"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_existentes)
-    df_99_unique = df_99_gen[df_99_gen["Setor"] == "Unique"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_existentes)
-    df_99_private = df_99_gen[df_99_gen["Setor"] == "Private"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_existentes)
-    df_99_operacao = df_99_gen[df_99_gen["Setor"] == "Operação"] if len(df_99_gen) > 0 else pd.DataFrame(columns=cols_30_existentes)
-
+    # Exportação e backup em Excel
     print("\n[6/6] Exportando Dashboard Formatado em Excel...")
     with pd.ExcelWriter(out_file_model, engine="openpyxl") as writer:
-        pareto_df.to_excel(writer, sheet_name="01_Pareto_Cliente", index=False)
-        df_98_div.to_excel(writer, sheet_name="98_OK_Divergencia_Operacao", index=False)
-        df_98_ok.to_excel(writer, sheet_name="98_OK_Sem_Divergencia_Concil", index=False)
-        df_99_gen.to_excel(writer, sheet_name="99_Base_Divergencias_Geral", index=False)
-        df_99_suporte.to_excel(writer, sheet_name="99_Suporte backoffice", index=False)
-        df_99_eventos.to_excel(writer, sheet_name="99_Central de Eventos", index=False)
-        df_99_lazer.to_excel(writer, sheet_name="99_Concierge-Lazer", index=False)
-        df_99_unique.to_excel(writer, sheet_name="99_Unique", index=False)
-        df_99_private.to_excel(writer, sheet_name="99_Private", index=False)
-        df_99_operacao.to_excel(writer, sheet_name="99_Operação", index=False)
+        df_master.to_excel(writer, sheet_name="99_Base_Divergencias_Geral", index=False)
         if not df_log_acumulado.empty:
             df_log_acumulado.to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
-        else:
-            pd.DataFrame(
-                columns=["Data_Hora", "Bilhete", "Usuario_Acao", "Status_Anterior", "Novo_Status", "Area_Anterior", "Nova_Area", "Observacao", "Tipo_Interacao"]
-            ).to_excel(writer, sheet_name="00_Log_Auditoria", index=False)
-
-    wb = openpyxl.load_workbook(out_file_model)
-    header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
-    header_font = Font(color="FFFFFF", bold=True)
-    thin_border = Border(
-        left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin")
-    )
-    fill_alerta = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-    font_alerta = Font(color="9C0006", bold=True)
-    currency_cols = [
-        "Tarifa_Pendente_R$", "Taxa_Pendente_R$", "Receita_Pendente_R$", "Receita_Risco",
-        "A vista", "A credito", "Tarifa_Sistema", "Dif_Tarifa", "Taxa", "Taxa_Sistema",
-        "Dif_Taxa", "Comissão", "Taxa DU", "Desc.", "Incentivo", "Receita_Sistema",
-        "Dif_Receita", "VL. Líquido",
-    ]
-
-    for sheetname in tqdm(wb.sheetnames, desc="Formatando Abas do Excel", unit="aba"):
-        ws = wb[sheetname]
-        ws.views.sheetView[0].showGridLines = True
-        if sheetname not in ["01_Pareto_Cliente", "00_Log_Auditoria"]:
-            for cell in ws[1]:
-                cell.fill = header_fill
-                cell.font = header_font
-                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-                cell.border = thin_border
-        max_row = ws.max_row
-        if max_row > 1 and sheetname not in ["01_Pareto_Cliente", "00_Log_Auditoria"]:
-            ws.cell(row=max_row + 1, column=1, value="TOTAL").font = Font(bold=True)
-            for col_idx in range(1, ws.max_column + 1):
-                col_letter = get_column_letter(col_idx)
-                col_name = str(ws.cell(row=1, column=col_idx).value or "")
-                if col_name in currency_cols or col_name in ["Qtd_Bilhetes"]:
-                    c_tot = ws.cell(
-                        row=max_row + 1,
-                        column=col_idx,
-                        value=f"=SUM({col_letter}2:{col_letter}{max_row})",
-                    )
-                    c_tot.font = Font(bold=True)
-        for col_idx in range(1, ws.max_column + 1):
-            col_letter = get_column_letter(col_idx)
-            col_name = str(ws.cell(row=1, column=col_idx).value or "")
-            len_vals = [len(str(ws.cell(row=r, column=col_idx).value or "")) for r in range(1, ws.max_row + 1)]
-            max_len = max(len_vals) if len_vals else 10
-            ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
-            if col_name in currency_cols:
-                for r in range(2, ws.max_row + 1):
-                    cell = ws.cell(row=r, column=col_idx)
-                    if cell.value not in ["-", None]:
-                        try:
-                            cell.value = float(cell.value)
-                            cell.number_format = "R$ #,##0.00"
-                        except (ValueError, TypeError):
-                            pass
-            if col_name.startswith("Dif_"):
-                for r in range(2, ws.max_row + 1):
-                    cell = ws.cell(row=r, column=col_idx)
-                    try:
-                        if round(abs(float(cell.value)), 2) >= 0.01:
-                            cell.fill = fill_alerta
-                            cell.font = font_alerta
-                    except (ValueError, TypeError):
-                        pass
-
-    wb.save(out_file_model)
 
     salvar_csv_atomico(
         df_master[["Bilhetes", "Status_Geral", "Área Resp. Operação", "Obs. Operação", "Setor", "Ponto de venda", "Código Iata"]].drop_duplicates(subset=["Bilhetes"]),
         "Historico_Tratativas.csv"
     )
 
-    conn = sqlite3.connect("revenue_assurance.db")
-    try:
-        with conn:
-            df_99_gen.to_sql("tb_master", conn, if_exists="replace", index=False)
-            df_98_div.to_sql("tb_div_op", conn, if_exists="replace", index=False)
-            df_98_ok.to_sql("tb_sem_div", conn, if_exists="replace", index=False)
-            df_99_suporte.to_sql("tb_backoffice", conn, if_exists="replace", index=False)
-        print("⚡ Base SQLite (revenue_assurance.db) atualizada com sucesso!")
-    except Exception as e:
-        print(f"⚠️ Erro ao atualizar o banco SQLite: {e}")
-    finally:
-        conn.close()
-
-    sincronizar_supabase_fim(df_master)
+    # Sincronização direta com a tb_conciliacao_base no Supabase
+    sincronizar_supabase_tudo(df_master)
 
     print("\n" + "=" * 75)
-    print(f" AUDITORIA CONCLUÍDA COM SUCESSO! SALVO EM: {out_file_model} ".center(75, "="))
+    print(f" AUDITORIA E SINCRONIZAÇÃO SUPABASE CONCLUÍDAS COM SUCESSO! ".center(75, "="))
     print("=" * 75)
 
 if __name__ == "__main__":
