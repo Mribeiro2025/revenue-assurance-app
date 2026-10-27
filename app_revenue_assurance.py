@@ -182,6 +182,7 @@ def get_db_engine():
                         ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS sv VARCHAR(255);
                         ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS fop VARCHAR(255);
                         ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS rloc_cia VARCHAR(255);
+                        ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS cliente VARCHAR(255);
                     """))
             except Exception: pass
             return engine
@@ -192,8 +193,8 @@ def get_db_engine():
 def carregar_tratativas_db():
     engine = get_db_engine()
     if not engine:
-        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "sv", "fop", "rloc_cia", "data_modificacao"])
-    query = "SELECT bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, sv, fop, rloc_cia, data_modificacao FROM tratativas"
+        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "sv", "fop", "rloc_cia", "cliente", "data_modificacao"])
+    query = "SELECT bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, sv, fop, rloc_cia, cliente, data_modificacao FROM tratativas"
     try:
         df_db = pd.read_sql(query, engine)
         if not df_db.empty and "bilhete" in df_db.columns:
@@ -206,7 +207,7 @@ def carregar_tratativas_db():
             df_db.drop(columns=["bilhete_clean"], inplace=True, errors="ignore")
         return df_db
     except Exception:
-        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "sv", "fop", "rloc_cia", "data_modificacao"])
+        return pd.DataFrame(columns=["bilhete", "status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "sv", "fop", "rloc_cia", "cliente", "data_modificacao"])
 
 def salvar_tratativas_lote_supabase(df_lote, usuario):
     engine = get_db_engine()
@@ -229,6 +230,7 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
             sv_val = str(r.get("SV", r.get("sv", r.get("Solicitação", "-")))).strip()
             fop_val = str(r.get("FOP", r.get("fop", r.get("Pagto", "-")))).strip()
             rloc_val = str(r.get("Rloc_CIA", r.get("rloc_cia", r.get("Rloc_Cia", "-")))).strip()
+            cliente_val = str(r.get("Cliente", r.get("cliente", ""))).strip()
             
             if st_val in ["-", "", "None", "nan"]:
                 st_val = "Pendente de Lançamento (Não Consta)"
@@ -239,19 +241,19 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
             dados_lote.append({
                 "bilhete": b_clean, "status_geral": st_val, "area_resp": ar_val,
                 "obs_operacao": obs_limpa, "setor": setor_val, "gerentes": gerente_val,
-                "sv": sv_val, "fop": fop_val, "rloc_cia": rloc_val, "usuario": str(usuario)
+                "sv": sv_val, "fop": fop_val, "rloc_cia": rloc_val, "cliente": cliente_val, "usuario": str(usuario)
             })
             
     if not dados_lote:
         return False, "Nenhum bilhete válido para atualização.", 0, 0, 0
         
     sql_upsert = text("""
-        INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, sv, fop, rloc_cia, usuario_modificacao, data_modificacao)
-        VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :sv, :fop, :rloc_cia, :usuario, NOW())
+        INSERT INTO tratativas (bilhete, status_geral, area_resp, obs_operacao, setor, gerentes, sv, fop, rloc_cia, cliente, usuario_modificacao, data_modificacao)
+        VALUES (:bilhete, :status_geral, :area_resp, :obs_operacao, :setor, :gerentes, :sv, :fop, :rloc_cia, :cliente, :usuario, NOW())
         ON CONFLICT (bilhete) DO UPDATE SET
             status_geral = EXCLUDED.status_geral, area_resp = EXCLUDED.area_resp, obs_operacao = EXCLUDED.obs_operacao,
             setor = EXCLUDED.setor, gerentes = EXCLUDED.gerentes, sv = EXCLUDED.sv, fop = EXCLUDED.fop,
-            rloc_cia = EXCLUDED.rloc_cia, usuario_modificacao = EXCLUDED.usuario_modificacao, data_modificacao = NOW();
+            rloc_cia = EXCLUDED.rloc_cia, cliente = EXCLUDED.cliente, usuario_modificacao = EXCLUDED.usuario_modificacao, data_modificacao = NOW();
     """)
     try:
         with engine.begin() as conn:
@@ -369,7 +371,6 @@ def validar_sessao_url():
             st.warning(f"⚠️ Sua sessão expirou após {int(TEMPO_MAXIMO_SESSAO_HORAS)} horas de inatividade. Por favor, faça login novamente.")
             return False, None
         else:
-            # Atualiza o timestamp para renovar a validade da sessão a cada nova ação
             st.query_params["session_time"] = str(ts_atual)
             return True, str(session_user_param).strip().lower()
     except Exception:
@@ -425,7 +426,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# 5. ROTEADOR DE BASES & TRATAMENTO ROBUSTO DE AGING / DATAS
+# 5. ROTEADOR DE BASES & TRATAMENTO ROBUSTO DE AGING / DATAS / SV / CLIENTE
 # ==============================================================================
 def clean_str(val):
     if pd.isna(val) or val is None: return "-"
@@ -450,11 +451,21 @@ def padronizar_df(df):
             
     df_out["Emissor / Consultor"] = df_out.apply(consolidar_emissor_consultor, axis=1)
     
-    # Mapeamento do campo SV
-    for c_sv in ["Solicitação", "Solicitacao", "SV", "Solicitacao_Extrato"]:
-        if c_sv in df_out.columns and "SV" not in df_out.columns:
-            df_out["SV"] = df_out[c_sv]
-    if "SV" not in df_out.columns: df_out["SV"] = "-"
+    # --------------------------------------------------------------------------
+    # MAPEAMENTO E COALESCE DO CAMPO SV (Solicitação de Viagem)
+    # --------------------------------------------------------------------------
+    cols_sv_candidatas = [
+        "SV", "Solicitação", "Solicitacao", "Solicitacao_Extrato", "Solicitacao_Lemon",
+        "Solicitacao_Viagem", "Num_Solicitacao", "Número Solicitação", "OS", "Ordem de Serviço",
+        "Pedido", "Ped_Venda", "SV_Lemon", "SV_Benner"
+    ]
+    sv_series = pd.Series("-", index=df_out.index)
+    for c_sv in cols_sv_candidatas:
+        if c_sv in df_out.columns:
+            val_clean = df_out[c_sv].astype(str).str.strip()
+            mask_val = val_clean.notna() & ~val_clean.str.lower().isin(["nan", "none", "", "-", "null", "<na>"])
+            sv_series = sv_series.where(~mask_val, val_clean)
+    df_out["SV"] = sv_series
 
     # Mapeamento do campo FOP
     for c_fop in ["Forma de Recebimento", "Pagto", "FOP", "Forma_Recebimento"]:
@@ -467,6 +478,44 @@ def padronizar_df(df):
         if c_rloc in df_out.columns and "Rloc_CIA" not in df_out.columns:
             df_out["Rloc_CIA"] = df_out[c_rloc]
     if "Rloc_CIA" not in df_out.columns: df_out["Rloc_CIA"] = "-"
+
+    # --------------------------------------------------------------------------
+    # MAPEAMENTO E FILTRO DE EXPURGO DA FILIAL NO CAMPO CLIENTE
+    # --------------------------------------------------------------------------
+    cols_cliente_candidatas = [
+        "Cliente", "Nome Cliente", "Nome_Cliente", "Razao Social", "Razao_Social",
+        "Empresa_Cliente", "Cliente_Benner", "Cliente_Lemon"
+    ]
+    cliente_series = pd.Series("", index=df_out.index)
+    for c_cli in cols_cliente_candidatas:
+        if c_cli in df_out.columns:
+            val_clean = df_out[c_cli].astype(str).str.strip()
+            mask_val = val_clean.notna() & ~val_clean.str.lower().isin(["nan", "none", "", "-", "null", "<na>"])
+            cliente_series = cliente_series.where(~mask_val, val_clean)
+            
+    df_out["Cliente_Tmp"] = cliente_series
+
+    def expurgar_filial_cliente(row):
+        cli = str(row.get("Cliente_Tmp", "")).strip()
+        pv = str(row.get("Ponto de venda", "")).strip().lower()
+        cli_low = cli.lower()
+        
+        if not cli or cli_low in ["nan", "none", "", "-", "null", "<na>"]:
+            return ""
+            
+        termos_filial = [
+            "maringa turismo", "maringá turismo", "grupo arbaitman", "arbaitman",
+            "matriz", "filial", "subsidiaria", "subsidiária", "agencia", "agência"
+        ]
+        
+        # Se for idêntico ao ponto de venda ou contiver palavras-chave de filial/agência interna
+        if (pv and cli_low == pv) or any(t in cli_low for t in termos_filial):
+            return ""
+            
+        return cli
+
+    df_out["Cliente"] = df_out.apply(expurgar_filial_cliente, axis=1)
+    df_out.drop(columns=["Cliente_Tmp"], inplace=True, errors="ignore")
 
     if "CIA" in df_out.columns:
         df_out["CIA"] = df_out["CIA"].astype(str).str.upper().str.strip().replace(DEPARA_CIAS)
@@ -523,7 +572,7 @@ def mesclar_com_supabase(df_excel):
         df_db = df_db.sort_values("data_modificacao", ascending=False)
     df_db = df_db.drop_duplicates("Bilhete_Clean", keep="first")
     
-    cols_sup_desejadas = ["status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "sv", "fop", "rloc_cia"]
+    cols_sup_desejadas = ["status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "sv", "fop", "rloc_cia", "cliente"]
     cols_presentes = [c for c in cols_sup_desejadas if c in df_db.columns]
     
     df_merged = pd.merge(df_excel, df_db[["Bilhete_Clean"] + cols_presentes], on="Bilhete_Clean", how="left")
@@ -531,7 +580,7 @@ def mesclar_com_supabase(df_excel):
     muta_map = [
         ("Status_Geral", "status_geral"), ("Área Resp. Operação", "area_resp"),
         ("Obs. Operação", "obs_operacao"), ("Setor", "setor"), ("Gerentes", "gerentes"),
-        ("SV", "sv"), ("FOP", "fop"), ("Rloc_CIA", "rloc_cia")
+        ("SV", "sv"), ("FOP", "fop"), ("Rloc_CIA", "rloc_cia"), ("Cliente", "cliente")
     ]
     for col_excel, col_sb in muta_map:
         if col_sb in df_merged.columns:
@@ -667,13 +716,13 @@ def carregar_bases():
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 # ==============================================================================
-# 6. CARREGAMENTO E FILTROS OPERACIONAIS
+# 6. CARREGAMENTO E FILTROS OPERACIONAIS DINÂMICOS
 # ==============================================================================
 df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div = carregar_bases()
 df_todos_unificados = pd.concat([df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
 st.sidebar.title("Grupo Arbaitman")
-st.sidebar.caption("Conciliação Aérea FP&A v4.5")
+st.sidebar.caption("Conciliação Aérea FP&A v4.6")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 
 col_sb1, col_sb2 = st.sidebar.columns(2)
@@ -715,6 +764,9 @@ f_backoffice = aplicar_filtros(df_backoffice)
 f_eventos = aplicar_filtros(df_eventos)
 f_lemon_virt = aplicar_filtros(df_lemon_virt)
 f_sem_div = aplicar_filtros(df_sem_div)
+
+# CONSOLIDADO FILTRADO DINÂMICO PARA REATIVIDADE COMPLETA DOS KPIS
+df_todos_filtrados = pd.concat([f_falta, f_concur, f_erros, f_backoffice, f_eventos, f_lemon_virt, f_sem_div], ignore_index=True)
 
 # ==============================================================================
 # 7. BANNER PRINCIPAL COM FONTES DE DADOS E MÉTRICAS
@@ -763,20 +815,21 @@ if e_master():
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO C-LEVEL
+# ABA 0: DASHBOARD EXECUTIVO C-LEVEL (MÉTRICAS DINÂMICAS)
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.markdown("<div class='section-banner'><h3>📊 Visão Financeira Global & Indicadores de Performance (FP&A)</h3></div>", unsafe_allow_html=True)
     
     df_pendentes = pd.concat([f_falta, f_concur, f_erros, f_backoffice, f_eventos, f_lemon_virt], ignore_index=True)
-    tot_processados = len(df_todos_unificados)
+    
+    tot_processados = len(df_todos_filtrados)
     tot_pendentes = len(df_pendentes)
     tot_conciliados = len(f_sem_div)
     taxa_concil = (tot_conciliados / tot_processados * 100) if tot_processados > 0 else 0.0
     
-    tarifa_total_emitida = df_todos_unificados["Tarifa Total Emitida"].sum() if "Tarifa Total Emitida" in df_todos_unificados.columns else 0.0
-    taxa_total_emitida = df_todos_unificados["Taxa"].sum() if "Taxa" in df_todos_unificados.columns else 0.0
-    receita_total_emitida = df_todos_unificados["Receita Total Emitida"].sum() if "Receita Total Emitida" in df_todos_unificados.columns else 0.0
+    tarifa_total_emitida = df_todos_filtrados["Tarifa Total Emitida"].sum() if not df_todos_filtrados.empty and "Tarifa Total Emitida" in df_todos_filtrados.columns else 0.0
+    taxa_total_emitida = df_todos_filtrados["Taxa"].sum() if not df_todos_filtrados.empty and "Taxa" in df_todos_filtrados.columns else 0.0
+    receita_total_emitida = df_todos_filtrados["Receita Total Emitida"].sum() if not df_todos_filtrados.empty and "Receita Total Emitida" in df_todos_filtrados.columns else 0.0
     ticket_medio_pendente = (df_pendentes["Tarifa Total Emitida"].sum() / len(df_pendentes)) if not df_pendentes.empty else 0.0
 
     # BLOCO DE KPIS EXECUTIVE SUMMARY
@@ -961,6 +1014,7 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
                 setor_vals = df_sel["Setor"].values if "Setor" in df_sel.columns else ["-"] * n_items
                 sv_vals = df_sel["SV"].values if "SV" in df_sel.columns else ["-"] * n_items
                 fop_vals = df_sel["FOP"].values if "FOP" in df_sel.columns else ["-"] * n_items
+                cliente_vals = df_sel["Cliente"].values if "Cliente" in df_sel.columns else [""] * n_items
                 
                 if rloc_novo.strip():
                     rloc_vals = [rloc_novo.strip()] * n_items
@@ -976,7 +1030,8 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
                     "Gerentes": [ar_nova] * n_items,
                     "SV": sv_vals,
                     "FOP": fop_vals,
-                    "Rloc_CIA": rloc_vals
+                    "Rloc_CIA": rloc_vals,
+                    "Cliente": cliente_vals
                 })
                 ok, msg, _, _, _ = salvar_tratativas_lote_supabase(df_up, usr_str)
                 if ok:
