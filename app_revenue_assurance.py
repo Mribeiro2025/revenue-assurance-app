@@ -24,8 +24,6 @@ st.set_page_config(
 )
 
 ARQUIVO_DASHBOARD_PADRAO = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
-
-# Tempo máximo de inatividade em horas até exigir novo login (Padrão: 8h)
 TEMPO_MAXIMO_SESSAO_HORAS = 8.0 
 
 DEPARA_CIAS = {
@@ -40,14 +38,14 @@ DEPARA_CIAS = {
 }
 
 DEPARA_GERENTES = {
-    "FABIANO SOUZA": "Fabiano Souza", "FABIANO": "Fabiano Souza",
+    "FABIANO SOUZA": "Fabiano Souza", "FABIANO": "Fabiano Souza", "Lazer": "Fabiano Souza", "LAZER": "Fabiano Souza", "CONCIERGE": "Fabiano Souza", "Concierge": "Fabiano Souza",
     "GUILHERME SILVA": "Guilherme Silva", "GUILHERME": "Guilherme Silva",
     "IVANETE BERTASOL": "Ivanete Bertasol", "IVANETE": "Ivanete Bertasol",
     "KELI SANTI": "Keli Santi", "KELI": "Keli Santi",
     "MARCELO PEREIRA": "Marcelo Pereira", "MARCELO": "Marcelo Pereira",
     "ROSANGELA PALLU": "Rosangela Pallu", "ROSANGELA": "Rosangela Pallu",
     "JAIME SCHNAIDER": "Jaime Schnaider", "JAIME": "Jaime Schnaider",
-    "SILVANA CELANI": "Silvana Celani", "SILVANA": "Silvana Celani",
+    "SILVANA CELANI": "Silvana Celani", "SILVANA": "Silvana Celani", "Private": "Silvana Celani", "PRIVATE": "Silvana Celani",
     "KATIA MARTINS": "Katia Martins", "KÁTIA MARTINS": "Katia Martins", "KATIA": "Katia Martins",
     "JOAO PAULO": "João Paulo", "JOÃO PAULO": "João Paulo",
     "SUPORTE BACKOFFICE": "Suporte Backoffice", "BACKOFFICE": "Suporte Backoffice",
@@ -66,16 +64,18 @@ def padronizar_nome_gerente(nome_raw):
 
 def consolidar_emissor_consultor(row):
     emis = str(row.get("Emissor") or row.get("Emissor_Reserva_Lemon") or "").strip()
+    emis_clean = emis.replace("Sem emissor", "").replace("Sem consultor", "").strip()
+    
+    if emis_clean and emis_clean.lower() not in ["nan", "none", "", "-", "null"]:
+        return emis_clean
     cons = str(row.get("Consultor") or row.get("Consultor_Lemon") or "").strip()
-    elementos = []
-    for val in [emis, cons]:
-        val_clean = val.replace("Sem consultor", "").replace("Sem emissor", "").strip()
-        if val_clean and val_clean.lower() not in ["nan", "none", "", "-", "null"]:
-            if val_clean not in elementos:
-                elementos.append(val_clean)
-    return " / ".join(elementos) if elementos else "-"
+    cons_clean = cons.replace("Sem consultor", "").replace("Sem emissor", "").strip()
+    
+    if cons_clean and cons_clean.lower() not in ["nan", "none", "", "-", "null"]:
+        return cons_clean
+    return "-"
 
-# Injeção de CSS com Design Premium para st.tabs e Interface C-Level
+# Injeção de CSS
 st.markdown(
     """
     <style>
@@ -106,8 +106,18 @@ st.markdown(
             margin-right: 6px;
             margin-top: 8px;
         }
-
-        /* ESTILIZAÇÃO CUSTOMIZADA DE ALTO PADRÃO PARA AS ABAS (ST.TABS) */
+        .update-badge {
+            background: rgba(255, 255, 255, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: #ffffff;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 8px;
+            float: right;
+        }
         div[data-baseweb="tab-list"] {
             gap: 8px;
             background-color: #f1f5f9;
@@ -141,7 +151,6 @@ st.markdown(
         div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {
             display: none !important;
         }
-
         .section-banner {
             background: #ffffff;
             border-left: 5px solid #002060;
@@ -183,7 +192,7 @@ st.markdown(
 )
 
 # ==============================================================================
-# 2. CONEXÃO COM BANCO DE DADOS & MIGRAÇÃO AUTOMÁTICA DE ESQUEMA
+# 2. CONEXÃO COM BANCO DE DADOS, MIGRAÇÃO & LOGS DE ACESSO
 # ==============================================================================
 def sanitizar_bilhete(val):
     if pd.isna(val) or val is None: return ""
@@ -217,12 +226,64 @@ def get_db_engine():
                         ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS fop VARCHAR(255);
                         ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS rloc_cia VARCHAR(255);
                         ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS cliente VARCHAR(255);
+                        
+                        CREATE TABLE IF NOT EXISTS log_acessos (
+                            id SERIAL PRIMARY KEY,
+                            usuario VARCHAR(255),
+                            nome VARCHAR(255),
+                            data_acesso TIMESTAMP DEFAULT NOW()
+                        );
                     """))
             except Exception: pass
             return engine
     except Exception as e:
         st.error(f"Erro na conexão com o banco de dados: {e}")
     return None
+
+def registrar_log_acesso(usuario_id, nome_usuario):
+    engine = get_db_engine()
+    if engine:
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("INSERT INTO log_acessos (usuario, nome, data_acesso) VALUES (:usuario, :nome, NOW())"),
+                    {"usuario": str(usuario_id).strip().lower(), "nome": str(nome_usuario).strip()}
+                )
+        except Exception: pass
+
+def obter_relatorio_acessos_db():
+    engine = get_db_engine()
+    if not engine:
+        return pd.DataFrame(), pd.DataFrame()
+    try:
+        query_log = "SELECT usuario, nome, data_acesso FROM log_acessos ORDER BY data_acesso DESC LIMIT 500"
+        df_logs = pd.read_sql(query_log, engine)
+        if not df_logs.empty:
+            df_logs["data_acesso"] = pd.to_datetime(df_logs["data_acesso"])
+            
+        df_users = pd.DataFrame()
+        try:
+            df_users = pd.read_sql("SELECT usuario, nome, perfil, status FROM usuarios", engine)
+            df_users["usuario"] = df_users["usuario"].astype(str).str.strip().str.lower()
+        except Exception: pass
+
+        if not df_logs.empty and not df_users.empty:
+            df_agg = df_logs.groupby("usuario").agg(
+                ultimo_acesso=("data_acesso", "max"),
+                total_acessos=("data_acesso", "count")
+            ).reset_index()
+            
+            df_m = pd.merge(df_users, df_agg, on="usuario", how="left")
+        elif not df_users.empty:
+            df_m = df_users.copy()
+            df_m["ultimo_acesso"] = pd.NaT
+            df_m["total_acessos"] = 0
+        else:
+            df_m = pd.DataFrame()
+
+        return df_m, df_logs
+    except Exception:
+        return pd.DataFrame(), pd.DataFrame()
 
 def carregar_tratativas_db():
     engine = get_db_engine()
@@ -298,9 +359,9 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
         return False, f"Erro ao salvar tratativas: {e}", 0, 0, len(dados_lote)
 
 # ==============================================================================
-# 3. GERADOR DE EXCEL ESTILIZADO PARA DOWNLOAD
+# 3. GERADOR DE EXCEL ESTILIZADO COM CABEÇALHO PERSONALIZADO E NOME DO GERENTE
 # ==============================================================================
-def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
+def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"):
     buffer = io.BytesIO()
     if df_export is None or df_export.empty:
         df_export = pd.DataFrame(columns=["Aviso"], data=[["Nenhum registro encontrado"]])
@@ -308,19 +369,44 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
     cols_remover = [c for c in ["Dt_Parsed", "Bilhete_Clean", "Aba_Origem"] if c in df_export.columns]
     df_clean = df_export.drop(columns=cols_remover) if cols_remover else df_export.copy()
     
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        df_clean.to_excel(writer, sheet_name=nome_aba[:30], index=False)
-        
-    buffer.seek(0)
-    wb = openpyxl.load_workbook(buffer)
+    wb = openpyxl.Workbook()
     ws = wb.active
+    nome_sheet = re.sub(r'[\*\?:/\[\]]', '', nome_aba)[:30]
+    ws.title = nome_sheet if nome_sheet else "Relatorio"
     ws.views.sheetView[0].showGridLines = True
     
-    header_fill = PatternFill(start_color="001E4D", end_color="001E4D", fill_type="solid")
-    header_font = Font(color="FFFFFF", bold=True, size=11)
+    header_title_fill = PatternFill(start_color="001E4D", end_color="001E4D", fill_type="solid")
+    header_title_font = Font(name="Calibri", color="FFFFFF", bold=True, size=14)
+    
+    subtitle_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    subtitle_font = Font(name="Calibri", color="002060", bold=True, size=10)
+    
+    max_cols = max(len(df_clean.columns), 6)
+    
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max_cols)
+    cell_title = ws.cell(row=1, column=1, value="✈️ Grupo Arbaitman | Relatório Executivo de Conciliação Aérea (FP&A)")
+    cell_title.fill = header_title_fill
+    cell_title.font = header_title_font
+    cell_title.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.row_dimensions[1].height = 28
+    
+    dt_str = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    gerente_label = f"Gerente Responsável: {nome_gerente}" if nome_gerente and nome_gerente != "Geral" else "Escopo: Geral (Todos os Gerentes)"
+    sub_txt = f"Aba: {nome_aba.replace('_', ' ')}  |  {gerente_label}  |  Emissão: {dt_str}"
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=max_cols)
+    cell_sub = ws.cell(row=2, column=1, value=sub_txt)
+    cell_sub.fill = subtitle_fill
+    cell_sub.font = subtitle_font
+    cell_sub.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.row_dimensions[2].height = 20
+    
+    ws.row_dimensions[3].height = 10
+    
+    header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
+    header_font = Font(name="Calibri", color="FFFFFF", bold=True, size=11)
     thin_border = Border(
-        left=Side(style="thin", color="E2E8F0"), right=Side(style="thin", color="E2E8F0"),
-        top=Side(style="thin", color="E2E8F0"), bottom=Side(style="thin", color="E2E8F0")
+        left=Side(style="thin", color="CBD5E1"), right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"), bottom=Side(style="thin", color="CBD5E1")
     )
     fill_alerta = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
     font_alerta = Font(color="9C0006", bold=True)
@@ -331,41 +417,44 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio"):
         "Receita Total Emitida", "Receita_Sistema", "Dif_Receita"
     ]
     
-    for cell in ws[1]:
+    for col_idx, col_name in enumerate(df_clean.columns, 1):
+        cell = ws.cell(row=4, column=col_idx, value=col_name)
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = thin_border
-        
-    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
-        for cell in row:
+    ws.row_dimensions[4].height = 24
+    
+    for r_idx, row_data in enumerate(df_clean.values, start=5):
+        ws.row_dimensions[r_idx].height = 19
+        for c_idx, val in enumerate(row_data, start=1):
+            cell = ws.cell(row=r_idx, column=c_idx, value=val)
             cell.border = thin_border
-            col_name = str(ws.cell(row=1, column=cell.column).value or "")
-            if col_name in currency_cols and cell.value not in ["-", None, ""]:
+            col_name = df_clean.columns[c_idx - 1]
+            if col_name in currency_cols and val not in ["-", None, ""]:
                 try:
-                    cell.value = float(cell.value)
+                    cell.value = float(val)
                     cell.number_format = "R$ #,##0.00"
                 except (ValueError, TypeError): pass
-            if col_name.startswith("Dif_") and cell.value not in ["-", None, ""]:
+            if col_name.startswith("Dif_") and val not in ["-", None, ""]:
                 try:
-                    if abs(float(cell.value)) >= 0.01:
+                    if abs(float(val)) >= 0.01:
                         cell.fill = fill_alerta
                         cell.font = font_alerta
                 except (ValueError, TypeError): pass
                 
-    for col_idx in range(1, ws.max_column + 1):
+    for col_idx in range(1, len(df_clean.columns) + 1):
         col_letter = get_column_letter(col_idx)
-        len_vals = [len(str(ws.cell(row=r, column=col_idx).value or "")) for r in range(1, min(ws.max_row + 1, 100))]
+        len_vals = [len(str(ws.cell(row=r, column=col_idx).value or "")) for r in range(4, min(ws.max_row + 1, 100))]
         max_len = max(len_vals) if len_vals else 10
-        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+        ws.column_dimensions[col_letter].width = min(max(max_len + 3, 12), 42)
         
-    output_buffer = io.BytesIO()
-    wb.save(output_buffer)
-    output_buffer.seek(0)
-    return output_buffer.getvalue()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 # ==============================================================================
-# 4. AUTENTICAÇÃO DE USUÁRIOS & PERSISTÊNCIA DE SESSÃO COM EXPIRAÇÃO AUTOMÁTICA
+# 4. AUTENTICAÇÃO, ALTERAÇÃO DE SENHA & PERSISTÊNCIA DE SESSÃO
 # ==============================================================================
 def carregar_usuarios_supabase():
     dict_u = {}
@@ -382,13 +471,36 @@ def carregar_usuarios_supabase():
         except Exception: pass
     return dict_u
 
+def alterar_senha_usuario(usuario_id, senha_atual, nova_senha):
+    engine = get_db_engine()
+    if not engine:
+        return False, "Banco de dados indisponível."
+    try:
+        with engine.begin() as conn:
+            res = conn.execute(
+                text("SELECT senha FROM usuarios WHERE LOWER(usuario) = LOWER(:usuario)"),
+                {"usuario": usuario_id}
+            ).fetchone()
+            if not res:
+                return False, "Usuário não encontrado."
+            senha_banco = str(res[0]).strip()
+            if senha_banco != str(senha_atual).strip():
+                return False, "A senha atual informada está incorreta."
+                
+            conn.execute(
+                text("UPDATE usuarios SET senha = :nova_senha WHERE LOWER(usuario) = LOWER(:usuario)"),
+                {"nova_senha": str(nova_senha).strip(), "usuario": usuario_id}
+            )
+            return True, "🔑 Senha alterada com sucesso!"
+    except Exception as e:
+        return False, f"Erro ao atualizar senha no banco: {e}"
+
 if "autenticado" not in st.session_state: st.session_state["autenticado"] = False
 if "usuario_atual" not in st.session_state: st.session_state["usuario_atual"] = None
 if "perfil_atual" not in st.session_state: st.session_state["perfil_atual"] = None
 if "login_user_id" not in st.session_state: st.session_state["login_user_id"] = None
 
 def validar_sessao_url():
-    """Valida a sessão gravada na URL e verifica se não ultrapassou o tempo de inatividade."""
     session_user_param = st.query_params.get("session_user")
     session_time_param = st.query_params.get("session_time")
     
@@ -411,7 +523,6 @@ def validar_sessao_url():
         st.query_params.clear()
         return False, None
 
-# VERIFICAÇÃO AUTOMÁTICA DA SESSÃO AO CARREGAR / DAR REFRESH (F5)
 if not st.session_state["autenticado"]:
     sessao_valida, u_key = validar_sessao_url()
     if sessao_valida and u_key:
@@ -421,11 +532,13 @@ if not st.session_state["autenticado"]:
             st.session_state["usuario_atual"] = usuarios_db[u_key]["nome"]
             st.session_state["perfil_atual"] = usuarios_db[u_key]["perfil"]
             st.session_state["login_user_id"] = u_key
+            registrar_log_acesso(u_key, usuarios_db[u_key]["nome"])
         elif u_key == "mribeiro":
             st.session_state["autenticado"] = True
             st.session_state["usuario_atual"] = "Marcos Ribeiro"
             st.session_state["perfil_atual"] = "Master"
             st.session_state["login_user_id"] = "mribeiro"
+            registrar_log_acesso("mribeiro", "Marcos Ribeiro")
 
 def e_master():
     u_id = st.session_state.get("login_user_id", "")
@@ -447,6 +560,7 @@ if not st.session_state["autenticado"]:
                 st.session_state["login_user_id"] = u_input
                 st.query_params["session_user"] = u_input
                 st.query_params["session_time"] = str(time.time())
+                registrar_log_acesso(u_input, usuarios_db[u_input]["nome"])
                 st.rerun()
             elif u_input == "mribeiro" and p_input in ["14052013", "123"]:
                 st.session_state["autenticado"] = True
@@ -455,12 +569,13 @@ if not st.session_state["autenticado"]:
                 st.session_state["login_user_id"] = "mribeiro"
                 st.query_params["session_user"] = "mribeiro"
                 st.query_params["session_time"] = str(time.time())
+                registrar_log_acesso("mribeiro", "Marcos Ribeiro")
                 st.rerun()
             else: st.error("Usuário ou senha incorretos.")
     st.stop()
 
 # ==============================================================================
-# 5. ROTEADOR DE BASES & TRATAMENTO ROBUSTO DE AGING / DATAS / SV / CLIENTE
+# 5. ROTEADOR DE BASES, COMPATIBILIDADE DE COLUNAS & ALIMENTAÇÃO SV LEMONTECH
 # ==============================================================================
 def clean_str(val):
     if pd.isna(val) or val is None: return "-"
@@ -485,9 +600,6 @@ def padronizar_df(df):
             
     df_out["Emissor / Consultor"] = df_out.apply(consolidar_emissor_consultor, axis=1)
     
-    # --------------------------------------------------------------------------
-    # MAPEAMENTO E COALESCE DO CAMPO SV (Solicitação de Viagem)
-    # --------------------------------------------------------------------------
     cols_sv_candidatas = [
         "SV", "Solicitação", "Solicitacao", "Solicitacao_Extrato", "Solicitacao_Lemon",
         "Solicitacao_Viagem", "Num_Solicitacao", "Número Solicitação", "OS", "Ordem de Serviço",
@@ -500,22 +612,14 @@ def padronizar_df(df):
             mask_val = val_clean.notna() & ~val_clean.str.lower().isin(["nan", "none", "", "-", "null", "<na>"])
             sv_series = sv_series.where(~mask_val, val_clean)
     df_out["SV"] = sv_series
-
-    # Mapeamento do campo FOP
     for c_fop in ["Forma de Recebimento", "Pagto", "FOP", "Forma_Recebimento"]:
         if c_fop in df_out.columns and "FOP" not in df_out.columns:
             df_out["FOP"] = df_out[c_fop]
     if "FOP" not in df_out.columns: df_out["FOP"] = "-"
-
-    # Mapeamento de Rloc_CIA
-    for c_rloc in ["Rloc_Cia", "Localizador_Cia", "Rloc_CIA"]:
+    for c_rloc in ["Rloc_Cia", "Localizador_Sistema", "Rloc_CIA", "Localizador_Cia"]:
         if c_rloc in df_out.columns and "Rloc_CIA" not in df_out.columns:
             df_out["Rloc_CIA"] = df_out[c_rloc]
     if "Rloc_CIA" not in df_out.columns: df_out["Rloc_CIA"] = "-"
-
-    # --------------------------------------------------------------------------
-    # MAPEAMENTO E FILTRO DE EXPURGO DA FILIAL NO CAMPO CLIENTE
-    # --------------------------------------------------------------------------
     cols_cliente_candidatas = [
         "Cliente", "Nome Cliente", "Nome_Cliente", "Razao Social", "Razao_Social",
         "Empresa_Cliente", "Cliente_Benner", "Cliente_Lemon"
@@ -528,28 +632,18 @@ def padronizar_df(df):
             cliente_series = cliente_series.where(~mask_val, val_clean)
             
     df_out["Cliente_Tmp"] = cliente_series
-
     def expurgar_filial_cliente(row):
         cli = str(row.get("Cliente_Tmp", "")).strip()
         pv = str(row.get("Ponto de venda", "")).strip().lower()
         cli_low = cli.lower()
-        
         if not cli or cli_low in ["nan", "none", "", "-", "null", "<na>"]:
             return ""
-            
-        termos_filial = [
-            "maringa turismo", "maringá turismo", "grupo arbaitman", "arbaitman",
-            "matriz", "filial", "subsidiaria", "subsidiária", "agencia", "agência"
-        ]
-        
+        termos_filial = ["maringa turismo", "maringá turismo", "grupo arbaitman", "arbaitman", "matriz", "filial", "subsidiaria", "subsidiária", "agencia", "agência"]
         if (pv and cli_low == pv) or any(t in cli_low for t in termos_filial):
             return ""
-            
         return cli
-
     df_out["Cliente"] = df_out.apply(expurgar_filial_cliente, axis=1)
     df_out.drop(columns=["Cliente_Tmp"], inplace=True, errors="ignore")
-
     if "CIA" in df_out.columns:
         df_out["CIA"] = df_out["CIA"].astype(str).str.upper().str.strip().replace(DEPARA_CIAS)
         
@@ -560,25 +654,18 @@ def padronizar_df(df):
     df_out["Tarifa Total Emitida"] = df_out["A vista"] + df_out["A credito"]
     df_out["Receita Total Emitida"] = df_out["Comissão"] + df_out["Taxa DU"] + df_out["Incentivo"]
     
-    # TRATAMENTO ROBUSTO DE AGING
     def converter_data_flexivel(val):
         if pd.isna(val) or val in ["-", "", "nan", "None", None]:
             return pd.NaT
         if isinstance(val, (int, float)):
-            try:
-                return pd.to_datetime('1899-12-30') + pd.to_timedelta(val, unit='D')
-            except Exception:
-                return pd.NaT
-        try:
-            return pd.to_datetime(val, dayfirst=True, errors="coerce")
-        except Exception:
-            return pd.NaT
-
+            try: return pd.to_datetime('1899-12-30') + pd.to_timedelta(val, unit='D')
+            except Exception: return pd.NaT
+        try: return pd.to_datetime(val, dayfirst=True, errors="coerce")
+        except Exception: return pd.NaT
     if "Data Emissão" in df_out.columns:
         df_out["Dt_Parsed"] = df_out["Data Emissão"].apply(converter_data_flexivel)
     else:
         df_out["Dt_Parsed"] = pd.NaT
-
     hoje = pd.to_datetime(datetime.date.today())
     dias = (hoje - df_out["Dt_Parsed"]).dt.days
     df_out["Dias_Pendente"] = dias
@@ -631,21 +718,19 @@ def reordenar_colunas(df, modo="completo"):
     
     if modo == "falta_lancamento":
         cols_desejadas = [
-            "Bilhetes", "Área Resp. Operação", "Código Iata", "SV", "Rloc_CIA", "Ponto de venda", "Cliente", "Emissor / Consultor",
-            "CIA", "Data Emissão", "FOP", "Status_Geral", "Obs. Operação",
+            "Bilhetes", "Rloc_CIA", "FOP", "Área Resp. Operação", "Código Iata", "SV", "Ponto de venda", "Cliente", "Emissor / Consultor",
+            "CIA", "Data Emissão", "Status_Geral", "Obs. Operação",
             "A vista", "A credito", "Tarifa Total Emitida", "Taxa", "Comissão", "Taxa DU", "Incentivo", "Receita Total Emitida"
         ]
     else:
         cols_desejadas = [
-            "Bilhetes", "Área Resp. Operação", "Código Iata", "SV", "Rloc_CIA", "Ponto de venda", "Cliente", "Emissor / Consultor",
-            "CIA", "Localizador_Sistema", "Data Emissão", "FOP", "Status_Geral", "Status_Divergencia", "Status_Cia", "Obs. Operação",
+            "Bilhetes", "Rloc_CIA", "FOP", "Área Resp. Operação", "Código Iata", "SV", "Ponto de venda", "Cliente", "Emissor / Consultor",
+            "CIA", "Localizador_Sistema", "Data Emissão", "Status_Geral", "Status_Divergencia", "Status_Cia", "Obs. Operação",
             "A vista", "A credito", "Tarifa Total Emitida", "Taxa", "Comissão", "Taxa DU", "Incentivo", "Receita Total Emitida",
             "Fornecedor_Sistema", "Status_Sistema", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita"
         ]
         
     cols_finais = [c for c in cols_desejadas if c in df.columns]
-    
-    # PRESERVAÇÃO EXPLÍCITA DAS COLUNAS DE AGING E SUPORTE DO DASHBOARD
     cols_protegidas = ["Dt_Parsed", "Dias_Pendente", "Faixa_Aging", "Bilhete_Clean", "Aba_Origem"]
     cols_sobra = [c for c in df.columns if c not in cols_finais and c not in cols_protegidas]
     
@@ -673,45 +758,37 @@ def rotear_bases_mestra(df_master):
     df_ok = df_master[mask_ok].copy()
     df_pend = df_master[~mask_ok].copy()
     
-    # 1. ERRO DE INTEGRAÇÃO CONCUR
     def e_concur(r):
         obs_val = str(r.get("Obs. Operação", "")).lower()
         st_val = str(r.get("Status_Geral", "")).lower()
         fonte_val = str(r.get("Fonte_Relatorio", "")).lower()
         return "concur" in obs_val or "concur" in st_val or "concur" in fonte_val
-
     mask_concur = df_pend.apply(e_concur, axis=1)
     df_concur = df_pend[mask_concur].copy()
     df_rest = df_pend[~mask_concur].copy()
     
-    # 2. SUPORTE BACKOFFICE
     def e_suporte_backoffice(r):
         ar_val = str(r.get("Área Resp. Operação", "")).lower()
         ger_val = str(r.get("Gerentes", "")).lower()
         obs_val = str(r.get("Obs. Operação", "")).lower()
         st_val = str(r.get("Status_Geral", "")).lower()
         return "backoffice" in ar_val or "backoffice" in ger_val or "katia" in ar_val or any(k in obs_val or k in st_val for k in ["chamado", "ticket", "suporte"])
-
     mask_bo = df_rest.apply(e_suporte_backoffice, axis=1)
     df_bo = df_rest[mask_bo].copy()
     df_rest = df_rest[~mask_bo].copy()
     
-    # 3. CENTRAL DE EVENTOS
     mask_evt = df_rest.apply(lambda r: "eventos" in str(r.get("Área Resp. Operação", "")).lower() or "eventos" in str(r.get("Gerentes", "")).lower(), axis=1)
     df_eventos = df_rest[mask_evt].copy()
     df_rest = df_rest[~mask_evt].copy()
     
-    # 4. EMISSOR VIRTUAL LEMONTECH
     mask_lemon = df_rest.apply(lambda r: "virtual" in str(r.get("Emissor / Consultor", "")).lower() or "lemontech" in str(r.get("Emissor / Consultor", "")).lower(), axis=1)
     df_lemon_virt = df_rest[mask_lemon].copy()
     df_rest = df_rest[~mask_lemon].copy()
     
-    # 5. FALTA DE LANÇAMENTO (MARINGÁ) VS ERROS DE VALORES
     mask_falta = df_rest.apply(lambda r: "falta de lançamento" in str(r.get("Status_Geral", "")).lower() or "não consta" in str(r.get("Status_Geral", "")).lower() or str(r.get("Status_Geral", "")).lower() in ["-", "", "none"], axis=1)
     df_falta = df_rest[mask_falta].copy()
     df_erros = df_rest[~mask_falta].copy()
     
-    # Reordenação de colunas por aba
     df_falta = reordenar_colunas(df_falta, modo="falta_lancamento")
     df_concur = reordenar_colunas(df_concur, modo="falta_lancamento")
     df_erros = reordenar_colunas(df_erros, modo="completo")
@@ -724,39 +801,131 @@ def rotear_bases_mestra(df_master):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_bases():
+    dt_atualizacao = datetime.datetime.now()
     if os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
         fonte = ARQUIVO_DASHBOARD_PADRAO
+        try:
+            mod_time = os.path.getmtime(ARQUIVO_DASHBOARD_PADRAO)
+            dt_atualizacao = datetime.datetime.fromtimestamp(mod_time)
+        except Exception: pass
     else:
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), dt_atualizacao.strftime("%d/%m/%Y às %H:%M:%S")
+        
     try:
         xls = pd.ExcelFile(fonte, engine="openpyxl")
         frames = []
+        map_sv_bilhete = {}
+        map_sv_loc = {}
+        
+        # Mapeamento do Extrato Lemontech em Dois Passos
+        for sheet in xls.sheet_names:
+            s_low = sheet.lower()
+            if "lemon" in s_low or "extrato" in s_low or sheet.startswith("98_") or sheet.startswith("97_"):
+                try:
+                    df_lemon = pd.read_excel(xls, sheet_name=sheet)
+                    
+                    # Coluna de origem da solicitação (SV)
+                    col_sv = next((c for c in df_lemon.columns if str(c).strip().lower() in [
+                        "solicitação", "solicitacao", "sv", "número solicitação", "num_solicitacao", "solicitação de viagem"
+                    ]), None)
+                    
+                    # Coluna do bilhete para o Passo 1
+                    col_bil = next((c for c in df_lemon.columns if str(c).strip().lower() in [
+                        "bilhete", "bilhetes", "numero bilhete", "num_bilhete", "nº bilhete"
+                    ]), None)
+                    
+                    # Coluna do localizador para o Passo 2
+                    col_loc = next((c for c in df_lemon.columns if str(c).strip().lower() in [
+                        "localizador", "loc", "rloc", "rloc_cia", "localizador_sistema", "localizador_cia"
+                    ]), None)
+                    
+                    if col_sv:
+                        for _, row in df_lemon.iterrows():
+                            sv_val = str(row.get(col_sv, "")).strip()
+                            if sv_val and sv_val.lower() not in ["nan", "none", "", "-", "null", "<na>"]:
+                                # Passo 1: Mapear por número do Bilhete
+                                if col_bil:
+                                    b_c = sanitizar_bilhete(row.get(col_bil))
+                                    if b_c: map_sv_bilhete[b_c] = sv_val
+                                    
+                                # Passo 2: Mapear por Localizador (Loc/Rloc)
+                                if col_loc:
+                                    loc_c = str(row.get(col_loc, "")).strip().upper().replace(".0", "")
+                                    if loc_c and loc_c.lower() not in ["nan", "none", "", "-", "null"] and len(loc_c) >= 3:
+                                        map_sv_loc[loc_c] = sv_val
+                except Exception: pass
+                
         for sheet in xls.sheet_names:
             if sheet.startswith("99_") or sheet.startswith("98_"):
                 df_sheet = pd.read_excel(xls, sheet_name=sheet)
                 frames.append(df_sheet)
-        if not frames: return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+                
+        if not frames:
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), dt_atualizacao.strftime("%d/%m/%Y às %H:%M:%S")
+        
         df_m = pd.concat(frames, ignore_index=True)
         if "Bilhetes" in df_m.columns:
             df_m["Bilhete_Clean"] = df_m["Bilhetes"].apply(sanitizar_bilhete)
             df_m = df_m[df_m["Bilhete_Clean"].astype(str).str.len() > 3]
             df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
             
+        df_m = padronizar_df(df_m)
         df_m = mesclar_com_supabase(df_m)
-        return rotear_bases_mestra(df_m)
+        
+        # Enriquecimento da coluna SV em Dois Passos (Passo 1: Bilhete -> Passo 2: Localizador)
+        def enriquecer_sv(row):
+            sv_atual = str(row.get("SV", "")).strip()
+            if sv_atual and sv_atual.lower() not in ["nan", "none", "", "-", "null", "<na>"]:
+                return sv_atual
+            
+            # Passo 1: Busca pelo número do Bilhete
+            b_c = str(row.get("Bilhete_Clean", "")).strip()
+            if b_c in map_sv_bilhete:
+                return map_sv_bilhete[b_c]
+                
+            # Passo 2: Busca secundária pelo Localizador (Rloc / Loc)
+            for col_l in ["Rloc_CIA", "Localizador_Sistema", "Localizador", "Loc", "Rloc_Cia", "Rloc"]:
+                loc_v = str(row.get(col_l, "")).strip().upper().replace(".0", "")
+                if loc_v in map_sv_loc:
+                    return map_sv_loc[loc_v]
+            return "-"
+            
+        df_m["SV"] = df_m.apply(enriquecer_sv, axis=1)
+        
+        f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
+        return f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok, dt_atualizacao.strftime("%d/%m/%Y às %H:%M:%S")
     except Exception as e:
         st.error(f"Erro ao carregar base: {e}")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), dt_atualizacao.strftime("%d/%m/%Y às %H:%M:%S")
 
 # ==============================================================================
 # 6. CARREGAMENTO E FILTROS OPERACIONAIS DINÂMICOS
 # ==============================================================================
-df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div = carregar_bases()
+df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div, dt_ultima_atualizacao_str = carregar_bases()
 df_todos_unificados = pd.concat([df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
 st.sidebar.title("Grupo Arbaitman")
-st.sidebar.caption("Conciliação Aérea FP&A v4.7")
+st.sidebar.caption("Conciliação Aérea FP&A v4.9")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
+st.sidebar.info(f"🕒 **Última Atualização:**\n{dt_ultima_atualizacao_str}")
+
+with st.sidebar.expander("🔑 Alterar Minha Senha"):
+    with st.form("form_alterar_senha_sb"):
+        pass_act = st.text_input("Senha Atual:", type="password", key="pass_act")
+        pass_new = st.text_input("Nova Senha:", type="password", key="pass_new")
+        pass_cnf = st.text_input("Confirmar Nova Senha:", type="password", key="pass_cnf")
+        if st.form_submit_button("Atualizar Senha"):
+            if not pass_act or not pass_new:
+                st.error("Preencha todos os campos.")
+            elif pass_new != pass_cnf:
+                st.error("As senhas não coincidem.")
+            elif len(pass_new) < 3:
+                st.error("A nova senha deve ter no mínimo 3 caracteres.")
+            else:
+                u_id = st.session_state.get("login_user_id", "")
+                ok, msg = alterar_senha_usuario(u_id, pass_act, pass_new)
+                if ok: st.success(msg)
+                else: st.error(msg)
 
 col_sb1, col_sb2 = st.sidebar.columns(2)
 with col_sb1:
@@ -774,10 +943,8 @@ with col_sb2:
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔍 Filtros Operacionais")
-
 opts_gerentes = sorted(list(set(df_todos_unificados["Área Resp. Operação"].dropna().unique()))) if not df_todos_unificados.empty else []
 filtro_gerente = st.sidebar.multiselect("Gerente Responsável:", options=opts_gerentes, placeholder="Todos os Gerentes")
-
 opts_cias = sorted(list(set(df_todos_unificados["CIA"].dropna().unique()))) if not df_todos_unificados.empty else []
 filtro_cia = st.sidebar.multiselect("Companhia Aérea:", options=opts_cias, placeholder="Todas as CIAs")
 
@@ -797,23 +964,28 @@ f_backoffice = aplicar_filtros(df_backoffice)
 f_eventos = aplicar_filtros(df_eventos)
 f_lemon_virt = aplicar_filtros(df_lemon_virt)
 f_sem_div = aplicar_filtros(df_sem_div)
-
-# CONSOLIDADO FILTRADO DINÂMICO PARA REATIVIDADE COMPLETA DOS KPIS
 df_todos_filtrados = pd.concat([f_falta, f_concur, f_erros, f_backoffice, f_eventos, f_lemon_virt, f_sem_div], ignore_index=True)
 
 # ==============================================================================
 # 7. BANNER PRINCIPAL COM FONTES DE DADOS E MÉTRICAS
 # ==============================================================================
 st.markdown(
-    """
+    f"""
     <div class='main-header'>
-        <h1>✈️ Grupo Arbaitman | Portal Executivo de Conciliação Aérea (FP&A)</h1>
-        <p>Painel Estratégico de Revenue Assurance & Gestão Unificada de Pendências</p>
-        <div style='margin-top: 10px;'>
-            <span class='fonte-pill'>🏢 ERP Benner (Acumulado)</span>
-            <span class='fonte-pill'>🤖 OBT Lemontech (Extrato)</span>
-            <span class='fonte-pill'>✈️ Cias Aéreas (AZUL, GOL, BSP, HOT)</span>
-            <span class='fonte-pill'>🌐 GDS Sabre</span>
+        <div style='display: flex; justify-content: space-between; align-items: flex-start;'>
+            <div>
+                <h1>✈️ Grupo Arbaitman | Portal Executivo de Conciliação Aérea (FP&A)</h1>
+                <p>Painel Estratégico de Revenue Assurance & Gestão Unificada de Pendências</p>
+                <div style='margin-top: 10px;'>
+                    <span class='fonte-pill'>🏢 ERP Benner (Acumulado)</span>
+                    <span class='fonte-pill'>🤖 OBT Lemontech (Extrato)</span>
+                    <span class='fonte-pill'>✈️ Cias Aéreas (AZUL, GOL, BSP, HOT)</span>
+                    <span class='fonte-pill'>🌐 GDS Sabre</span>
+                </div>
+            </div>
+            <div style='text-align: right;'>
+                <span class='update-badge'>🕒 Dados Atualizados em: {dt_ultima_atualizacao_str}</span>
+            </div>
         </div>
     </div>
     """,
@@ -843,11 +1015,10 @@ abas = [
 ]
 if e_master():
     abas.extend(["⚙️ Gestão de Acessos", "📜 Log de Histórico", "📥 Carga em Lote Avançada"])
-
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO C-LEVEL (MÉTRICAS DINÂMICAS)
+# ABA 0: DASHBOARD EXECUTIVO C-LEVEL
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.markdown("<div class='section-banner'><h3>📊 Visão Financeira Global & Indicadores de Performance (FP&A)</h3></div>", unsafe_allow_html=True)
@@ -863,8 +1034,7 @@ with aba_sel[0]:
     taxa_total_emitida = df_todos_filtrados["Taxa"].sum() if not df_todos_filtrados.empty and "Taxa" in df_todos_filtrados.columns else 0.0
     receita_total_emitida = df_todos_filtrados["Receita Total Emitida"].sum() if not df_todos_filtrados.empty and "Receita Total Emitida" in df_todos_filtrados.columns else 0.0
     ticket_medio_pendente = (df_pendentes["Tarifa Total Emitida"].sum() / len(df_pendentes)) if not df_pendentes.empty else 0.0
-
-    # BLOCO DE KPIS EXECUTIVE SUMMARY
+    
     k1, k2, k3, k4, k5, k6 = st.columns(6)
     k1.metric("Vol. Total Bilhetes", f"{tot_processados:,}")
     k2.metric("Taxa Conciliação", f"{taxa_concil:.1f}%")
@@ -875,11 +1045,9 @@ with aba_sel[0]:
     
     st.markdown("---")
     
-    # LINHA 1 DE GRÁFICOS: DISTRIBUIÇÃO POR ABA + TOP CIAS
     g1, g2 = st.columns(2)
     with g1:
         st.markdown('<div class="chart-card"><h5>📊 Distribuição de Bilhetes Pendentes por Aba do Sistema</h5>', unsafe_allow_html=True)
-        
         dados_abas = [
             {"Aba": "1. Falta Lançamento", "Quantidade": len(f_falta)},
             {"Aba": "2. Erro Concur 🚨", "Quantidade": len(f_concur)},
@@ -890,17 +1058,9 @@ with aba_sel[0]:
         ]
         df_abas = pd.DataFrame(dados_abas)
         df_abas = df_abas[df_abas["Quantidade"] > 0]
-        
         if not df_abas.empty:
-            fig_pie = px.pie(
-                df_abas, values="Quantidade", names="Aba", hole=0.5,
-                color_discrete_sequence=["#002060", "#d90429", "#fa8c16", "#0050b3", "#0086c0", "#722ed1"]
-            )
-            fig_pie.update_traces(
-                textposition='inside',
-                textinfo='value+percent',
-                hovertemplate='<b>%{label}</b><br>Volume: %{value:,}<br>Representação: %{percent}'
-            )
+            fig_pie = px.pie(df_abas, values="Quantidade", names="Aba", hole=0.5, color_discrete_sequence=["#002060", "#d90429", "#fa8c16", "#0050b3", "#0086c0", "#722ed1"])
+            fig_pie.update_traces(textposition='inside', textinfo='value+percent', hovertemplate='<b>%{label}</b><br>Volume: %{value:,}<br>Representação: %{percent}')
             fig_pie.update_layout(height=330, margin=dict(l=10, r=10, t=10, b=10))
             st.plotly_chart(fig_pie, use_container_width=True)
         else: st.info("Sem pendências cadastradas.")
@@ -911,24 +1071,17 @@ with aba_sel[0]:
         if not df_pendentes.empty:
             df_cia = df_pendentes["CIA"].value_counts().head(8).reset_index()
             df_cia.columns = ["Companhia", "Quantidade"]
-            
             fig_bar = px.bar(df_cia, x="Companhia", y="Quantidade", text="Quantidade", color_discrete_sequence=["#002060"])
-            fig_bar.update_traces(
-                textposition='outside',
-                texttemplate='%{value:,}',
-                hovertemplate='<b>%{x}</b><br>Pendências: %{y:,}'
-            )
+            fig_bar.update_traces(textposition='outside', texttemplate='%{value:,}', hovertemplate='<b>%{x}</b><br>Pendências: %{y:,}')
             fig_bar.update_layout(height=330, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Qtd Bilhetes")
             st.plotly_chart(fig_bar, use_container_width=True)
         else: st.info("Sem pendências.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # LINHA 2 DE GRÁFICOS: AGING CORRIGIDO + QUADRO COMPLEMENTAR
     st.markdown('<div class="chart-card"><h5>⏳ Aging / Curva de Envelhecimento das Pendências</h5>', unsafe_allow_html=True)
     if not df_pendentes.empty and "Faixa_Aging" in df_pendentes.columns:
         df_aging = df_pendentes["Faixa_Aging"].value_counts().reset_index()
         df_aging.columns = ["Faixa", "Quantidade"]
-        
         ordem_aging = ["Até 30 dias", "31 a 60 dias", "61 a 90 dias", "> 90 dias (Crítico)", "Sem Data"]
         df_aging["Faixa"] = pd.Categorical(df_aging["Faixa"], categories=ordem_aging, ordered=True)
         df_aging = df_aging.sort_values("Faixa")
@@ -936,13 +1089,7 @@ with aba_sel[0]:
         g_ag1, g_ag2 = st.columns([2.2, 1])
         with g_ag1:
             fig_aging = px.bar(df_aging, x="Faixa", y="Quantidade", text="Quantidade", color="Faixa",
-                               color_discrete_map={
-                                   "Até 30 dias": "#52c41a",
-                                   "31 a 60 dias": "#1890ff",
-                                   "61 a 90 dias": "#fa8c16",
-                                   "> 90 dias (Crítico)": "#f5222d",
-                                   "Sem Data": "#bfbfbf"
-                               })
+                               color_discrete_map={"Até 30 dias": "#52c41a", "31 a 60 dias": "#1890ff", "61 a 90 dias": "#fa8c16", "> 90 dias (Crítico)": "#f5222d", "Sem Data": "#bfbfbf"})
             fig_aging.update_traces(textposition='outside', texttemplate='%{value:,}')
             fig_aging.update_layout(height=300, margin=dict(l=10, r=10, t=25, b=10), showlegend=False, xaxis_title="", yaxis_title="Qtd Bilhetes")
             st.plotly_chart(fig_aging, use_container_width=True)
@@ -957,7 +1104,6 @@ with aba_sel[0]:
     else: st.info("Sem dados de aging disponíveis.")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # LINHA 3 DE GRÁFICOS: VISÃO DUAL POR GERENTE (EXPOSIÇÃO R$ + QUANTIDADE DE EMISSÕES)
     g3, g4 = st.columns(2)
     with g3:
         st.markdown('<div class="chart-card"><h5>💼 Exposição Financeira (R$) Pendente por Gerente</h5>', unsafe_allow_html=True)
@@ -966,7 +1112,6 @@ with aba_sel[0]:
             df_fin = df_pendentes.groupby("Área Resp. Operação")["Valor_Total"].sum().reset_index()
             df_fin = df_fin.sort_values("Valor_Total", ascending=False)
             df_fin["Texto_Fmt"] = df_fin["Valor_Total"].apply(lambda x: f"R$ {x:,.0f}")
-            
             fig_fin = px.bar(df_fin, x="Área Resp. Operação", y="Valor_Total", text="Texto_Fmt", color_discrete_sequence=["#fa8c16"])
             fig_fin.update_traces(textposition='outside', hovertemplate='<b>%{x}</b><br>Valor Pendente: R$ %{y:,.2f}')
             fig_fin.update_layout(height=330, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Valor (R$)")
@@ -979,7 +1124,6 @@ with aba_sel[0]:
         if not df_pendentes.empty:
             df_qtd_ger = df_pendentes["Área Resp. Operação"].value_counts().reset_index()
             df_qtd_ger.columns = ["Gerente", "Quantidade"]
-            
             fig_qtd = px.bar(df_qtd_ger, x="Gerente", y="Quantidade", text="Quantidade", color_discrete_sequence=["#003366"])
             fig_qtd.update_traces(textposition='outside', texttemplate='%{value:,}', hovertemplate='<b>%{x}</b><br>Emissões Pendentes: %{y:,}')
             fig_qtd.update_layout(height=330, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Qtd Emissões")
@@ -988,29 +1132,45 @@ with aba_sel[0]:
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
-# MÓDULO REUTILIZÁVEL DE TABELAS (COM AUTO-PREENCHIMENTO)
+# MÓDULO REUTILIZÁVEL DE TABELAS
 # ------------------------------------------------------------------------------
 def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
     if df_tab.empty:
         st.info("Nenhum bilhete nesta categoria.")
         return
         
+    gerente_nome_export = "Geral"
+    if filtro_gerente and len(filtro_gerente) == 1:
+        gerente_nome_export = filtro_gerente[0]
+    elif "Área Resp. Operação" in df_tab.columns:
+        unq_g = list(set(df_tab["Área Resp. Operação"].dropna().tolist()))
+        if len(unq_g) == 1:
+            gerente_nome_export = unq_g[0]
+            
+    fn_gerente_s = re.sub(r'\s+', '_', gerente_nome_export)
+    nome_arquivo_excel = f"Relatorio_Conciliacao_{nome_base}_{fn_gerente_s}_{datetime.date.today().strftime('%Y%m%d')}.xlsx"
+    
     c_s1, c_s2 = st.columns([3, 1])
     with c_s1:
-        termo = st.text_input("🔍 Buscar por Bilhete, Gerente, Cliente, Emissor ou Localizador:", key=f"src_{key_pfx}")
+        termo = st.text_input("🔍 Buscar por Bilhete, Localizador (Loc / Rloc), Gerente, Cliente, Emissor ou SV:", key=f"src_{key_pfx}")
     with c_s2:
         st.write("")
         st.download_button(
             "📥 Extrair Relatório Executivo (.xlsx)",
-            data=gerar_excel_estilizado(df_tab, nome_base),
-            file_name=f"{nome_base}_Filtrado.xlsx",
+            data=gerar_excel_estilizado(df_tab, nome_aba=nome_base, nome_gerente=gerente_nome_export),
+            file_name=nome_arquivo_excel,
             key=f"dl_{key_pfx}"
         )
         
     df_exib = df_tab.copy()
     if termo.strip():
         t_low = termo.strip().lower()
-        cols_s = [c for c in ["Bilhetes", "Localizador_Sistema", "Área Resp. Operação", "Emissor / Consultor", "Ponto de venda", "Cliente", "SV", "Rloc_CIA"] if c in df_exib.columns]
+        cols_s = [
+            c for c in [
+                "Bilhetes", "Rloc_CIA", "Localizador_Sistema", "Localizador", "Rloc_Cia", "Localizador_Cia", "Loc", "Rloc",
+                "Área Resp. Operação", "Emissor / Consultor", "Ponto de venda", "Cliente", "SV", "FOP"
+            ] if c in df_exib.columns
+        ]
         m_s = pd.Series(False, index=df_exib.index)
         for col in cols_s:
             m_s |= df_exib[col].astype(str).str.lower().str.contains(t_low, na=False)
@@ -1024,25 +1184,33 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
         df_sel = df_exib[df_exib["Bilhetes"].isin(bilhet_sel)]
         st.info(f"🎯 **{len(df_sel)} bilhete(s) selecionado(s)** para atualização de tratativa.")
         
-        # PREENCHIMENTO AUTOMÁTICO DOS DADOS EXISTENTES (AUTO-FILL)
-        primeira_linha = df_sel.iloc[0]
+        is_single = len(df_sel) == 1
+        primeira_linha = df_sel.iloc[0] if is_single else {}
         
+        OPCAO_MANTER_ST = "-- Manter Status Original --"
         opts_st = [
-            "Já Lançado no ERP", "Emitido e Lançado", "Pendente de Lançamento (Não Consta)",
+            OPCAO_MANTER_ST, "Já Lançado no ERP", "Emitido e Lançado", "Pendente de Lançamento (Não Consta)",
             "Erro de Integração Concur", "Em Análise Backoffice", "Divergência de Tarifa", "Divergência de Taxa", "Cancelado / Reembolsado"
         ]
-        st_atual = str(primeira_linha.get("Status_Geral", "")).strip()
-        idx_st = opts_st.index(st_atual) if st_atual in opts_st else 2
+        if is_single:
+            st_atual = str(primeira_linha.get("Status_Geral", "")).strip()
+            idx_st = opts_st.index(st_atual) if st_atual in opts_st else 0
+        else:
+            idx_st = 0
+            
+        OPCAO_MANTER_GER = "-- Manter Gerente Original --"
+        opts_g = [OPCAO_MANTER_GER] + sorted(list(set(DEPARA_GERENTES.values())))
+        if is_single:
+            ar_atual = padronizar_nome_gerente(primeira_linha.get("Área Resp. Operação", primeira_linha.get("Gerentes", "")))
+            idx_g = opts_g.index(ar_atual) if ar_atual in opts_g else 0
+        else:
+            idx_g = 0
+            
+        rloc_init = str(primeira_linha.get("Rloc_CIA", "")).strip() if is_single else ""
+        if rloc_init in ["-", "None", "nan", "null"]: rloc_init = ""
         
-        opts_g = sorted(list(set(DEPARA_GERENTES.values())))
-        ar_atual = padronizar_nome_gerente(primeira_linha.get("Área Resp. Operação", primeira_linha.get("Gerentes", "")))
-        idx_g = opts_g.index(ar_atual) if ar_atual in opts_g else 0
-        
-        rloc_atual = str(primeira_linha.get("Rloc_CIA", "")).strip()
-        if rloc_atual in ["-", "None", "nan", "null"]: rloc_atual = ""
-        
-        obs_atual = str(primeira_linha.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip()
-        if obs_atual in ["-", "None", "nan", "null"]: obs_atual = ""
+        obs_init = str(primeira_linha.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip() if is_single else ""
+        if obs_init in ["-", "None", "nan", "null"]: obs_init = ""
         
         with st.form(f"form_{key_pfx}"):
             c1, c2, c3 = st.columns(3)
@@ -1051,36 +1219,34 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
             with c2:
                 ar_nova = st.selectbox("Nova Área Responsável / Gerente:", opts_g, index=idx_g, key=f"ar_{key_pfx}")
             with c3:
-                rloc_novo = st.text_input("Novo Rloc_CIA (Opcional):", value=rloc_atual, key=f"rloc_{key_pfx}")
+                rloc_novo = st.text_input("Novo Rloc_CIA (Deixe em branco p/ manter original):", value=rloc_init, key=f"rloc_{key_pfx}")
                 
-            obs_nova = st.text_area("Observação / Justificativa Detalhada:", value=obs_atual, key=f"obs_{key_pfx}")
+            obs_nova = st.text_area("Observação / Justificativa Detalhada (Deixe em branco p/ manter original):", value=obs_init, key=f"obs_{key_pfx}")
             
             if st.form_submit_button("💾 Salvar Tratativa"):
                 usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
-                n_items = len(df_sel)
                 
-                setor_vals = df_sel["Setor"].values if "Setor" in df_sel.columns else ["-"] * n_items
-                sv_vals = df_sel["SV"].values if "SV" in df_sel.columns else ["-"] * n_items
-                fop_vals = df_sel["FOP"].values if "FOP" in df_sel.columns else ["-"] * n_items
-                cliente_vals = df_sel["Cliente"].values if "Cliente" in df_sel.columns else [""] * n_items
-                
-                if rloc_novo.strip():
-                    rloc_vals = [rloc_novo.strip()] * n_items
-                else:
-                    rloc_vals = df_sel["Rloc_CIA"].values if "Rloc_CIA" in df_sel.columns else ["-"] * n_items
-                
-                df_up = pd.DataFrame({
-                    "Bilhetes": df_sel["Bilhetes"].values,
-                    "Status_Geral": [st_novo] * n_items,
-                    "Área Resp. Operação": [ar_nova] * n_items,
-                    "Obs. Operação": [obs_nova] * n_items,
-                    "Setor": setor_vals,
-                    "Gerentes": [ar_nova] * n_items,
-                    "SV": sv_vals,
-                    "FOP": fop_vals,
-                    "Rloc_CIA": rloc_vals,
-                    "Cliente": cliente_vals
-                })
+                list_up = []
+                for _, row_item in df_sel.iterrows():
+                    st_final = row_item.get("Status_Geral", "Pendente de Lançamento (Não Consta)") if st_novo == OPCAO_MANTER_ST else st_novo
+                    ar_final = padronizar_nome_gerente(row_item.get("Área Resp. Operação", row_item.get("Gerentes", "Não Mapeado"))) if ar_nova == OPCAO_MANTER_GER else ar_nova
+                    rloc_final = str(row_item.get("Rloc_CIA", "-")).strip() if not rloc_novo.strip() else rloc_novo.strip()
+                    obs_final = str(row_item.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip() if not obs_nova.strip() else obs_nova.strip()
+                    
+                    list_up.append({
+                        "Bilhetes": row_item.get("Bilhetes"),
+                        "Status_Geral": st_final,
+                        "Área Resp. Operação": ar_final,
+                        "Obs. Operação": obs_final,
+                        "Setor": row_item.get("Setor", "-"),
+                        "Gerentes": ar_final,
+                        "SV": row_item.get("SV", "-"),
+                        "FOP": row_item.get("FOP", "-"),
+                        "Rloc_CIA": rloc_final,
+                        "Cliente": row_item.get("Cliente", "")
+                    })
+                    
+                df_up = pd.DataFrame(list_up)
                 ok, msg, _, _, _ = salvar_tratativas_lote_supabase(df_up, usr_str)
                 if ok:
                     st.success(msg)
@@ -1088,8 +1254,18 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
                     st.cache_data.clear()
                     st.rerun()
                 else: st.error(msg)
-
-    st.dataframe(df_exib, use_container_width=True, hide_index=True)
+                
+    if bilhet_sel:
+        set_sel = set(bilhet_sel)
+        def destacar_linhas_selecionadas(row):
+            b_val = str(row.get("Bilhetes", "")).strip()
+            if b_val in set_sel:
+                return ["background-color: #fff3cd; color: #000000; font-weight: bold; border-left: 4px solid #fa8c16;"] * len(row)
+            return [""] * len(row)
+        df_styled = df_exib.style.apply(destacar_linhas_selecionadas, axis=1)
+        st.dataframe(df_styled, use_container_width=True, hide_index=True)
+    else:
+        st.dataframe(df_exib, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------------------------
 # ABAS OPERACIONAIS
@@ -1097,27 +1273,21 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
 with aba_sel[1]:
     st.markdown("<div class='section-banner'><h3>📋 1. Falta de Lançamento no ERP (Maringá)</h3><p>Emissões pendentes de lançamento no ERP Benner.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_falta, "Falta_Lancamento", "fl")
-
 with aba_sel[2]:
     st.markdown("<div class='section-banner'><h3>🚨 2. Erro de Integração Concur</h3><p>Aba dedicada exclusivamente às falhas de integração com a plataforma Concur.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_concur, "Erro_Concur", "conc")
-
 with aba_sel[3]:
     st.markdown("<div class='section-banner'><h3>⚠️ 3. Erros de Valores & CIA (Maringá)</h3><p>Bilhetes no ERP com divergência de Tarifa, Taxa ou Companhia Aérea.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_erros, "Erros_Valores", "ev")
-
 with aba_sel[4]:
     st.markdown("<div class='section-banner'><h3>🎧 4. Suporte Backoffice</h3><p>Casos sob gestão e análise da equipe de Backoffice.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_backoffice, "Suporte_Backoffice", "sb")
-
 with aba_sel[5]:
     st.markdown("<div class='section-banner'><h3>🎪 5. Central de Eventos</h3><p>Emissões corporativas associadas ao setor de Eventos.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_eventos, "Central_Eventos", "ce")
-
 with aba_sel[6]:
     st.markdown("<div class='section-banner'><h3>🤖 6. Emissor Virtual Lemontech</h3><p>Emissões realizadas via robô / Emissor Virtual Lemontech.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_lemon_virt, "Emissor_Virtual", "evl")
-
 with aba_sel[7]:
     st.markdown("<div class='section-banner'><h3>✅ 7. Bilhetes Solicitados Conciliação</h3><p>Bilhetes validados e conciliados sem divergências ativas.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_sem_div, "Bilhetes_Conciliados", "ok")
@@ -1127,21 +1297,102 @@ with aba_sel[7]:
 # ------------------------------------------------------------------------------
 if e_master():
     with aba_sel[8]:
-        st.subheader("⚙️ Gestão de Acessos")
-        usuarios_db = carregar_usuarios_supabase()
-        if usuarios_db:
-            df_usr = pd.DataFrame.from_dict(usuarios_db, orient="index").reset_index()
-            df_usr.columns = ["Usuário", "Senha", "Nome", "Perfil", "Status"]
-            st.dataframe(df_usr[["Usuário", "Nome", "Perfil", "Status"]], use_container_width=True, hide_index=True)
+        st.subheader("⚙️ Gestão de Acessos & Frequência de Uso")
+        st.markdown("Painel de acompanhamento de usuários cadastrados, último acesso registrado e tempo de inatividade.")
+        
+        df_gestao_usr, df_historico_acessos = obter_relatorio_acessos_db()
+        
+        if not df_gestao_usr.empty:
+            now = pd.Timestamp.now()
+            
+            def calc_tempo_inatividade(row):
+                dt = row.get("ultimo_acesso")
+                if pd.isna(dt) or dt is None:
+                    return "Nunca acessou"
+                dias = (now - dt).days
+                if dias == 0:
+                    return "Hoje"
+                elif dias == 1:
+                    return "Ontem"
+                else:
+                    return f"Há {dias} dias"
+            
+            df_gestao_usr["Tempo sem Acessar"] = df_gestao_usr.apply(calc_tempo_inatividade, axis=1)
+            
+            def classificar_status_uso(row):
+                dt = row.get("ultimo_acesso")
+                if pd.isna(dt) or dt is None:
+                    return "🔴 Inativo (Nunca)"
+                dias = (now - dt).days
+                if dias <= 7:
+                    return "🟢 Ativo Recente"
+                elif dias <= 30:
+                    return "🟡 Ativo Moderado"
+                else:
+                    return "🔴 Inativo (> 30 dias)"
+                    
+            df_gestao_usr["Status Inatividade"] = df_gestao_usr.apply(classificar_status_uso, axis=1)
+            
+            # Métricas no topo
+            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+            col_m1.metric("Total Usuários", len(df_gestao_usr))
+            
+            ativos_7d = len(df_gestao_usr[df_gestao_usr["Status Inatividade"] == "🟢 Ativo Recente"])
+            inativos_30d = len(df_gestao_usr[df_gestao_usr["Status Inatividade"].str.contains("Inativo")])
+            
+            col_m2.metric("Ativos (Últimos 7 dias)", ativos_7d)
+            col_m3.metric("Inativos (>30 dias / Nunca)", inativos_30d)
+            col_m4.metric("Total Logs Registrados", len(df_historico_acessos) if not df_historico_acessos.empty else 0)
+            
+            st.markdown("---")
+            st.write("### 👥 Tabela de Controle de Usuários e Acessos")
+            
+            df_exib_usr = df_gestao_usr.copy()
+            cols_renames = {
+                "usuario": "Usuário", "nome": "Nome", "perfil": "Perfil",
+                "status": "Status Cadastro", "ultimo_acesso": "Último Acesso",
+                "total_acessos": "Total Acessos"
+            }
+            df_exib_usr.rename(columns=cols_renames, inplace=True)
+            
+            st.dataframe(
+                df_exib_usr[["Usuário", "Nome", "Perfil", "Status Cadastro", "Último Acesso", "Tempo sem Acessar", "Status Inatividade", "Total Acessos"]],
+                column_config={
+                    "Último Acesso": st.column_config.DatetimeColumn("Último Acesso", format="DD/MM/YYYY HH:mm"),
+                    "Total Acessos": st.column_config.NumberColumn("Total de Acessos")
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("Nenhum dado de usuário ou log disponível no banco de dados.")
 
     with aba_sel[9]:
-        st.subheader("📜 Log de Histórico de Alterações")
-        engine_sb = get_db_engine()
-        if engine_sb:
-            try:
-                df_log_db = pd.read_sql("SELECT * FROM log_auditoria ORDER BY id DESC LIMIT 300", engine_sb)
-                st.dataframe(df_log_db, use_container_width=True, hide_index=True)
-            except Exception: st.info("Sem registros no log.")
+        st.subheader("📜 Log de Histórico de Auditoria e Acessos")
+        sub_tab1, sub_tab2 = st.tabs(["📝 Histórico de Tratativas (Auditoria)", "🔐 Log de logins no App"])
+        
+        with sub_tab1:
+            engine_sb = get_db_engine()
+            if engine_sb:
+                try:
+                    df_log_db = pd.read_sql("SELECT * FROM log_auditoria ORDER BY id DESC LIMIT 300", engine_sb)
+                    st.dataframe(df_log_db, use_container_width=True, hide_index=True)
+                except Exception:
+                    st.info("Nenhum histórico de tratativa registrado até o momento.")
+                    
+        with sub_tab2:
+            _, df_logs_det = obter_relatorio_acessos_db()
+            if not df_logs_det.empty:
+                st.dataframe(
+                    df_logs_det,
+                    column_config={
+                        "data_acesso": st.column_config.DatetimeColumn("Data/Hora do Acesso", format="DD/MM/YYYY HH:mm:ss")
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("Nenhum log de acesso registrado ainda.")
 
     with aba_sel[10]:
         st.subheader("📥 Carga de Retornos de Cobrança em Lote Avançada")
@@ -1157,7 +1408,6 @@ if e_master():
                 
                 if st.button("🚀 Confirmar e Processar Lote", type="primary"):
                     progress_bar = st.progress(0, text="Iniciando leitura e validação dos bilhetes...")
-                    
                     for idx in range(1, 101, 20):
                         time.sleep(0.08)
                         progress_bar.progress(idx, text=f"Sincronizando registros com a base de dados... ({idx}%)")
