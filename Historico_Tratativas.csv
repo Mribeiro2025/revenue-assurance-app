@@ -490,8 +490,8 @@
 70107721163,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-12973-0,20452030,MC,ZM6EJM
 70107704340,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Matriz (Barueri),57-13784-6,-,Cartão,NJ6YMS
 70100891028,Emitido e Lançado,Guilherme Silva,,Operação,Matriz (Barueri),57-14733-3,-,Cartão,TWGFFQ
-70106208851,Pendente de Lançamento (Não Consta),Central de Eventos,,Operação,Matriz (Barueri),57-14733-3,-,Faturado,UPFM6N
-70106212520,Pendente de Lançamento (Não Consta),Central de Eventos,,Operação,Matriz (Barueri),57-14733-3,-,Faturado,BW4S3N
+70106208851,Já Lançado no ERP,Central de Eventos,,Operação,Matriz (Barueri),57-14733-3,-,Faturado,UPFM6N
+70106212520,Já Lançado no ERP,Central de Eventos,,Operação,Matriz (Barueri),57-14733-3,-,Faturado,BW4S3N
 70107183379,Pendente de Lançamento (Não Consta),Guilherme Silva,,Operação,Matriz (Barueri),57-14733-3,20392675,MC,YLRNFM
 70107440606,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,Matriz (Barueri),57-15284-1,-,Cartão,CMQB6D
 70093743316,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - AKALZJ,Operação,Matriz (Barueri),57-15786-6,-,Cartão,AKMYYZ
@@ -664,7 +664,7 @@ No aguardo.",Operação,São Paulo,57-97157-2,20388436,MC,-
 9572307551741,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Cartão,-
 9572308089555,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Cartão,-
 9572308089556,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Cartão,-
-9572307754197,Emitido e Lançado,Marcelo Pereira,,Operação,Rio de Janeiro,57-56170-0,19663156,Faturado,MUVKSQ
+9572307754197,Emitido e Lançado,Marcelo Pereira,,Operação,Rio de Janeiro,57-56170-0,20458673,Faturado,MUVKSQ
 9572307570702,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
 9572307575860,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
 9572307575861,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
@@ -711,7 +711,7 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2304033520,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - WWQJAF,Operação,Não Mapeado,DIRETO,-,Cartão,YJFQXJ
 2304295588,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - CEZFIZ,Operação,Não Mapeado,DIRETO,-,Cartão,HOFZDT
 2304398902,Emitido e Lançado,Rosangela Pallu,,Operação,Não Mapeado,DIRETO,19312268,Cartão,GDRLVS
-2304398903,Emitido e Lançado,Rosangela Pallu,,Operação,Não Mapeado,DIRETO,19312267,Cartão,GDRLVS
+2304398903,Emitido e Lançado,Rosangela Pallu,,Operação,Não Mapeado,DIRETO,19312268,Cartão,GDRLVS
 2305556643,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - FVMGWJ,Operação,Não Mapeado,DIRETO,-,Cartão,KZDOYY
 2305688675,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - UDCJBQ,Operação,Não Mapeado,DIRETO,-,Cartão,UANNYZ
 2305969004,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - FSXAFC,Operação,Não Mapeado,DIRETO,-,Cartão,DJMKHW
@@ -1081,7 +1081,7 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2314502640,Emitido e Lançado,Não Mapeado,,Operação,Não Mapeado,DIRETO,20447319,Faturado,CLTIAT
 2314519808,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,GAFUSG
 4436998222,Emitido e Lançado,Jaime Schnaider,,Operação,Não Mapeado,DIRETO,-,Cash,MGNCBU
-[MGNCBU-1],Emitido e Lançado,Jaime Schnaider,"Lançado corretamente - GOL,  por favor verificar com a conciliação.",Operação,Não Mapeado,DIRETO,18307000,Faturado,EURBDY
+[MGNCBU-1],Emitido e Lançado,Jaime Schnaider,"Lançado corretamente - GOL,  por favor verificar com a conciliação.",Operação,Não Mapeado,DIRETO,18307000,Cash,MGNCBU
 4436998223,Emitido e Lançado,Jaime Schnaider,,Operação,Não Mapeado,DIRETO,-,Cash,MGNCBU
 4436998224,Emitido e Lançado,Jaime Schnaider,,Operação,Não Mapeado,DIRETO,-,Cash,MGNCBU
 4436998225,Emitido e Lançado,Jaime Schnaider,,Operação,Não Mapeado,DIRETO,-,Cash,MGNCBU

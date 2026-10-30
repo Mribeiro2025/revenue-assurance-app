@@ -415,7 +415,7 @@ def salvar_csv_atomico(df, caminho_csv):
     os.rename(tmp_path, caminho_csv)
 
 def sincronizar_supabase_tudo(df_master):
-    """Envia todos os bilhetes auditados para a tb_conciliacao_base no Supabase em lote."""
+    """Renova a tb_conciliacao_base no Supabase e insere apenas a carga do relatório atual."""
     engine_sb = obter_engine_supabase()
     if not engine_sb or df_master.empty:
         print("⚠️ Supabase indisponível ou dataframe mestre vazio.")
@@ -424,7 +424,16 @@ def sincronizar_supabase_tudo(df_master):
     criar_tabelas_supabase_se_nao_existirem(engine_sb)
     from sqlalchemy import text
     
-    upsert_base_sql = text("""
+    # 1. LIMPA A TABELA BASE PARA REMOVER CASOS OBSOLETOS / REGULARIZADOS
+    try:
+        with engine_sb.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE tb_conciliacao_base;"))
+        print("🧹 Tabela 'tb_conciliacao_base' reiniciada com sucesso para a nova carga!")
+    except Exception as e:
+        print(f"⚠️ Erro ao truncar tabela base no Supabase: {e}")
+
+    # 2. PREPARA O INSERÇÃO DOS REGISTROS DA CARGA ATUAL
+    insert_base_sql = text("""
         INSERT INTO tb_conciliacao_base (
             bilhete, localizador, rloc_cia, cia, fornecedor_sistema, status_cia, status_sistema,
             data_emissao, pagto, sv, fop, a_vista, a_credito, tarifa_sistema, dif_tarifa, taxa_emitida,
@@ -443,53 +452,7 @@ def sincronizar_supabase_tudo(df_master):
             :fonte_relatorio, :tipo_emissao_lemon, :consultor_lemon, :emissor_reserva_lemon,
             :centro_custo_lemon, :forma_pagto_lemon, :autorizacao_cartao_lemon, :modalidade_lemon,
             :emissao_online_lemon, :source_lemon, :ponto_venda_lemon, NOW()
-        ) ON CONFLICT (bilhete) DO UPDATE SET
-            localizador = EXCLUDED.localizador,
-            rloc_cia = EXCLUDED.rloc_cia,
-            cia = EXCLUDED.cia,
-            fornecedor_sistema = EXCLUDED.fornecedor_sistema,
-            status_cia = EXCLUDED.status_cia,
-            status_sistema = EXCLUDED.status_sistema,
-            data_emissao = EXCLUDED.data_emissao,
-            pagto = EXCLUDED.pagto,
-            sv = EXCLUDED.sv,
-            fop = EXCLUDED.fop,
-            a_vista = EXCLUDED.a_vista,
-            a_credito = EXCLUDED.a_credito,
-            tarifa_sistema = EXCLUDED.tarifa_sistema,
-            dif_tarifa = EXCLUDED.dif_tarifa,
-            taxa_emitida = EXCLUDED.taxa_emitida,
-            taxa_sistema = EXCLUDED.taxa_sistema,
-            dif_taxa = EXCLUDED.dif_taxa,
-            comissao = EXCLUDED.comissao,
-            taxa_du = EXCLUDED.taxa_du,
-            desconto = EXCLUDED.desconto,
-            incentivo = EXCLUDED.incentivo,
-            receita_sistema = EXCLUDED.receita_sistema,
-            dif_receita = EXCLUDED.dif_receita,
-            vl_liquido = EXCLUDED.vl_liquido,
-            status_divergencia = EXCLUDED.status_divergencia,
-            consultor = EXCLUDED.consultor,
-            emissor = EXCLUDED.emissor,
-            sistema_reserva = EXCLUDED.sistema_reserva,
-            cliente = EXCLUDED.cliente,
-            ponto_venda = EXCLUDED.ponto_venda,
-            codigo_iata = EXCLUDED.codigo_iata,
-            gerente_sugerido = EXCLUDED.gerente_sugerido,
-            setor_sugerido = EXCLUDED.setor_sugerido,
-            aba_destino = EXCLUDED.aba_destino,
-            fonte_relatorio = EXCLUDED.fonte_relatorio,
-            tipo_emissao_lemon = EXCLUDED.tipo_emissao_lemon,
-            consultor_lemon = EXCLUDED.consultor_lemon,
-            emissor_reserva_lemon = EXCLUDED.emissor_reserva_lemon,
-            centro_custo_lemon = EXCLUDED.centro_custo_lemon,
-            forma_pagto_lemon = EXCLUDED.forma_pagto_lemon,
-            autorizacao_cartao_lemon = EXCLUDED.autorizacao_cartao_lemon,
-            modalidade_lemon = EXCLUDED.modalidade_lemon,
-            emissao_online_lemon = EXCLUDED.emissao_online_lemon,
-            source_lemon = EXCLUDED.source_lemon,
-            ponto_venda_lemon = EXCLUDED.ponto_venda_lemon,
-            data_processamento = NOW();
+        );
     """)
     
     lote_base = []
@@ -551,8 +514,8 @@ def sincronizar_supabase_tudo(df_master):
             for i in range(0, len(lote_base), tam_lote):
                 chunk = lote_base[i:i + tam_lote]
                 with engine_sb.begin() as conn:
-                    conn.execute(upsert_base_sql, chunk)
-            print(f"☁️ {len(lote_base)} registros sincronizados com SUCESSO na 'tb_conciliacao_base' do Supabase!")
+                    conn.execute(insert_base_sql, chunk)
+            print(f"☁️ {len(lote_base)} registros inseridos com SUCESSO na 'tb_conciliacao_base' do Supabase!")
         except Exception as e:
             print(f"❌ ERRO CRÍTICO ao sincronizar lote no Supabase: {e}")
 
