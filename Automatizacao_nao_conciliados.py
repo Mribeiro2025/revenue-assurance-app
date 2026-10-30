@@ -58,7 +58,7 @@ def obter_engine_supabase():
     return None
 
 def criar_tabelas_supabase_se_nao_existirem(engine):
-    """Garante a criação de todas as tabelas e views necessárias no Supabase."""
+    """Garante a criação de todas as tabelas, chaves primárias e views necessárias no Supabase."""
     if not engine:
         return
     from sqlalchemy import text
@@ -113,7 +113,17 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
         data_processamento TIMESTAMP DEFAULT NOW()
     );
 
-    -- Garantia de adição das novas colunas em tabelas legadas no Supabase
+    -- Garantia de adição de Chave Primária caso a tabela tenha sido criada sem PK
+    DO $$ 
+    BEGIN 
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE constraint_type = 'PRIMARY KEY' AND table_name = 'tb_conciliacao_base'
+        ) THEN
+            ALTER TABLE tb_conciliacao_base ADD CONSTRAINT pk_tb_conciliacao_base PRIMARY KEY (bilhete);
+        END IF;
+    END $$;
+
     ALTER TABLE tb_conciliacao_base ADD COLUMN IF NOT EXISTS sv VARCHAR(255);
     ALTER TABLE tb_conciliacao_base ADD COLUMN IF NOT EXISTS fop VARCHAR(255);
 
@@ -127,6 +137,7 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
         sv VARCHAR(255),
         fop VARCHAR(255),
         rloc_cia VARCHAR(255),
+        cliente VARCHAR(255),
         usuario_modificacao VARCHAR(255),
         data_modificacao TIMESTAMP DEFAULT NOW()
     );
@@ -168,10 +179,10 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
         COALESCE(t.obs_operacao, '') AS "Obs. Operação",
         t.data_modificacao AS "Data_Modificacao",
         t.usuario_modificacao AS "Usuario_Modificacao",
-        t.data_modificacao AS "Ultima_Alteracao",
+        COALESCE(t.data_modificacao, b.data_processamento, NOW()) AS "Ultima_Alteracao",
         b.emissor AS "Emissor",
         b.sistema_reserva AS "Sistema Reserva",
-        b.cliente AS "Cliente",
+        COALESCE(t.cliente, b.cliente, '-') AS "Cliente",
         COALESCE(t.setor, b.setor_sugerido, 'Operação') AS "Setor",
         b.tipo_emissao_lemon AS "Tipo_Emissao_Lemon",
         b.consultor_lemon AS "Consultor_Lemon",
@@ -191,7 +202,7 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
     try:
         with engine.begin() as conn:
             conn.execute(text(ddl_script))
-        print("⚡ Estrutura do Supabase (Tabelas e Visão) validada com sucesso!")
+        print("⚡ Estrutura do Supabase (Tabelas e Visão Mestra) validada com sucesso!")
     except Exception as e:
         print(f"⚠️ Aviso ao verificar estrutura no Supabase: {e}")
 
@@ -402,6 +413,7 @@ def sincronizar_supabase_tudo(df_master):
     """Envia todos os bilhetes auditados para a tb_conciliacao_base no Supabase em lote."""
     engine_sb = obter_engine_supabase()
     if not engine_sb or df_master.empty:
+        print("⚠️ Supabase indisponível ou dataframe mestre vazio.")
         return
     
     criar_tabelas_supabase_se_nao_existirem(engine_sb)
@@ -535,9 +547,9 @@ def sincronizar_supabase_tudo(df_master):
                 chunk = lote_base[i:i + tam_lote]
                 with engine_sb.begin() as conn:
                     conn.execute(upsert_base_sql, chunk)
-            print(f"☁️ {len(lote_base)} registros sincronizados na 'tb_conciliacao_base' do Supabase!")
+            print(f"☁️ {len(lote_base)} registros sincronizados com SUCESSO na 'tb_conciliacao_base' do Supabase!")
         except Exception as e:
-            print(f"⚠️ Erro ao sincronizar lote na 'tb_conciliacao_base': {e}")
+            print(f"❌ ERRO CRÍTICO ao sincronizar lote no Supabase: {e}")
 
 def executar_auditoria():
     auto_converter_benner_parquet()
@@ -570,15 +582,13 @@ def executar_auditoria():
                     "Gerente_Responsavel": clean_str_strict(r.get(col_gerente)),
                 }
 
-    print("\n[2/5] Indexando Extrato OBT Lemontech (Lendo SV e dados do cliente)...")
+    print("\n[2/5] Indexando Extrato OBT Lemontech...")
     caminho_lemon = encontrar_arquivo(["Extrato_Bilhetes_lemontech.xlsx", "Extrato_Bilhetes_lemontech.XLSX"])
     lemon_index = {}
     if caminho_lemon:
         df_lemon = pd.read_excel(caminho_lemon, engine="openpyxl")
         for idx, r in tqdm(df_lemon.iterrows(), total=len(df_lemon), desc="Indexando Lemontech", unit="reg"):
             cc_desc = f"{clean_str_strict(r.get('Centro de Custo'))} - {clean_str_strict(r.get('Descrição Centro de Custo'))}".strip(" -")
-            
-            # CAPTURA DO CAMPO SV (Solicitação no relatório Lemontech)
             sv_lemon = clean_str_strict(r.get("Solicitação") or r.get("Solicitacao") or r.get("Nº Pedido"))
             
             info_lemon = {
@@ -601,7 +611,7 @@ def executar_auditoria():
                     if k not in lemon_index:
                         lemon_index[k] = info_lemon
 
-    print("\n[3/5] Indexando ERP Benner (Lendo FOP e Cliente oficial)...")
+    print("\n[3/5] Indexando ERP Benner...")
     if os.path.exists("Acumulado.parquet"):
         df_benner = pd.read_parquet("Acumulado.parquet")
     else:
@@ -617,11 +627,7 @@ def executar_auditoria():
         for idx, r in tqdm(df_benner.iterrows(), total=len(df_benner), desc="Indexando Benner", unit="linha"):
             rloc_cia_val = clean_str_strict(r.get("Rloc Cia") or r.get("Rloc CIA") or r.get("Código Rloc") or r.get("Localizador")) or "-"
             dt_benner_raw = clean_str_strict(r.get("Data Emissão") or r.get("Data") or r.get("Data Emissao") or "")
-            
-            # CAPTURA DO CAMPO FOP (Forma de Recebimento no Acumulado.xlsx)
             fop_benner = clean_str_strict(r.get("Forma de Recebimento") or r.get("Bandeira") or r.get("Forma de Pagamento")) or "-"
-            
-            # CAPTURA DO CAMPO CLIENTE (Cliente / Apelido Cliente no Acumulado.xlsx)
             cliente_benner = clean_str_strict(r.get("Cliente") or r.get("Apelido Cliente")) or "-"
             
             info = {
@@ -816,7 +822,6 @@ def executar_auditoria():
                         if h_up in col_map:
                             return safe_get_num(row, col_map[h_up])
                     return 0.0
-
                 a_vista = get_val_dinamico(["A vista", "A VISTA"])
                 a_credito = get_val_dinamico(["A credito", "A CREDITO", "A Crédito"])
                 tarifa_emitida = a_vista + a_credito
@@ -828,7 +833,6 @@ def executar_auditoria():
                 receita_emitida = comissao + taxa_du + incentivo
                 vl_liquido = get_val_dinamico(["VL. Líquido", "VL. LÍQUIDO", "VL. Liquido"])
                 
-                # DEFINIÇÃO DOS NOVOS CAMPOS EXCLUSIVOS
                 sv_final = l_match["Lemon_SV"] if l_match and l_match.get("Lemon_SV") != "-" else (hist_data.get("SV") or "-")
                 
                 if b_match and b_match.get("Benner_FOP") and b_match["Benner_FOP"] != "-":
@@ -840,7 +844,6 @@ def executar_auditoria():
                 else:
                     fop_final = hist_data.get("FOP") or "-"
                 
-                # CLIENTE OFICIAL
                 if b_match and b_match.get("Benner_Cliente") and b_match["Benner_Cliente"] != "-":
                     cliente_final = b_match["Benner_Cliente"]
                 elif l_match and l_match.get("Lemon_Solicitante") and l_match["Lemon_Solicitante"] != "-":
@@ -978,8 +981,7 @@ def executar_auditoria():
         keep="first"
     )
 
-    # Exportação e backup em Excel
-    print("\n[6/6] Exportando Dashboard Formatado em Excel...")
+    print("\n[6/6] Exportando Dashboard e Sincronizando com Supabase...")
     with pd.ExcelWriter(out_file_model, engine="openpyxl") as writer:
         df_master.to_excel(writer, sheet_name="99_Base_Divergencias_Geral", index=False)
         if not df_log_acumulado.empty:
@@ -990,11 +992,11 @@ def executar_auditoria():
         "Historico_Tratativas.csv"
     )
 
-    # Sincronização direta com a tb_conciliacao_base no Supabase
+    # Sincronização direta com o Supabase
     sincronizar_supabase_tudo(df_master)
 
     print("\n" + "=" * 75)
-    print(f" AUDITORIA E SINCRONIZAÇÃO SUPABASE CONCLUÍDAS COM SUCESSO! ".center(75, "="))
+    print(" AUDITORIA E SINCRONIZAÇÃO SUPABASE CONCLUÍDAS COM SUCESSO! ".center(75, "="))
     print("=" * 75)
 
 if __name__ == "__main__":

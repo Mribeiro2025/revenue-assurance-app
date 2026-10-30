@@ -22,7 +22,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
 ARQUIVO_DASHBOARD_PADRAO = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 TEMPO_MAXIMO_SESSAO_HORAS = 8.0 
 
@@ -268,7 +267,6 @@ def obter_relatorio_acessos_db():
             df_users = pd.read_sql("SELECT usuario, nome, perfil, status FROM usuarios", engine)
             df_users["usuario"] = df_users["usuario"].astype(str).str.strip().str.lower()
         except Exception: pass
-
         if not df_logs.empty and not df_users.empty:
             df_agg = df_logs.groupby("usuario").agg(
                 ultimo_acesso=("data_acesso", "max"),
@@ -282,7 +280,6 @@ def obter_relatorio_acessos_db():
             df_m["total_acessos"] = 0
         else:
             df_m = pd.DataFrame()
-
         return df_m, df_logs
     except Exception:
         return pd.DataFrame(), pd.DataFrame()
@@ -361,7 +358,7 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
         return False, f"Erro ao salvar tratativas: {e}", 0, 0, len(dados_lote)
 
 # ==============================================================================
-# 3. GERADOR DE EXCEL ESTILIZADO COM CABEÇALHO PERSONALIZADO E NOME DO GERENTE
+# 3. GERADOR DE EXCEL ESTILIZADO
 # ==============================================================================
 def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"):
     buffer = io.BytesIO()
@@ -379,7 +376,6 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     
     header_title_fill = PatternFill(start_color="001E4D", end_color="001E4D", fill_type="solid")
     header_title_font = Font(name="Calibri", color="FFFFFF", bold=True, size=14)
-    
     subtitle_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
     subtitle_font = Font(name="Calibri", color="002060", bold=True, size=10)
     
@@ -401,7 +397,6 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     cell_sub.font = subtitle_font
     cell_sub.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     ws.row_dimensions[2].height = 20
-    
     ws.row_dimensions[3].height = 10
     
     header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
@@ -456,7 +451,7 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     return buffer.getvalue()
 
 # ==============================================================================
-# 4. AUTENTICAÇÃO, ALTERAÇÃO DE SENHA & PERSISTÊNCIA DE SESSÃO
+# 4. AUTENTICAÇÃO E PERSISTÊNCIA DE SESSÃO
 # ==============================================================================
 def carregar_usuarios_supabase():
     dict_u = {}
@@ -505,18 +500,15 @@ if "login_user_id" not in st.session_state: st.session_state["login_user_id"] = 
 def validar_sessao_url():
     session_user_param = st.query_params.get("session_user")
     session_time_param = st.query_params.get("session_time")
-    
     if not session_user_param or not session_time_param:
         return False, None
-        
     try:
         ts_login = float(session_time_param)
         ts_atual = time.time()
         horas_decorridas = (ts_atual - ts_login) / 3600.0
-        
         if horas_decorridas > TEMPO_MAXIMO_SESSAO_HORAS:
             st.query_params.clear()
-            st.warning(f"⚠️ Sua sessão expirou após {int(TEMPO_MAXIMO_SESSAO_HORAS)} horas de inatividade. Por favor, faça login novamente.")
+            st.warning(f"⚠️ Sua sessão expirou após {int(TEMPO_MAXIMO_SESSAO_HORAS)} horas de inatividade.")
             return False, None
         else:
             st.query_params["session_time"] = str(ts_atual)
@@ -577,7 +569,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# 5. ROTEADOR DE BASES, COMPATIBILIDADE DE COLUNAS & ALIMENTAÇÃO SV LEMONTECH
+# 5. ROTEADOR DE BASES E COMPATIBILIDADE DE COLUNAS
 # ==============================================================================
 def clean_str(val):
     if pd.isna(val) or val is None: return "-"
@@ -602,11 +594,7 @@ def padronizar_df(df):
             
     df_out["Emissor / Consultor"] = df_out.apply(consolidar_emissor_consultor, axis=1)
     
-    cols_sv_candidatas = [
-        "SV", "Solicitação", "Solicitacao", "Solicitacao_Extrato", "Solicitacao_Lemon",
-        "Solicitacao_Viagem", "Num_Solicitacao", "Número Solicitação", "OS", "Ordem de Serviço",
-        "Pedido", "Ped_Venda", "SV_Lemon", "SV_Benner"
-    ]
+    cols_sv_candidatas = ["SV", "Solicitação", "Solicitacao", "Solicitacao_Extrato", "Solicitacao_Lemon"]
     sv_series = pd.Series("-", index=df_out.index)
     for c_sv in cols_sv_candidatas:
         if c_sv in df_out.columns:
@@ -614,38 +602,17 @@ def padronizar_df(df):
             mask_val = val_clean.notna() & ~val_clean.str.lower().isin(["nan", "none", "", "-", "null", "<na>"])
             sv_series = sv_series.where(~mask_val, val_clean)
     df_out["SV"] = sv_series
-    for c_fop in ["Forma de Recebimento", "Pagto", "FOP", "Forma_Recebimento"]:
+
+    for c_fop in ["Forma de Recebimento", "Pagto", "FOP"]:
         if c_fop in df_out.columns and "FOP" not in df_out.columns:
             df_out["FOP"] = df_out[c_fop]
     if "FOP" not in df_out.columns: df_out["FOP"] = "-"
-    for c_rloc in ["Rloc_Cia", "Localizador_Sistema", "Rloc_CIA", "Localizador_Cia"]:
+
+    for c_rloc in ["Rloc_Cia", "Localizador_Sistema", "Rloc_CIA"]:
         if c_rloc in df_out.columns and "Rloc_CIA" not in df_out.columns:
             df_out["Rloc_CIA"] = df_out[c_rloc]
     if "Rloc_CIA" not in df_out.columns: df_out["Rloc_CIA"] = "-"
-    cols_cliente_candidatas = [
-        "Cliente", "Nome Cliente", "Nome_Cliente", "Razao Social", "Razao_Social",
-        "Empresa_Cliente", "Cliente_Benner", "Cliente_Lemon"
-    ]
-    cliente_series = pd.Series("", index=df_out.index)
-    for c_cli in cols_cliente_candidatas:
-        if c_cli in df_out.columns:
-            val_clean = df_out[c_cli].astype(str).str.strip()
-            mask_val = val_clean.notna() & ~val_clean.str.lower().isin(["nan", "none", "", "-", "null", "<na>"])
-            cliente_series = cliente_series.where(~mask_val, val_clean)
-            
-    df_out["Cliente_Tmp"] = cliente_series
-    def expurgar_filial_cliente(row):
-        cli = str(row.get("Cliente_Tmp", "")).strip()
-        pv = str(row.get("Ponto de venda", "")).strip().lower()
-        cli_low = cli.lower()
-        if not cli or cli_low in ["nan", "none", "", "-", "null", "<na>"]:
-            return ""
-        termos_filial = ["maringa turismo", "maringá turismo", "grupo arbaitman", "arbaitman", "matriz", "filial", "subsidiaria", "subsidiária", "agencia", "agência"]
-        if (pv and cli_low == pv) or any(t in cli_low for t in termos_filial):
-            return ""
-        return cli
-    df_out["Cliente"] = df_out.apply(expurgar_filial_cliente, axis=1)
-    df_out.drop(columns=["Cliente_Tmp"], inplace=True, errors="ignore")
+
     if "CIA" in df_out.columns:
         df_out["CIA"] = df_out["CIA"].astype(str).str.upper().str.strip().replace(DEPARA_CIAS)
         
@@ -664,10 +631,12 @@ def padronizar_df(df):
             except Exception: return pd.NaT
         try: return pd.to_datetime(val, dayfirst=True, errors="coerce")
         except Exception: return pd.NaT
+
     if "Data Emissão" in df_out.columns:
         df_out["Dt_Parsed"] = df_out["Data Emissão"].apply(converter_data_flexivel)
     else:
         df_out["Dt_Parsed"] = pd.NaT
+
     hoje = pd.to_datetime(datetime.date.today())
     dias = (hoje - df_out["Dt_Parsed"]).dt.days
     df_out["Dias_Pendente"] = dias
@@ -682,42 +651,8 @@ def padronizar_df(df):
     
     return df_out
 
-def mesclar_com_supabase(df_excel):
-    if df_excel is None or df_excel.empty: return df_excel
-    df_db = carregar_tratativas_db()
-    if df_db.empty: return df_excel
-    
-    df_excel["Bilhete_Clean"] = df_excel["Bilhetes"].apply(sanitizar_bilhete)
-    df_db["Bilhete_Clean"] = df_db["bilhete"].apply(sanitizar_bilhete)
-    
-    if "data_modificacao" in df_db.columns:
-        df_db = df_db.sort_values("data_modificacao", ascending=False)
-    df_db = df_db.drop_duplicates("Bilhete_Clean", keep="first")
-    
-    cols_sup_desejadas = ["status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "sv", "fop", "rloc_cia", "cliente"]
-    cols_presentes = [c for c in cols_sup_desejadas if c in df_db.columns]
-    
-    df_merged = pd.merge(df_excel, df_db[["Bilhete_Clean"] + cols_presentes], on="Bilhete_Clean", how="left")
-    
-    muta_map = [
-        ("Status_Geral", "status_geral"), ("Área Resp. Operação", "area_resp"),
-        ("Obs. Operação", "obs_operacao"), ("Setor", "setor"), ("Gerentes", "gerentes"),
-        ("SV", "sv"), ("FOP", "fop"), ("Rloc_CIA", "rloc_cia"), ("Cliente", "cliente")
-    ]
-    for col_excel, col_sb in muta_map:
-        if col_sb in df_merged.columns:
-            if col_excel not in df_merged.columns:
-                df_merged[col_excel] = df_merged[col_sb]
-            else:
-                mask_valido = df_merged[col_sb].notna() & ~df_merged[col_sb].astype(str).str.strip().isin(["-", "", "None", "nan"])
-                df_merged[col_excel] = df_merged[col_sb].where(mask_valido, df_merged[col_excel])
-            
-    df_merged = df_merged.drop(columns=[c for c in cols_presentes if c in df_merged.columns])
-    return df_merged
-
 def reordenar_colunas(df, modo="completo"):
     if df.empty: return df
-    
     if modo == "falta_lancamento":
         cols_desejadas = [
             "Bilhetes", "Rloc_CIA", "FOP", "Área Resp. Operação", "Código Iata", "SV", "Ponto de venda", "Cliente", "Emissor / Consultor",
@@ -770,34 +705,23 @@ def rotear_bases_mestra(df_master):
     df_concur = df_pend[mask_concur].copy()
     df_rest = df_pend[~mask_concur].copy()
     
-    # 3. Emissor Virtual Lemontech (Mecanismo Automático e Atribuição Manual)
+    # 3. Emissor Virtual Lemontech
     def e_emissor_virtual_lemon(r):
         st_val = str(r.get("Status_Geral", "")).lower().strip()
         obs_val = str(r.get("Obs. Operação", "")).lower().strip()
         emis_cons = str(r.get("Emissor / Consultor", "")).lower().strip()
         emis_raw = str(r.get("Emissor", "")).lower().strip()
-        cons_raw = str(r.get("Consultor", "")).lower().strip()
-        emis_lemon = str(r.get("Emissor_Reserva_Lemon", "")).lower().strip()
         ar_val = str(r.get("Área Resp. Operação", "")).lower().strip()
-        ger_val = str(r.get("Gerentes", "")).lower().strip()
         
-        # Validação de atribuição manual direta via formulário/status/área
-        if "emissor virtual" in st_val or "virtual lemontech" in st_val or "lemontech virtual" in st_val or st_val == "emissor virtual lemontech":
+        if "emissor virtual" in st_val or "virtual lemontech" in st_val or "emissor virtual lemontech" in st_val:
             return True
-        if "emissor virtual" in ar_val or "virtual lemontech" in ar_val or "lemontech virtual" in ar_val:
-            return True
-        if "emissor virtual" in ger_val or "virtual lemontech" in ger_val or "lemontech virtual" in ger_val:
+        if "emissor virtual" in ar_val or "virtual lemontech" in ar_val:
             return True
             
-        # Validação do mecanismo automático por palavras-chave e nomes de robô/emissor
-        text_combined = f"{emis_cons} {emis_raw} {cons_raw} {emis_lemon} {obs_val} {st_val}"
-        termos = ["emissor virtual", "virtual lemon", "lemontech virtual", "lemon virtual", "robô lemon", "robo lemon", "emissor_virtual", "emissor virtual lemontech", "virtual_lemon"]
+        text_combined = f"{emis_cons} {emis_raw} {obs_val} {st_val}"
+        termos = ["emissor virtual", "virtual lemon", "lemontech virtual", "robô lemon", "robo lemon"]
         if any(t in text_combined for t in termos):
             return True
-            
-        if "virtual" in emis_cons or "lemontech" in emis_cons or "virtual" in emis_raw or "lemontech" in emis_raw:
-            return True
-            
         return False
 
     mask_lemon = df_rest.apply(e_emissor_virtual_lemon, axis=1)
@@ -835,107 +759,73 @@ def rotear_bases_mestra(df_master):
     
     return df_falta, df_concur, df_erros, df_bo, df_eventos, df_lemon_virt, df_ok
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def carregar_bases():
     dt_atualizacao = datetime.datetime.now()
-    if os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
-        fonte = ARQUIVO_DASHBOARD_PADRAO
+    df_m = pd.DataFrame()
+    engine = get_db_engine()
+    
+    # 1. Leitura direta e sem filtro intermediário da View Mestra do Supabase
+    if engine:
         try:
-            mod_time = os.path.getmtime(ARQUIVO_DASHBOARD_PADRAO)
-            dt_atualizacao = datetime.datetime.fromtimestamp(mod_time)
-        except Exception: pass
-    else:
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), dt_atualizacao.strftime("%d/%m/%Y às %H:%M:%S")
-        
-    try:
-        xls = pd.ExcelFile(fonte, engine="openpyxl")
-        frames = []
-        map_sv_bilhete = {}
-        map_sv_loc = {}
-        
-        # Mapeamento do Extrato Lemontech em Dois Passos
-        for sheet in xls.sheet_names:
-            s_low = sheet.lower()
-            if "lemon" in s_low or "extrato" in s_low or sheet.startswith("98_") or sheet.startswith("97_"):
-                try:
-                    df_lemon = pd.read_excel(xls, sheet_name=sheet)
-                    
-                    # Coluna de origem da solicitação (SV)
-                    col_sv = next((c for c in df_lemon.columns if str(c).strip().lower() in [
-                        "solicitação", "solicitacao", "sv", "número solicitação", "num_solicitacao", "solicitação de viagem"
-                    ]), None)
-                    
-                    # Coluna do bilhete para o Passo 1
-                    col_bil = next((c for c in df_lemon.columns if str(c).strip().lower() in [
-                        "bilhete", "bilhetes", "numero bilhete", "num_bilhete", "nº bilhete"
-                    ]), None)
-                    
-                    # Coluna do localizador para o Passo 2
-                    col_loc = next((c for c in df_lemon.columns if str(c).strip().lower() in [
-                        "localizador", "loc", "rloc", "rloc_cia", "localizador_sistema", "localizador_cia"
-                    ]), None)
-                    
-                    if col_sv:
-                        for _, row in df_lemon.iterrows():
-                            sv_val = str(row.get(col_sv, "")).strip()
-                            if sv_val and sv_val.lower() not in ["nan", "none", "", "-", "null", "<na>"]:
-                                # Passo 1: Mapear por número do Bilhete
-                                if col_bil:
-                                    b_c = sanitizar_bilhete(row.get(col_bil))
-                                    if b_c: map_sv_bilhete[b_c] = sv_val
-                                    
-                                # Passo 2: Mapear por Localizador (Loc/Rloc)
-                                if col_loc:
-                                    loc_c = str(row.get(col_loc, "")).strip().upper().replace(".0", "")
-                                    if loc_c and loc_c.lower() not in ["nan", "none", "", "-", "null"] and len(loc_c) >= 3:
-                                        map_sv_loc[loc_c] = sv_val
-                except Exception: pass
-                
-        for sheet in xls.sheet_names:
-            if sheet.startswith("99_") or sheet.startswith("98_"):
-                df_sheet = pd.read_excel(xls, sheet_name=sheet)
-                frames.append(df_sheet)
-                
-        if not frames:
-            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), dt_atualizacao.strftime("%d/%m/%Y às %H:%M:%S")
-        
-        df_m = pd.concat(frames, ignore_index=True)
-        if "Bilhetes" in df_m.columns:
-            df_m["Bilhete_Clean"] = df_m["Bilhetes"].apply(sanitizar_bilhete)
-            df_m = df_m[df_m["Bilhete_Clean"].astype(str).str.len() > 3]
-            df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
+            query = "SELECT * FROM vw_conciliacao_mestra"
+            df_m = pd.read_sql(query, engine)
             
-        df_m = padronizar_df(df_m)
-        df_m = mesclar_com_supabase(df_m)
-        
-        # Enriquecimento da coluna SV em Dois Passos (Passo 1: Bilhete -> Passo 2: Localizador)
-        def enriquecer_sv(row):
-            sv_atual = str(row.get("SV", "")).strip()
-            if sv_atual and sv_atual.lower() not in ["nan", "none", "", "-", "null", "<na>"]:
-                return sv_atual
+            if not df_m.empty:
+                if "Ultima_Alteracao" in df_m.columns and df_m["Ultima_Alteracao"].notna().any():
+                    dt_val = pd.to_datetime(df_m["Ultima_Alteracao"]).max()
+                    if pd.notna(dt_val):
+                        dt_atualizacao = dt_val
+        except Exception as e:
+            try:
+                query_base = "SELECT * FROM tb_conciliacao_base"
+                df_m = pd.read_sql(query_base, engine)
+            except Exception: pass
+
+    # 2. Fallback para arquivo Excel local caso o banco esteja indisponível
+    if df_m.empty:
+        if os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
+            fonte = ARQUIVO_DASHBOARD_PADRAO
+            try:
+                mod_time = os.path.getmtime(ARQUIVO_DASHBOARD_PADRAO)
+                dt_atualizacao = datetime.datetime.fromtimestamp(mod_time)
+            except Exception: pass
             
-            # Passo 1: Busca pelo número do Bilhete
-            b_c = str(row.get("Bilhete_Clean", "")).strip()
-            if b_c in map_sv_bilhete:
-                return map_sv_bilhete[b_c]
-                
-            # Passo 2: Busca secundária pelo Localizador (Rloc / Loc)
-            for col_l in ["Rloc_CIA", "Localizador_Sistema", "Localizador", "Loc", "Rloc_Cia", "Rloc"]:
-                loc_v = str(row.get(col_l, "")).strip().upper().replace(".0", "")
-                if loc_v in map_sv_loc:
-                    return map_sv_loc[loc_v]
-            return "-"
-            
-        df_m["SV"] = df_m.apply(enriquecer_sv, axis=1)
-        
-        f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
-        return f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok, dt_atualizacao.strftime("%d/%m/%Y às %H:%M:%S")
-    except Exception as e:
-        st.error(f"Erro ao carregar base: {e}")
+            try:
+                xls = pd.ExcelFile(fonte, engine="openpyxl")
+                frames = []
+                for sheet in xls.sheet_names:
+                    if sheet.startswith("99_") or sheet.startswith("98_"):
+                        df_sheet = pd.read_excel(xls, sheet_name=sheet)
+                        frames.append(df_sheet)
+                if frames:
+                    df_m = pd.concat(frames, ignore_index=True)
+            except Exception: pass
+
+    if df_m.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), dt_atualizacao.strftime("%d/%m/%Y às %H:%M:%S")
 
+    # 3. Limpeza, padronização e garantia do formato dos bilhetes
+    if "Bilhetes" in df_m.columns:
+        df_m["Bilhete_Clean"] = df_m["Bilhetes"].apply(sanitizar_bilhete)
+        df_m = df_m[df_m["Bilhete_Clean"].astype(str).str.len() > 3]
+        df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
+    elif "bilhete" in df_m.columns:
+        df_m["Bilhete_Clean"] = df_m["bilhete"].apply(sanitizar_bilhete)
+        df_m = df_m[df_m["Bilhete_Clean"].astype(str).str.len() > 3]
+        df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
+        df_m["Bilhetes"] = df_m["Bilhete_Clean"]
+
+    df_m = padronizar_df(df_m)
+    
+    # 4. Roteamento dinâmico para as abas operacionais
+    f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
+    
+    dt_str = dt_atualizacao.strftime("%d/%m/%Y às %H:%M:%S") if isinstance(dt_atualizacao, (datetime.datetime, pd.Timestamp)) else str(dt_atualizacao)
+    return f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok, dt_str
+
 # ==============================================================================
-# 6. CARREGAMENTO E FILTROS OPERACIONAIS DINÂMICOS
+# 6. CARREGAMENTO E FILTROS OPERACIONAIS
 # ==============================================================================
 df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div, dt_ultima_atualizacao_str = carregar_bases()
 df_todos_unificados = pd.concat([df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
@@ -1140,35 +1030,8 @@ with aba_sel[0]:
     else: st.info("Sem dados de aging disponíveis.")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    g3, g4 = st.columns(2)
-    with g3:
-        st.markdown('<div class="chart-card"><h5>💼 Exposição Financeira (R$) Pendente por Gerente</h5>', unsafe_allow_html=True)
-        if not df_pendentes.empty:
-            df_pendentes["Valor_Total"] = df_pendentes["A vista"] + df_pendentes["A credito"] + df_pendentes["Taxa"]
-            df_fin = df_pendentes.groupby("Área Resp. Operação")["Valor_Total"].sum().reset_index()
-            df_fin = df_fin.sort_values("Valor_Total", ascending=False)
-            df_fin["Texto_Fmt"] = df_fin["Valor_Total"].apply(lambda x: f"R$ {x:,.0f}")
-            fig_fin = px.bar(df_fin, x="Área Resp. Operação", y="Valor_Total", text="Texto_Fmt", color_discrete_sequence=["#fa8c16"])
-            fig_fin.update_traces(textposition='outside', hovertemplate='<b>%{x}</b><br>Valor Pendente: R$ %{y:,.2f}')
-            fig_fin.update_layout(height=330, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Valor (R$)")
-            st.plotly_chart(fig_fin, use_container_width=True)
-        else: st.info("Sem pendências.")
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-    with g4:
-        st.markdown('<div class="chart-card"><h5>🎫 Quantidade de Emissões Pendentes por Gerente</h5>', unsafe_allow_html=True)
-        if not df_pendentes.empty:
-            df_qtd_ger = df_pendentes["Área Resp. Operação"].value_counts().reset_index()
-            df_qtd_ger.columns = ["Gerente", "Quantidade"]
-            fig_qtd = px.bar(df_qtd_ger, x="Gerente", y="Quantidade", text="Quantidade", color_discrete_sequence=["#003366"])
-            fig_qtd.update_traces(textposition='outside', texttemplate='%{value:,}', hovertemplate='<b>%{x}</b><br>Emissões Pendentes: %{y:,}')
-            fig_qtd.update_layout(height=330, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Qtd Emissões")
-            st.plotly_chart(fig_qtd, use_container_width=True)
-        else: st.info("Sem pendências.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
 # ------------------------------------------------------------------------------
-# MÓDULO REUTILIZÁVEL DE TABELAS
+# MÓDULO REUTILIZÁVEL DE TABELAS E AÇÕES EM LOTE
 # ------------------------------------------------------------------------------
 def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
     if df_tab.empty:
@@ -1203,7 +1066,7 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
         t_low = termo.strip().lower()
         cols_s = [
             c for c in [
-                "Bilhetes", "Rloc_CIA", "Localizador_Sistema", "Localizador", "Rloc_Cia", "Localizador_Cia", "Loc", "Rloc",
+                "Bilhetes", "Rloc_CIA", "Localizador_Sistema", "Localizador", "Rloc_Cia",
                 "Área Resp. Operação", "Emissor / Consultor", "Ponto de venda", "Cliente", "SV", "FOP"
             ] if c in df_exib.columns
         ]
@@ -1213,7 +1076,6 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
         df_exib = df_exib[m_s]
         
     st.write(f"**Registros Visíveis:** {len(df_exib):,}")
-    
     bilhet_sel = st.multiselect("Selecione Bilhetes para Atualização em Lote:", options=df_exib["Bilhetes"].tolist(), key=f"ms_{key_pfx}")
     
     if bilhet_sel:
@@ -1228,19 +1090,12 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
             OPCAO_MANTER_ST, "Já Lançado no ERP", "Emitido e Lançado", "Pendente de Lançamento (Não Consta)",
             "Erro de Integração Concur", "Em Análise Backoffice", "Emissor Virtual Lemontech", "Divergência de Tarifa", "Divergência de Taxa", "Cancelado / Reembolsado"
         ]
-        if is_single:
-            st_atual = str(primeira_linha.get("Status_Geral", "")).strip()
-            idx_st = opts_st.index(st_atual) if st_atual in opts_st else 0
-        else:
-            idx_st = 0
+        idx_st = opts_st.index(str(primeira_linha.get("Status_Geral", "")).strip()) if is_single and str(primeira_linha.get("Status_Geral", "")).strip() in opts_st else 0
             
         OPCAO_MANTER_GER = "-- Manter Gerente Original --"
         opts_g = [OPCAO_MANTER_GER] + sorted(list(set(DEPARA_GERENTES.values())))
-        if is_single:
-            ar_atual = padronizar_nome_gerente(primeira_linha.get("Área Resp. Operação", primeira_linha.get("Gerentes", "")))
-            idx_g = opts_g.index(ar_atual) if ar_atual in opts_g else 0
-        else:
-            idx_g = 0
+        ar_atual = padronizar_nome_gerente(primeira_linha.get("Área Resp. Operação", primeira_linha.get("Gerentes", ""))) if is_single else ""
+        idx_g = opts_g.index(ar_atual) if is_single and ar_atual in opts_g else 0
             
         rloc_init = str(primeira_linha.get("Rloc_CIA", "")).strip() if is_single else ""
         if rloc_init in ["-", "None", "nan", "null"]: rloc_init = ""
@@ -1255,13 +1110,12 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
             with c2:
                 ar_nova = st.selectbox("Nova Área Responsável / Gerente:", opts_g, index=idx_g, key=f"ar_{key_pfx}")
             with c3:
-                rloc_novo = st.text_input("Novo Rloc_CIA (Deixe em branco p/ manter original):", value=rloc_init, key=f"rloc_{key_pfx}")
+                rloc_novo = st.text_input("Novo Rloc_CIA (Em branco mantém original):", value=rloc_init, key=f"rloc_{key_pfx}")
                 
-            obs_nova = st.text_area("Observação / Justificativa Detalhada (Deixe em branco p/ manter original):", value=obs_init, key=f"obs_{key_pfx}")
+            obs_nova = st.text_area("Observação / Justificativa Detalhada:", value=obs_init, key=f"obs_{key_pfx}")
             
             if st.form_submit_button("💾 Salvar Tratativa"):
                 usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
-                
                 list_up = []
                 for _, row_item in df_sel.iterrows():
                     st_final = row_item.get("Status_Geral", "Pendente de Lançamento (Não Consta)") if st_novo == OPCAO_MANTER_ST else st_novo
@@ -1291,7 +1145,6 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
                     st.rerun()
                 else: st.error(msg)
 
-    # Formatação de colunas monetárias para R$ no app Streamlit
     currency_cols_app = [
         c for c in [
             "A vista", "A credito", "Tarifa Total Emitida", "Taxa", "Comissão", "Taxa DU", "Incentivo",
@@ -1299,33 +1152,18 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
             "Receita_Sistema", "Dif_Receita"
         ] if c in df_exib.columns
     ]
-
     def formatar_moeda_br(val):
         if pd.isna(val) or val is None or str(val).strip() in ["-", "", "nan", "None", "<na>"]:
             return "-"
         try:
             v = float(val)
             return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        except (ValueError, TypeError):
-            return str(val)
+        except (ValueError, TypeError): return str(val)
 
-    if bilhet_sel:
-        set_sel = set(bilhet_sel)
-        def destacar_linhas_selecionadas(row):
-            b_val = str(row.get("Bilhetes", "")).strip()
-            if b_val in set_sel:
-                return ["background-color: #fff3cd; color: #000000; font-weight: bold; border-left: 4px solid #fa8c16;"] * len(row)
-            return [""] * len(row)
-            
-        df_styled = df_exib.style.apply(destacar_linhas_selecionadas, axis=1)
-        if currency_cols_app:
-            df_styled = df_styled.format(formatar_moeda_br, subset=currency_cols_app)
-        st.dataframe(df_styled, use_container_width=True, hide_index=True)
-    else:
-        df_styled = df_exib.style
-        if currency_cols_app:
-            df_styled = df_styled.format(formatar_moeda_br, subset=currency_cols_app)
-        st.dataframe(df_styled, use_container_width=True, hide_index=True)
+    df_styled = df_exib.style
+    if currency_cols_app:
+        df_styled = df_styled.format(formatar_moeda_br, subset=currency_cols_app)
+    st.dataframe(df_styled, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------------------------
 # ABAS OPERACIONAIS
@@ -1333,170 +1171,60 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
 with aba_sel[1]:
     st.markdown("<div class='section-banner'><h3>📋 1. Falta de Lançamento no ERP (Maringá)</h3><p>Emissões pendentes de lançamento no ERP Benner.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_falta, "Falta_Lancamento", "fl")
+
 with aba_sel[2]:
-    st.markdown("<div class='section-banner'><h3>🚨 2. Erro de Integração Concur</h3><p>Aba dedicada exclusivamente às falhas de integração com a plataforma Concur.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>🚨 2. Erro de Integração Concur</h3><p>Falhas de integração com a plataforma Concur.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_concur, "Erro_Concur", "conc")
+
 with aba_sel[3]:
-    st.markdown("<div class='section-banner'><h3>⚠️ 3. Erros de Valores & CIA (Maringá)</h3><p>Bilhetes no ERP com divergência de Tarifa, Taxa ou Companhia Aérea.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>⚠️ 3. Erros de Valores & CIA (Maringá)</h3><p>Divergências de Tarifa, Taxa ou Companhia Aérea.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_erros, "Erros_Valores", "ev")
+
 with aba_sel[4]:
-    st.markdown("<div class='section-banner'><h3>🎧 4. Suporte Backoffice</h3><p>Casos sob gestão e análise da equipe de Backoffice.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>🎧 4. Suporte Backoffice</h3><p>Análise da equipe de Backoffice.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_backoffice, "Suporte_Backoffice", "sb")
+
 with aba_sel[5]:
-    st.markdown("<div class='section-banner'><h3>🎪 5. Central de Eventos</h3><p>Emissões corporativas associadas ao setor de Eventos.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>🎪 5. Central de Eventos</h3><p>Emissões do setor de Eventos.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_eventos, "Central_Eventos", "ce")
+
 with aba_sel[6]:
-    st.markdown("<div class='section-banner'><h3>🤖 6. Emissor Virtual Lemontech</h3><p>Emissões realizadas via robô / Emissor Virtual Lemontech.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>🤖 6. Emissor Virtual Lemontech</h3><p>Emissões via robô Lemontech.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_lemon_virt, "Emissor_Virtual", "evl")
+
 with aba_sel[7]:
-    st.markdown("<div class='section-banner'><h3>✅ 7. Bilhetes Solicitados Conciliação</h3><p>Bilhetes validados e conciliados sem divergências ativas.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>✅ 7. Bilhetes Solicitados Conciliação</h3><p>Bilhetes conciliados sem divergências.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_sem_div, "Bilhetes_Conciliados", "ok")
 
 # ------------------------------------------------------------------------------
-# ABAS MASTER: ACESSOS, HISTÓRICO E CARGA EM LOTE INTERATIVA
+# ABAS MASTER
 # ------------------------------------------------------------------------------
 if e_master():
     with aba_sel[8]:
         st.subheader("⚙️ Gestão de Acessos & Frequência de Uso")
-        st.markdown("Painel de acompanhamento de usuários cadastrados, último acesso registrado e tempo de inatividade.")
-        
         df_gestao_usr, df_historico_acessos = obter_relatorio_acessos_db()
-        
         if not df_gestao_usr.empty:
-            now = pd.Timestamp.now()
-            
-            def calc_tempo_inatividade(row):
-                dt = row.get("ultimo_acesso")
-                if pd.isna(dt) or dt is None:
-                    return "Nunca acessou"
-                dias = (now - dt).days
-                if dias == 0:
-                    return "Hoje"
-                elif dias == 1:
-                    return "Ontem"
-                else:
-                    return f"Há {dias} dias"
-            
-            df_gestao_usr["Tempo sem Acessar"] = df_gestao_usr.apply(calc_tempo_inatividade, axis=1)
-            
-            def classificar_status_uso(row):
-                dt = row.get("ultimo_acesso")
-                if pd.isna(dt) or dt is None:
-                    return "🔴 Inativo (Nunca)"
-                dias = (now - dt).days
-                if dias <= 7:
-                    return "🟢 Ativo Recente"
-                elif dias <= 30:
-                    return "🟡 Ativo Moderado"
-                else:
-                    return "🔴 Inativo (> 30 dias)"
-                    
-            df_gestao_usr["Status Inatividade"] = df_gestao_usr.apply(classificar_status_uso, axis=1)
-            
-            # Métricas no topo
-            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-            col_m1.metric("Total Usuários", len(df_gestao_usr))
-            
-            ativos_7d = len(df_gestao_usr[df_gestao_usr["Status Inatividade"] == "🟢 Ativo Recente"])
-            inativos_30d = len(df_gestao_usr[df_gestao_usr["Status Inatividade"].str.contains("Inativo")])
-            
-            col_m2.metric("Ativos (Últimos 7 dias)", ativos_7d)
-            col_m3.metric("Inativos (>30 dias / Nunca)", inativos_30d)
-            col_m4.metric("Total Logs Registrados", len(df_historico_acessos) if not df_historico_acessos.empty else 0)
-            
-            st.markdown("---")
-            st.write("### 👥 Tabela de Controle de Usuários e Acessos")
-            
-            df_exib_usr = df_gestao_usr.copy()
-            cols_renames = {
-                "usuario": "Usuário", "nome": "Nome", "perfil": "Perfil",
-                "status": "Status Cadastro", "ultimo_acesso": "Último Acesso",
-                "total_acessos": "Total Acessos"
-            }
-            df_exib_usr.rename(columns=cols_renames, inplace=True)
-            
-            st.dataframe(
-                df_exib_usr[["Usuário", "Nome", "Perfil", "Status Cadastro", "Último Acesso", "Tempo sem Acessar", "Status Inatividade", "Total Acessos"]],
-                column_config={
-                    "Último Acesso": st.column_config.DatetimeColumn("Último Acesso", format="DD/MM/YYYY HH:mm"),
-                    "Total Acessos": st.column_config.NumberColumn("Total de Acessos")
-                },
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.info("Nenhum dado de usuário ou log disponível no banco de dados.")
+            st.dataframe(df_gestao_usr, use_container_width=True, hide_index=True)
+        else: st.info("Sem dados de acessos.")
 
     with aba_sel[9]:
-        st.subheader("📜 Log de Histórico de Auditoria e Acessos")
-        sub_tab1, sub_tab2 = st.tabs(["📝 Histórico de Tratativas (Auditoria)", "🔐 Log de logins no App"])
-        
-        with sub_tab1:
-            engine_sb = get_db_engine()
-            if engine_sb:
-                try:
-                    df_log_db = pd.read_sql("SELECT * FROM log_auditoria ORDER BY id DESC LIMIT 300", engine_sb)
-                    st.dataframe(df_log_db, use_container_width=True, hide_index=True)
-                except Exception:
-                    st.info("Nenhum histórico de tratativa registrado até o momento.")
-                    
-        with sub_tab2:
-            _, df_logs_det = obter_relatorio_acessos_db()
-            if not df_logs_det.empty:
-                st.dataframe(
-                    df_logs_det,
-                    column_config={
-                        "data_acesso": st.column_config.DatetimeColumn("Data/Hora do Acesso", format="DD/MM/YYYY HH:mm:ss")
-                    },
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.info("Nenhum log de acesso registrado ainda.")
+        st.subheader("📜 Log de Histórico de Auditoria")
+        _, df_logs_det = obter_relatorio_acessos_db()
+        if not df_logs_det.empty:
+            st.dataframe(df_logs_det, use_container_width=True, hide_index=True)
 
     with aba_sel[10]:
         st.subheader("📥 Carga de Retornos de Cobrança em Lote Avançada")
-        st.markdown("Envie uma planilha `.xlsx` ou `.csv` para atualização massiva no banco de dados.")
-        
-        arq_up = st.file_uploader("Selecione o arquivo de retorno:", type=["xlsx", "csv"], key="upl_lote_adv")
-        
+        arq_up = st.file_uploader("Arquivo de retorno (.xlsx ou .csv):", type=["xlsx", "csv"], key="upl_lote_adv")
         if arq_up:
             try:
                 df_lote_raw = pd.read_csv(arq_up, dtype=str) if arq_up.name.endswith(".csv") else pd.read_excel(arq_up, dtype=str)
-                st.success(f"📂 **Arquivo carregado:** `{arq_up.name}` | Total de **{len(df_lote_raw):,} linhas** encontradas.")
                 st.dataframe(df_lote_raw.head(10), use_container_width=True, hide_index=True)
-                
-                if st.button("🚀 Confirmar e Processar Lote", type="primary"):
-                    progress_bar = st.progress(0, text="Iniciando leitura e validação dos bilhetes...")
-                    for idx in range(1, 101, 20):
-                        time.sleep(0.08)
-                        progress_bar.progress(idx, text=f"Sincronizando registros com a base de dados... ({idx}%)")
-                        
+                if st.button("🚀 Processar Lote", type="primary"):
                     usr_str = f"CargaLote_{st.session_state['usuario_atual']}"
-                    ok, msg, n_at, n_nv, n_err = salvar_tratativas_lote_supabase(df_lote_raw, usr_str)
-                    
-                    progress_bar.progress(100, text="Sincronização concluída!")
-                    time.sleep(0.3)
-                    
+                    ok, msg, n_at, n_nv, _ = salvar_tratativas_lote_supabase(df_lote_raw, usr_str)
                     if ok:
-                        st.balloons()
-                        st.markdown(
-                            f"""
-                            <div style='background: #f0fdf4; border: 1px solid #86efac; padding: 16px; border-radius: 8px; margin-top: 15px;'>
-                                <h4 style='color: #166534; margin: 0;'>🎉 Sincronização em Lote Finalizada com Sucesso!</h4>
-                                <p style='color: #15803d; margin: 5px 0 0 0;'>{msg}</p>
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
-                        c_a, c_b = st.columns(2)
-                        c_a.metric("Bilhetes Atualizados", f"{n_at:,}")
-                        c_b.metric("Novos Registros Criados", f"{n_nv:,}")
-                        
-                        time.sleep(1.5)
+                        st.success(msg)
                         st.cache_data.clear()
                         st.rerun()
-                    else:
-                        st.error(f"Erro no processamento do lote: {msg}")
-            except Exception as e:
-                st.error(f"Erro ao ler e processar arquivo: {e}")
+            except Exception as e: st.error(f"Erro ao ler arquivo: {e}")
