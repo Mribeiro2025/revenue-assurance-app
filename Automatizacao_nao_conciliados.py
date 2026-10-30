@@ -58,7 +58,7 @@ def obter_engine_supabase():
     return None
 
 def criar_tabelas_supabase_se_nao_existirem(engine):
-    """Garante a criação de todas as tabelas, chaves primárias e views necessárias no Supabase."""
+    """Garante a criação de tabelas, chaves primárias e views no Supabase com lógica corrigida de Status_Geral."""
     if not engine:
         return
     from sqlalchemy import text
@@ -113,7 +113,6 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
         data_processamento TIMESTAMP DEFAULT NOW()
     );
 
-    -- Garantia de adição de Chave Primária caso a tabela tenha sido criada sem PK
     DO $$ 
     BEGIN 
         IF NOT EXISTS (
@@ -149,6 +148,7 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
         b.codigo_iata AS "Código Iata",
         COALESCE(t.sv, b.sv, '-') AS "SV",
         COALESCE(t.rloc_cia, b.rloc_cia, '-') AS "Rloc_Cia",
+        COALESCE(t.rloc_cia, b.rloc_cia, '-') AS "Rloc_CIA",
         COALESCE(t.gerentes, t.area_resp, b.gerente_sugerido, 'Não Mapeado') AS "Gerentes",
         b.cia AS "CIA",
         b.fornecedor_sistema AS "Fornecedor_Sistema",
@@ -174,7 +174,12 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
         b.vl_liquido AS "VL. Líquido",
         b.status_divergencia AS "Status_Divergencia",
         b.consultor AS "Consultor",
-        COALESCE(t.status_geral, b.status_divergencia, 'Pendente de Lançamento (Não Consta)') AS "Status_Geral",
+        CASE 
+            WHEN t.status_geral IS NOT NULL AND t.status_geral NOT IN ('', '-', 'None', 'nan') THEN t.status_geral
+            WHEN b.status_divergencia = 'Valores Corretos' THEN 'Emitido e Lançado'
+            WHEN b.status_divergencia = 'Pendente de Lançamento' THEN 'Pendente de Lançamento (Não Consta)'
+            ELSE COALESCE(b.status_divergencia, 'Pendente de Lançamento (Não Consta)')
+        END AS "Status_Geral",
         COALESCE(t.area_resp, b.gerente_sugerido, 'Operação') AS "Área Resp. Operação",
         COALESCE(t.obs_operacao, '') AS "Obs. Operação",
         t.data_modificacao AS "Data_Modificacao",
@@ -202,7 +207,7 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
     try:
         with engine.begin() as conn:
             conn.execute(text(ddl_script))
-        print("⚡ Estrutura do Supabase (Tabelas e Visão Mestra) validada com sucesso!")
+        print("⚡ Estrutura do Supabase e Visão Mestra validadas com sucesso!")
     except Exception as e:
         print(f"⚠️ Aviso ao verificar estrutura no Supabase: {e}")
 
@@ -894,7 +899,9 @@ def executar_auditoria():
                         else:
                             status_divergencia = "Valores Corretos"
                             aba_destino = "98_OK_Sem_Divergencia_Concil"
-                    status_geral = hist_data.get("Status_Geral") or "Emitido e Lançado"
+                            
+                    st_def = "Emitido e Lançado" if status_divergencia == "Valores Corretos" else status_divergencia
+                    status_geral = hist_data.get("Status_Geral") or st_def
                 else:
                     status_sistema = "NAO_CONSTA"
                     fornec_sistema = "-"
@@ -992,7 +999,6 @@ def executar_auditoria():
         "Historico_Tratativas.csv"
     )
 
-    # Sincronização direta com o Supabase
     sincronizar_supabase_tudo(df_master)
 
     print("\n" + "=" * 75)

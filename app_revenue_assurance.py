@@ -76,7 +76,6 @@ def consolidar_emissor_consultor(row):
         return cons_clean
     return "-"
 
-# Injeção de CSS
 st.markdown(
     """
     <style>
@@ -686,12 +685,17 @@ def rotear_bases_mestra(df_master):
         
     df_master = padronizar_df(df_master)
     
-    st_geral_str = df_master["Status_Geral"].astype(str).str.lower().str.strip()
-    st_div_str = df_master.get("Status_Divergencia", pd.Series("")).astype(str).str.lower().str.strip()
-    
-    mask_ok = st_geral_str.str.contains("já lançado|emitido e lançado|lançado|conciliado|valores corretos|regularizado", na=False) | \
-              st_div_str.str.contains("valores corretos|sem divergência", na=False)
-              
+    def e_conciliado_ok(r):
+        st = str(r.get("Status_Geral", "")).lower().strip()
+        div = str(r.get("Status_Divergencia", "")).lower().strip()
+        
+        if any(term in st for term in ["já lançado", "ja lancado", "regularizado", "conciliado", "valores corretos"]):
+            return True
+        if div in ["valores corretos", "sem divergência", "sem divergencia"] and not any(p in st for p in ["pendente", "erro", "divergência", "divergencia"]):
+            return True
+        return False
+
+    mask_ok = df_master.apply(e_conciliado_ok, axis=1)
     df_ok = df_master[mask_ok].copy()
     df_pend = df_master[~mask_ok].copy()
     
@@ -711,14 +715,19 @@ def rotear_bases_mestra(df_master):
         obs_val = str(r.get("Obs. Operação", "")).lower().strip()
         emis_cons = str(r.get("Emissor / Consultor", "")).lower().strip()
         emis_raw = str(r.get("Emissor", "")).lower().strip()
+        cons_raw = str(r.get("Consultor", "")).lower().strip()
+        emis_lemon = str(r.get("Emissor_Reserva_Lemon", "")).lower().strip()
         ar_val = str(r.get("Área Resp. Operação", "")).lower().strip()
+        ger_val = str(r.get("Gerentes", "")).lower().strip()
         
-        if "emissor virtual" in st_val or "virtual lemontech" in st_val or "emissor virtual lemontech" in st_val:
+        if "emissor virtual" in st_val or "virtual lemontech" in st_val or "lemontech virtual" in st_val:
             return True
-        if "emissor virtual" in ar_val or "virtual lemontech" in ar_val:
+        if "emissor virtual" in ar_val or "virtual lemontech" in ar_val or "lemontech virtual" in ar_val:
+            return True
+        if "emissor virtual" in ger_val or "virtual lemontech" in ger_val or "lemontech virtual" in ger_val:
             return True
             
-        text_combined = f"{emis_cons} {emis_raw} {obs_val} {st_val}"
+        text_combined = f"{emis_cons} {emis_raw} {cons_raw} {emis_lemon} {obs_val} {st_val}"
         termos = ["emissor virtual", "virtual lemon", "lemontech virtual", "robô lemon", "robo lemon"]
         if any(t in text_combined for t in termos):
             return True
@@ -765,7 +774,6 @@ def carregar_bases():
     df_m = pd.DataFrame()
     engine = get_db_engine()
     
-    # 1. Leitura direta e sem filtro intermediário da View Mestra do Supabase
     if engine:
         try:
             query = "SELECT * FROM vw_conciliacao_mestra"
@@ -782,7 +790,6 @@ def carregar_bases():
                 df_m = pd.read_sql(query_base, engine)
             except Exception: pass
 
-    # 2. Fallback para arquivo Excel local caso o banco esteja indisponível
     if df_m.empty:
         if os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
             fonte = ARQUIVO_DASHBOARD_PADRAO
@@ -805,7 +812,6 @@ def carregar_bases():
     if df_m.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), dt_atualizacao.strftime("%d/%m/%Y às %H:%M:%S")
 
-    # 3. Limpeza, padronização e garantia do formato dos bilhetes
     if "Bilhetes" in df_m.columns:
         df_m["Bilhete_Clean"] = df_m["Bilhetes"].apply(sanitizar_bilhete)
         df_m = df_m[df_m["Bilhete_Clean"].astype(str).str.len() > 3]
@@ -817,8 +823,6 @@ def carregar_bases():
         df_m["Bilhetes"] = df_m["Bilhete_Clean"]
 
     df_m = padronizar_df(df_m)
-    
-    # 4. Roteamento dinâmico para as abas operacionais
     f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
     
     dt_str = dt_atualizacao.strftime("%d/%m/%Y às %H:%M:%S") if isinstance(dt_atualizacao, (datetime.datetime, pd.Timestamp)) else str(dt_atualizacao)
