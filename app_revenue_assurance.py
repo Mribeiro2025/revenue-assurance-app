@@ -49,7 +49,9 @@ DEPARA_GERENTES = {
     "KATIA MARTINS": "Katia Martins", "KÁTIA MARTINS": "Katia Martins", "KATIA": "Katia Martins",
     "JOAO PAULO": "João Paulo", "JOÃO PAULO": "João Paulo",
     "SUPORTE BACKOFFICE": "Suporte Backoffice", "BACKOFFICE": "Suporte Backoffice",
-    "CENTRAL DE EVENTOS": "Central de Eventos", "EVENTOS": "Central de Eventos"
+    "CENTRAL DE EVENTOS": "Central de Eventos", "EVENTOS": "Central de Eventos",
+    "EMISSOR VIRTUAL": "Emissor Virtual Lemontech", "EMISSOR VIRTUAL LEMONTECH": "Emissor Virtual Lemontech",
+    "LEMONTECH VIRTUAL": "Emissor Virtual Lemontech", "VIRTUAL LEMONTECH": "Emissor Virtual Lemontech", "LEMONTECH": "Emissor Virtual Lemontech"
 }
 
 def padronizar_nome_gerente(nome_raw):
@@ -758,6 +760,7 @@ def rotear_bases_mestra(df_master):
     df_ok = df_master[mask_ok].copy()
     df_pend = df_master[~mask_ok].copy()
     
+    # 2. Concur
     def e_concur(r):
         obs_val = str(r.get("Obs. Operação", "")).lower()
         st_val = str(r.get("Status_Geral", "")).lower()
@@ -767,6 +770,41 @@ def rotear_bases_mestra(df_master):
     df_concur = df_pend[mask_concur].copy()
     df_rest = df_pend[~mask_concur].copy()
     
+    # 3. Emissor Virtual Lemontech (Mecanismo Automático e Atribuição Manual)
+    def e_emissor_virtual_lemon(r):
+        st_val = str(r.get("Status_Geral", "")).lower().strip()
+        obs_val = str(r.get("Obs. Operação", "")).lower().strip()
+        emis_cons = str(r.get("Emissor / Consultor", "")).lower().strip()
+        emis_raw = str(r.get("Emissor", "")).lower().strip()
+        cons_raw = str(r.get("Consultor", "")).lower().strip()
+        emis_lemon = str(r.get("Emissor_Reserva_Lemon", "")).lower().strip()
+        ar_val = str(r.get("Área Resp. Operação", "")).lower().strip()
+        ger_val = str(r.get("Gerentes", "")).lower().strip()
+        
+        # Validação de atribuição manual direta via formulário/status/área
+        if "emissor virtual" in st_val or "virtual lemontech" in st_val or "lemontech virtual" in st_val or st_val == "emissor virtual lemontech":
+            return True
+        if "emissor virtual" in ar_val or "virtual lemontech" in ar_val or "lemontech virtual" in ar_val:
+            return True
+        if "emissor virtual" in ger_val or "virtual lemontech" in ger_val or "lemontech virtual" in ger_val:
+            return True
+            
+        # Validação do mecanismo automático por palavras-chave e nomes de robô/emissor
+        text_combined = f"{emis_cons} {emis_raw} {cons_raw} {emis_lemon} {obs_val} {st_val}"
+        termos = ["emissor virtual", "virtual lemon", "lemontech virtual", "lemon virtual", "robô lemon", "robo lemon", "emissor_virtual", "emissor virtual lemontech", "virtual_lemon"]
+        if any(t in text_combined for t in termos):
+            return True
+            
+        if "virtual" in emis_cons or "lemontech" in emis_cons or "virtual" in emis_raw or "lemontech" in emis_raw:
+            return True
+            
+        return False
+
+    mask_lemon = df_rest.apply(e_emissor_virtual_lemon, axis=1)
+    df_lemon_virt = df_rest[mask_lemon].copy()
+    df_rest = df_rest[~mask_lemon].copy()
+
+    # 4. Suporte Backoffice
     def e_suporte_backoffice(r):
         ar_val = str(r.get("Área Resp. Operação", "")).lower()
         ger_val = str(r.get("Gerentes", "")).lower()
@@ -777,14 +815,12 @@ def rotear_bases_mestra(df_master):
     df_bo = df_rest[mask_bo].copy()
     df_rest = df_rest[~mask_bo].copy()
     
+    # 5. Central de Eventos
     mask_evt = df_rest.apply(lambda r: "eventos" in str(r.get("Área Resp. Operação", "")).lower() or "eventos" in str(r.get("Gerentes", "")).lower(), axis=1)
     df_eventos = df_rest[mask_evt].copy()
     df_rest = df_rest[~mask_evt].copy()
     
-    mask_lemon = df_rest.apply(lambda r: "virtual" in str(r.get("Emissor / Consultor", "")).lower() or "lemontech" in str(r.get("Emissor / Consultor", "")).lower(), axis=1)
-    df_lemon_virt = df_rest[mask_lemon].copy()
-    df_rest = df_rest[~mask_lemon].copy()
-    
+    # 6. Falta de Lançamento vs Erros de Valores
     mask_falta = df_rest.apply(lambda r: "falta de lançamento" in str(r.get("Status_Geral", "")).lower() or "não consta" in str(r.get("Status_Geral", "")).lower() or str(r.get("Status_Geral", "")).lower() in ["-", "", "none"], axis=1)
     df_falta = df_rest[mask_falta].copy()
     df_erros = df_rest[~mask_falta].copy()
@@ -905,7 +941,7 @@ df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_
 df_todos_unificados = pd.concat([df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
 st.sidebar.title("Grupo Arbaitman")
-st.sidebar.caption("Conciliação Aérea FP&A v4.9")
+st.sidebar.caption("Conciliação Aérea FP&A v5.0")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 st.sidebar.info(f"🕒 **Última Atualização:**\n{dt_ultima_atualizacao_str}")
 
@@ -1190,7 +1226,7 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
         OPCAO_MANTER_ST = "-- Manter Status Original --"
         opts_st = [
             OPCAO_MANTER_ST, "Já Lançado no ERP", "Emitido e Lançado", "Pendente de Lançamento (Não Consta)",
-            "Erro de Integração Concur", "Em Análise Backoffice", "Divergência de Tarifa", "Divergência de Taxa", "Cancelado / Reembolsado"
+            "Erro de Integração Concur", "Em Análise Backoffice", "Emissor Virtual Lemontech", "Divergência de Tarifa", "Divergência de Taxa", "Cancelado / Reembolsado"
         ]
         if is_single:
             st_atual = str(primeira_linha.get("Status_Geral", "")).strip()
@@ -1254,7 +1290,25 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
                     st.cache_data.clear()
                     st.rerun()
                 else: st.error(msg)
-                
+
+    # Formatação de colunas monetárias para R$ no app Streamlit
+    currency_cols_app = [
+        c for c in [
+            "A vista", "A credito", "Tarifa Total Emitida", "Taxa", "Comissão", "Taxa DU", "Incentivo",
+            "Receita Total Emitida", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa",
+            "Receita_Sistema", "Dif_Receita"
+        ] if c in df_exib.columns
+    ]
+
+    def formatar_moeda_br(val):
+        if pd.isna(val) or val is None or str(val).strip() in ["-", "", "nan", "None", "<na>"]:
+            return "-"
+        try:
+            v = float(val)
+            return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        except (ValueError, TypeError):
+            return str(val)
+
     if bilhet_sel:
         set_sel = set(bilhet_sel)
         def destacar_linhas_selecionadas(row):
@@ -1262,10 +1316,16 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
             if b_val in set_sel:
                 return ["background-color: #fff3cd; color: #000000; font-weight: bold; border-left: 4px solid #fa8c16;"] * len(row)
             return [""] * len(row)
+            
         df_styled = df_exib.style.apply(destacar_linhas_selecionadas, axis=1)
+        if currency_cols_app:
+            df_styled = df_styled.format(formatar_moeda_br, subset=currency_cols_app)
         st.dataframe(df_styled, use_container_width=True, hide_index=True)
     else:
-        st.dataframe(df_exib, use_container_width=True, hide_index=True)
+        df_styled = df_exib.style
+        if currency_cols_app:
+            df_styled = df_styled.format(formatar_moeda_br, subset=currency_cols_app)
+        st.dataframe(df_styled, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------------------------
 # ABAS OPERACIONAIS
