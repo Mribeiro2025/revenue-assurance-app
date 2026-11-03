@@ -76,6 +76,25 @@ def consolidar_emissor_consultor(row):
         return cons_clean
     return "-"
 
+def formatar_data_br(dt_val):
+    """Converte horários vindo do PostgreSQL/UTC para o fuso horário de Brasília (UTC-3)."""
+    if pd.isna(dt_val) or dt_val is None:
+        tz_br = datetime.timezone(datetime.timedelta(hours=-3))
+        return datetime.datetime.now(tz_br).strftime("%d/%m/%Y às %H:%M:%S")
+    try:
+        ts = pd.to_datetime(dt_val)
+        if ts.tzinfo is None:
+            ts = ts.tz_localize("UTC").tz_convert("America/Sao_Paulo")
+        else:
+            ts = ts.tz_convert("America/Sao_Paulo")
+        return ts.strftime("%d/%m/%Y às %H:%M:%S")
+    except Exception:
+        if isinstance(dt_val, datetime.datetime):
+            if dt_val.tzinfo is None:
+                dt_val = dt_val.replace(tzinfo=datetime.timezone.utc).astimezone(datetime.timezone(datetime.timedelta(hours=-3)))
+            return dt_val.strftime("%d/%m/%Y às %H:%M:%S")
+        return str(dt_val)
+
 st.markdown(
     """
     <style>
@@ -387,7 +406,8 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     cell_title.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     ws.row_dimensions[1].height = 28
     
-    dt_str = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    tz_br = datetime.timezone(datetime.timedelta(hours=-3))
+    dt_str = datetime.datetime.now(tz_br).strftime("%d/%m/%Y %H:%M")
     gerente_label = f"Gerente Responsável: {nome_gerente}" if nome_gerente and nome_gerente != "Geral" else "Escopo: Geral (Todos os Gerentes)"
     sub_txt = f"Aba: {nome_aba.replace('_', ' ')}  |  {gerente_label}  |  Emissão: {dt_str}"
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=max_cols)
@@ -601,17 +621,14 @@ def padronizar_df(df):
             mask_val = val_clean.notna() & ~val_clean.str.lower().isin(["nan", "none", "", "-", "null", "<na>"])
             sv_series = sv_series.where(~mask_val, val_clean)
     df_out["SV"] = sv_series
-
     for c_fop in ["Forma de Recebimento", "Pagto", "FOP"]:
         if c_fop in df_out.columns and "FOP" not in df_out.columns:
             df_out["FOP"] = df_out[c_fop]
     if "FOP" not in df_out.columns: df_out["FOP"] = "-"
-
     for c_rloc in ["Rloc_Cia", "Localizador_Sistema", "Rloc_CIA"]:
         if c_rloc in df_out.columns and "Rloc_CIA" not in df_out.columns:
             df_out["Rloc_CIA"] = df_out[c_rloc]
     if "Rloc_CIA" not in df_out.columns: df_out["Rloc_CIA"] = "-"
-
     if "CIA" in df_out.columns:
         df_out["CIA"] = df_out["CIA"].astype(str).str.upper().str.strip().replace(DEPARA_CIAS)
         
@@ -630,12 +647,10 @@ def padronizar_df(df):
             except Exception: return pd.NaT
         try: return pd.to_datetime(val, dayfirst=True, errors="coerce")
         except Exception: return pd.NaT
-
     if "Data Emissão" in df_out.columns:
         df_out["Dt_Parsed"] = df_out["Data Emissão"].apply(converter_data_flexivel)
     else:
         df_out["Dt_Parsed"] = pd.NaT
-
     hoje = pd.to_datetime(datetime.date.today())
     dias = (hoje - df_out["Dt_Parsed"]).dt.days
     df_out["Dias_Pendente"] = dias
@@ -685,13 +700,19 @@ def rotear_bases_mestra(df_master):
         
     df_master = padronizar_df(df_master)
     
+    # 1. OK / Conciliados / Solicitados Conciliação
     def e_conciliado_ok(r):
         st = str(r.get("Status_Geral", "")).lower().strip()
         div = str(r.get("Status_Divergencia", "")).lower().strip()
         
-        if any(term in st for term in ["já lançado", "ja lancado", "regularizado", "conciliado", "valores corretos"]):
+        terms_ok = [
+            "já lançado", "ja lancado", "regularizado", "conciliado", "conciliação", "conciliacao",
+            "solicitado conciliação", "solicitados conciliação", "solicitado conciliacao", "solicitados conciliacao",
+            "solicitado", "solicitados", "valores corretos", "emitido e lançado", "emitido e lancado"
+        ]
+        if any(term in st for term in terms_ok):
             return True
-        if div in ["valores corretos", "sem divergência", "sem divergencia"] and not any(p in st for p in ["pendente", "erro", "divergência", "divergencia"]):
+        if div in ["valores corretos", "sem divergência", "sem divergencia"] and not any(p in st for p in ["pendente", "erro", "divergência", "divergencia", "análise", "analise", "virtual"]):
             return True
         return False
 
@@ -732,7 +753,6 @@ def rotear_bases_mestra(df_master):
         if any(t in text_combined for t in termos):
             return True
         return False
-
     mask_lemon = df_rest.apply(e_emissor_virtual_lemon, axis=1)
     df_lemon_virt = df_rest[mask_lemon].copy()
     df_rest = df_rest[~mask_lemon].copy()
@@ -810,7 +830,7 @@ def carregar_bases():
             except Exception: pass
 
     if df_m.empty:
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), dt_atualizacao.strftime("%d/%m/%Y às %H:%M:%S")
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), formatar_data_br(dt_atualizacao)
 
     if "Bilhetes" in df_m.columns:
         df_m["Bilhete_Clean"] = df_m["Bilhetes"].apply(sanitizar_bilhete)
@@ -825,7 +845,7 @@ def carregar_bases():
     df_m = padronizar_df(df_m)
     f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
     
-    dt_str = dt_atualizacao.strftime("%d/%m/%Y às %H:%M:%S") if isinstance(dt_atualizacao, (datetime.datetime, pd.Timestamp)) else str(dt_atualizacao)
+    dt_str = formatar_data_br(dt_atualizacao)
     return f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok, dt_str
 
 # ==============================================================================
@@ -1091,10 +1111,19 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
         
         OPCAO_MANTER_ST = "-- Manter Status Original --"
         opts_st = [
-            OPCAO_MANTER_ST, "Já Lançado no ERP", "Emitido e Lançado", "Pendente de Lançamento (Não Consta)",
-            "Erro de Integração Concur", "Em Análise Backoffice", "Emissor Virtual Lemontech", "Divergência de Tarifa", "Divergência de Taxa", "Cancelado / Reembolsado"
+            OPCAO_MANTER_ST, "Solicitado Conciliação", "Já Lançado no ERP", "Emitido e Lançado",
+            "Pendente de Lançamento (Não Consta)", "Erro de Integração Concur", "Em Análise Backoffice",
+            "Emissor Virtual Lemontech", "Divergência de Tarifa", "Divergência de Taxa",
+            "Divergência de Cia Aérea", "Cancelado / Reembolsado"
         ]
-        idx_st = opts_st.index(str(primeira_linha.get("Status_Geral", "")).strip()) if is_single and str(primeira_linha.get("Status_Geral", "")).strip() in opts_st else 0
+        
+        st_atual_raw = str(primeira_linha.get("Status_Geral", "")).strip()
+        idx_st = 0
+        if is_single:
+            for i_opt, opt in enumerate(opts_st):
+                if opt.lower() == st_atual_raw.lower():
+                    idx_st = i_opt
+                    break
             
         OPCAO_MANTER_GER = "-- Manter Gerente Original --"
         opts_g = [OPCAO_MANTER_GER] + sorted(list(set(DEPARA_GERENTES.values())))
@@ -1163,7 +1192,6 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
             v = float(val)
             return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         except (ValueError, TypeError): return str(val)
-
     df_styled = df_exib.style
     if currency_cols_app:
         df_styled = df_styled.format(formatar_moeda_br, subset=currency_cols_app)
