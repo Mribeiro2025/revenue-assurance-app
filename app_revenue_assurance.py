@@ -375,6 +375,46 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
     except Exception as e:
         return False, f"Erro ao salvar tratativas: {e}", 0, 0, len(dados_lote)
 
+def mesclar_com_supabase(df_excel):
+    """Garante que as tratativas salvas no Supabase sobrescrevam os dados originais do Excel/View."""
+    if df_excel is None or df_excel.empty: return df_excel
+    df_db = carregar_tratativas_db()
+    if df_db.empty: return df_excel
+    
+    df_excel = df_excel.copy()
+    
+    col_bilhete_excel = "Bilhetes" if "Bilhetes" in df_excel.columns else ("bilhete" if "bilhete" in df_excel.columns else None)
+    if not col_bilhete_excel:
+        return df_excel
+        
+    df_excel["Bilhete_Clean"] = df_excel[col_bilhete_excel].apply(sanitizar_bilhete)
+    df_db["Bilhete_Clean"] = df_db["bilhete"].apply(sanitizar_bilhete)
+    
+    if "data_modificacao" in df_db.columns:
+        df_db = df_db.sort_values("data_modificacao", ascending=False)
+    df_db = df_db.drop_duplicates("Bilhete_Clean", keep="first").reset_index(drop=True)
+    
+    cols_sup_desejadas = ["status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "sv", "fop", "rloc_cia", "cliente"]
+    cols_presentes = [c for c in cols_sup_desejadas if c in df_db.columns]
+    
+    df_merged = pd.merge(df_excel, df_db[["Bilhete_Clean"] + cols_presentes], on="Bilhete_Clean", how="left")
+    
+    muta_map = [
+        ("Status_Geral", "status_geral"), ("Área Resp. Operação", "area_resp"),
+        ("Obs. Operação", "obs_operacao"), ("Setor", "setor"), ("Gerentes", "gerentes"),
+        ("SV", "sv"), ("FOP", "fop"), ("Rloc_CIA", "rloc_cia"), ("Cliente", "cliente")
+    ]
+    for col_excel, col_sb in muta_map:
+        if col_sb in df_merged.columns:
+            mask_valido = df_merged[col_sb].notna() & ~df_merged[col_sb].astype(str).str.strip().isin(["-", "", "None", "nan", "<na>"])
+            if col_excel not in df_merged.columns:
+                df_merged[col_excel] = df_merged[col_sb]
+            else:
+                df_merged[col_excel] = df_merged[col_sb].where(mask_valido, df_merged[col_excel])
+            
+    df_merged.drop(columns=[c for c in cols_presentes if c in df_merged.columns], inplace=True, errors="ignore")
+    return df_merged
+
 # ==============================================================================
 # 3. GERADOR DE EXCEL ESTILIZADO
 # ==============================================================================
@@ -406,8 +446,7 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     cell_title.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     ws.row_dimensions[1].height = 28
     
-    tz_br = datetime.timezone(datetime.timedelta(hours=-3))
-    dt_str = datetime.datetime.now(tz_br).strftime("%d/%m/%Y %H:%M")
+    dt_str = formatar_data_br(None)
     gerente_label = f"Gerente Responsável: {nome_gerente}" if nome_gerente and nome_gerente != "Geral" else "Escopo: Geral (Todos os Gerentes)"
     sub_txt = f"Aba: {nome_aba.replace('_', ' ')}  |  {gerente_label}  |  Emissão: {dt_str}"
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=max_cols)
@@ -708,7 +747,7 @@ def rotear_bases_mestra(df_master):
         terms_ok = [
             "já lançado", "ja lancado", "regularizado", "conciliado", "conciliação", "conciliacao",
             "solicitado conciliação", "solicitados conciliação", "solicitado conciliacao", "solicitados conciliacao",
-            "solicitado", "solicitados", "valores corretos", "emitido e lançado", "emitido e lancado"
+            "solicitado", "solicitados", "valores corretos", "emitido e lançado", "emitido e lancado", "lançado"
         ]
         if any(term in st for term in terms_ok):
             return True
@@ -842,7 +881,10 @@ def carregar_bases():
         df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
         df_m["Bilhetes"] = df_m["Bilhete_Clean"]
 
+    # --- PONTO CRÍTICO CORRIGIDO: Mesclar com as tratativas salvas no banco de dados ---
     df_m = padronizar_df(df_m)
+    df_m = mesclar_com_supabase(df_m)
+    
     f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
     
     dt_str = formatar_data_br(dt_atualizacao)
