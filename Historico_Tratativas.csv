@@ -1,8 +1,8 @@
 ﻿Bilhetes,Status_Geral,Área Resp. Operação,Obs. Operação,Setor,Ponto de venda,Código Iata,SV,FOP,Rloc_Cia
 70106528456,Emitido e Lançado,Fabiano Souza,,Concierge/Lazer,Matriz (Barueri),14-00044-2,-,Cash,WK6EXS
-70107182614,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Matriz (Barueri),57-03552-1,20391561,MC,CH364F
-70107593611,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Matriz (Barueri),57-03552-1,20440201,MC,GSKZ8B
-70107605292,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Matriz (Barueri),57-03552-1,20440201,MC,ZWEVUG
+70108038672,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-00054-3,-,Cartão,JJ2WGS
+70107182614,Solicitado Conciliação,Marcelo Pereira,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Matriz (Barueri),57-03552-1,20391561,Cartão Amex,CH364F
+70108233615,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Matriz (Barueri),57-03552-1,20507950,MC,AKCJQM
 70102233462,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - AMTYZK,Operação,Matriz (Barueri),57-05782-5,-,Cartão,BRWD6R
 70102234821,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - QGGYXU,Operação,Matriz (Barueri),57-05782-5,-,Cartão,CR777E
 70102235161,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - QEUVTO,Operação,Matriz (Barueri),57-05782-5,-,Cartão,OJ8B2P
@@ -457,43 +457,48 @@
 70107131696,Pendente de Lançamento (Não Consta),Keli Santi,AGUARDANDO APROVAÇÃO NO CONCUR - PNR IMWMME,Operação,Matriz (Barueri),57-05782-5,-,Cartão,IHZPSY
 70107140384,Pendente de Lançamento (Não Consta),Keli Santi,AGUARDANDO APROVAÇÃO NO CONCUR - PNR QYZOHQ,Operação,Matriz (Barueri),57-05782-5,-,Cartão,SRVP3U
 70107162762,Pendente de Lançamento (Não Consta),Keli Santi,AGUARDANDO APROVAÇÃO NO CONCUR - PNR MMMNYO,Operação,Matriz (Barueri),57-05782-5,-,Cartão,JNQGFD
-70107170119,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,20390691,MC,ZG9IVB
-70107174828,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,MIY9FF
-70107178679,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,EIF7XF
-70107178701,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,DINP4P
-70107178847,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,OW32TT
-70107178943,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,HRIN4E
-70107399521,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,YPSQ5N
-70107410192,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,LJTRGP
-70107415739,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,FH7BKI
-70107481695,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,THYTSL
-70107658345,Emitido e Lançado,Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,FHTBRV
-70107667588,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,EW4F8A
-70107668462,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,CIVI7P
-70107684591,Emitido e Lançado,Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,RJBC3C
-70107685299,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,XNLKQW
-70107703399,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,UGIL6L
-70107709185,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,PLFSPM
+70107174828,Pendente de Lançamento (Não Consta),Keli Santi,Chamado 391311  -Concur - não integrou PNR GDS IZWLYM,Operação,Matriz (Barueri),57-05782-5,-,Cartão,MIY9FF
+70107178679,Pendente de Lançamento (Não Consta),Keli Santi,Chamado 391311  - Concur - não integrou PNR GDS ECMZJR,Operação,Matriz (Barueri),57-05782-5,-,Cartão,EIF7XF
+70107178701,Pendente de Lançamento (Não Consta),Keli Santi,Chamado 391311  - concur - não integrou PNR GDS CGEVUY,Operação,Matriz (Barueri),57-05782-5,-,Cartão,DINP4P
+70107178847,Pendente de Lançamento (Não Consta),Keli Santi,Chamado 391311  - concur - não integrou PNR GDS YYGAME,Operação,Matriz (Barueri),57-05782-5,-,Cartão,OW32TT
+70107178943,Pendente de Lançamento (Não Consta),Keli Santi,Chamado 391311  -   Concur - não integrou PNR GDS IXQHTT,Operação,Matriz (Barueri),57-05782-5,-,Cartão,HRIN4E
+70107399521,Pendente de Lançamento (Não Consta),Keli Santi,concur - aguardando aprovação PNR GDS FXUDCM - gestão Randon,Operação,Matriz (Barueri),57-05782-5,-,Cartão,YPSQ5N
+70107410192,Pendente de Lançamento (Não Consta),Keli Santi,Chamado 391311  - concur - não integrou PNR GDS OTWHHE,Operação,Matriz (Barueri),57-05782-5,-,Cartão,LJTRGP
+70107415739,Pendente de Lançamento (Não Consta),Keli Santi,Chamado 391311  - concur - não integrou PNR GDS GYPTUN,Operação,Matriz (Barueri),57-05782-5,-,Cartão,FH7BKI
+70107481695,Pendente de Lançamento (Não Consta),Keli Santi,Chamado 391311  - concur - não integrou PNR GDS DIGUPJ,Operação,Matriz (Barueri),57-05782-5,-,Cartão,THYTSL
+70107667588,Pendente de Lançamento (Não Consta),Keli Santi,concur - não gerou PNR GDS -  ID KHRY (enviado gestão Randon-chamado concur),Operação,Matriz (Barueri),57-05782-5,-,Cartão,EW4F8A
+70107668462,Pendente de Lançamento (Não Consta),Keli Santi,concur - não gerou PNR GDS -  ID KHT6 (enviado gestão Randon-chamado concur),Operação,Matriz (Barueri),57-05782-5,-,Cartão,CIVI7P
+70107685299,Pendente de Lançamento (Não Consta),Keli Santi,concur - não gerou PNR GDS -  ID KHT4 (enviado gestão Randon - chamado concur),Operação,Matriz (Barueri),57-05782-5,-,Cartão,XNLKQW
+70107703399,Pendente de Lançamento (Não Consta),Keli Santi,concur - não gerou PNR GDS -  ID KHT3 (enviado gestão Randon-chamado concur),Operação,Matriz (Barueri),57-05782-5,-,Cartão,UGIL6L
+70107709185,Pendente de Lançamento (Não Consta),Keli Santi,Chamado 391311  - concur - não integrou PNR GDS KCMNEE,Operação,Matriz (Barueri),57-05782-5,-,Cartão,PLFSPM
+70107848190,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,HN8CWG
+70107864571,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,PSUR5R
+70108049859,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,MK7CSP
+70108088317,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,URHT2H
+70108109105,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,NP39PQ
+70108130663,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,HP9PNN
+70108137380,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,MIE1HF
+70108155893,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,VTRBVE
+70108159445,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,JLQ2UZ
+70108167988,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,NLKSGZ
+70108168633,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,OG286L
+70108188014,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,GHEI7F
+70108241520,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,NMGJ3G
+70108249640,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,YK28SS
+70108253480,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,GQ5W7X
+70108289247,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,VWCMPT
 72009896019,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - ESSSVW,Operação,Matriz (Barueri),57-05782-5,-,Cartão,XH2E5Y
 72009914328,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - NAWNMB,Operação,Matriz (Barueri),57-05782-5,-,Cartão,JRNH4E
 74000077155,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - HPUVPQ,Operação,Matriz (Barueri),57-05782-5,-,Cartão,CI6SMS
 74000139932,Pendente de Lançamento (Não Consta),Keli Santi,Concur,Operação,Matriz (Barueri),57-05782-5,-,Cartão,JISERS
-74000175095,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-05782-5,-,Cartão,DNYGWT
-70107349019,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-11069-0,20412856,MC,ONZR3T
-70107362013,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-11069-0,20412857,MC,ARH94R
-70107375692,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-11069-0,20412859,MC,EJS3WP
-70107397460,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-11069-0,20412854,MC,KFMV9L
-70107721068,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-11069-0,-,Cartão,SNT9SG
-70107174286,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Matriz (Barueri),57-11099-2,20392145,MC,ERQC5R
-70107481307,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Matriz (Barueri),57-11126-1,20429021,VI,NLH7FZ
-70107177999,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-12973-0,20387445,MC,QK75SC
-70107721163,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-12973-0,20452030,MC,ZM6EJM
-70107704340,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Matriz (Barueri),57-13784-6,-,Cartão,NJ6YMS
+74000175095,Pendente de Lançamento (Não Consta),Keli Santi,concur - aguardando aprovação PNR GDS AWIJUE,Operação,Matriz (Barueri),57-05782-5,-,Cartão,DNYGWT
+70107833803,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-09954-5,20461851,MC,JNL8RT
+70107916162,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-09954-5,20473428,MC,GSBIGE
+70107177999,Pendente de Lançamento (Não Consta),João Paulo,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Matriz (Barueri),57-12973-0,20387445,MC,QK75SC
+70108201760,Divergência de Receita,Ivanete Bertasol,,Operação,Matriz (Barueri),57-13375-3,20510157,Faturado,GKTWQM
+70108218675,Divergência de Receita,Ivanete Bertasol,,Operação,Matriz (Barueri),57-13375-3,20510158,Faturado,NT8MGR
 70100891028,Emitido e Lançado,Guilherme Silva,,Operação,Matriz (Barueri),57-14733-3,-,Cartão,TWGFFQ
-70106208851,Já Lançado no ERP,Central de Eventos,,Operação,Matriz (Barueri),57-14733-3,-,Faturado,UPFM6N
-70106212520,Já Lançado no ERP,Central de Eventos,,Operação,Matriz (Barueri),57-14733-3,-,Faturado,BW4S3N
-70107183379,Pendente de Lançamento (Não Consta),Guilherme Silva,,Operação,Matriz (Barueri),57-14733-3,20392675,MC,YLRNFM
-70107440606,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,Matriz (Barueri),57-15284-1,-,Cartão,CMQB6D
+70107183379,Solicitado Conciliação,Guilherme Silva,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Matriz (Barueri),57-14733-3,20392675,Cartão,YLRNFM
 70093743316,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - AKALZJ,Operação,Matriz (Barueri),57-15786-6,-,Cartão,AKMYYZ
 70105275092,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - APWMZA,Operação,Matriz (Barueri),57-15786-6,-,Cartão,KPQQ8K
 70105291869,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - MRRAET,Operação,Matriz (Barueri),57-15786-6,-,Cartão,IICJRF
@@ -501,202 +506,132 @@
 70105302257,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - MFVLHP,Operação,Matriz (Barueri),57-15786-6,-,Cartão,BLD6KJ
 70105307690,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - JPYRDF,Operação,Matriz (Barueri),57-15786-6,-,Cartão,LHMVUI
 70106533190,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - HZKAPL,Operação,Matriz (Barueri),57-15786-6,-,Cartão,LPBLGN
-70107431600,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-15786-6,-,Cartão,SWU7TD
-70107502471,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-15786-6,-,Cartão,WNQUTW
-70107586746,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-15786-6,-,Cartão,RFHFQB
-70107703559,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-15786-6,-,Cartão,DGGUMY
-70107539042,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-15846-3,20435059,MC,XSKD7E
-70107688440,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-15846-3,20451740,MC,GWMDYQ
-70107546204,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Matriz (Barueri),57-16416-6,20431711,MC,ZKQ8KP
-70107187865,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Matriz (Barueri),57-17372-3,20392801,MC,DS98UE
-70107177890,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0,20385004,AX,MWNEMQ
-70107187039,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0,20391458,MC,CMWCGT
-70107187678,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0,20392418,MC,LGHM7Y
-70107643594,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0,-,Cartão,MF3ZJB
-70107080907,Pendente de Lançamento (Não Consta),Keli Santi,"Chamado aberto 390401 - dia 30/10 ás 13:20. 
-No aguardo.",Operação,Matriz (Barueri),57-71137-1,20374087,MC,RTT6NR
-70107170012,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-71151-1,20388875,MC,AJP7TP
-70107175075,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-71151-1,20393027,MC,HP1FMA
-70107182453,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-71151-1,20389286,MC,SSQL3R
-70107170129,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-72826-3,20391110,MC,ILRPTZ
-70107182656,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-72826-3,20391888,MC,MWDV3A
-70107434704,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-72826-3,20426256,MC,ORQ4GH
-70107658590,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-72826-3,20449669,MC,MJWW9P
-70107708117,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-72826-3,20456624,MC,AW5DQQ
+70107431600,Pendente de Lançamento (Não Consta),Keli Santi,Chamado 391323 - concur não integrou PNR GDS MXMYVR,Operação,Matriz (Barueri),57-15786-6,-,Cartão,SWU7TD
+70107502471,Pendente de Lançamento (Não Consta),Keli Santi,Chamado 391323 - concur não integrou PNR GDS YIPAXP,Operação,Matriz (Barueri),57-15786-6,-,Cartão,WNQUTW
+70107586746,Pendente de Lançamento (Não Consta),Keli Santi,Chamado 391323 - concur não integrou PNR GDS UEMKPW,Operação,Matriz (Barueri),57-15786-6,-,Cartão,RFHFQB
+70108248479,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-15786-6,-,Cartão,DNIWYT
+70108248659,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-15786-6,-,Cartão,AN346Q
+70108139330,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Matriz (Barueri),57-17372-3,20499940,MC,ZMLWXM
+70107187039,Solicitado Conciliação,Keli Santi,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Porto Alegre,57-51823-0,20391458,Cartão,CMWCGT
+70107187678,Solicitado Conciliação,Keli Santi,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Porto Alegre,57-51823-0,20392418,Cartão,LGHM7Y
+70107895557,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-71137-1,20468710,MC,RPWFKA
+70108095134,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Matriz (Barueri),57-71137-1,20494107,MC,BGBBMY
+70107170012,Solicitado Conciliação,Keli Santi,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Matriz (Barueri),57-71151-1,20388875,Cartão,AJP7TP
+70107175075,Solicitado Conciliação,Keli Santi,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Matriz (Barueri),57-71151-1,20393027,Cartão,HP1FMA
+70107182453,Solicitado Conciliação,Keli Santi,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Matriz (Barueri),57-71151-1,20389286,Cartão,SSQL3R
+70107170129,Solicitado Conciliação,Rosangela Pallu,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Matriz (Barueri),57-72826-3,20391110,Cartão,ILRPTZ
+70107927389,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-72826-3,20473930,MC,DJN22M
+70107961643,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-72826-3,20476049,MC,OHYLHY
+70108054400,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-72826-3,20491092,MC,JQSH6H
 70106161772,Emitido e Lançado,Rosangela Pallu,,Operação,Matriz (Barueri),57-74046-5,-,Cartão,XFCRQR
 70106749745,Emitido e Lançado,Rosangela Pallu,,Operação,Matriz (Barueri),57-74046-5,20352332,Cartão Amex,ZPGQGQVV
-70107302633,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-74046-5,-,Cartão,XI7NYY
-70107399343,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-74046-5,-,Cartão,PKF7QP
-70107595108,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-74046-5,20442205,AX,AS2P3B
-70107618905,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-74046-5,20442220,AX,YRZ56K
-70107631284,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-74046-5,20442276,AX,QR89PK
-70107501822,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Matriz (Barueri),57-74814-3,-,Cartão,XQRG7K
-70107333248,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-74820-2,20408415,MC,QPTHVA
-70107170206,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-74825-0,20391821,MC,VLWRMM
-70107174219,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-74825-0,20391822,MC,YR8FFK
-70107178252,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-74825-0,20391801,MC,KRBC4U
-70107178270,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-74825-0,20391823,MC,PSSQFE
-70107186845,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-74825-0,20388016,MC,VLZE6M
-70107605789,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-74825-0,20441479,MC,WRT8FX
-72009790486,Pendente de Lançamento (Não Consta),Lazer,Area Responsavel ajustada para o devido gestor,Operação,Matriz (Barueri),57-75220-3,-,Cartão,GGY3WL
-2303646699,Pendente de Lançamento (Não Consta),Rosangela Pallu,Enviado ao Suporte - aguardando o número do chamado,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2305373768,Pendente de Lançamento (Não Consta),Rosangela Pallu,POSITIVO - CHAMADO ABERTO 388014 - Rosangela Pallu,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2305423077,Em Análise Backoffice,Rosangela Pallu,POSITIVO - CHAMADO ABERTO 388014 - Rosangela Pallu,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2305423509,Em Análise Backoffice,Rosangela Pallu,POSITIVO - CHAMADO ABERTO 388014 - Rosangela Pallu,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2305565333,Pendente de Lançamento (Não Consta),Rosangela Pallu,POSITIVO - CHAMADO ABERTO 388014 - Rosangela Pallu,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2305565335,Em Análise Backoffice,Rosangela Pallu,POSITIVO - CHAMADO ABERTO 388014 - Rosangela Pallu,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2305565546,Em Análise Backoffice,Rosangela Pallu,POSITIVO - CHAMADO ABERTO 388014 - Rosangela Pallu,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2306026480,Em Análise Backoffice,Rosangela Pallu,POSITIVO - CHAMADO ABERTO 388014 - Rosangela Pallu,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2306538388,Pendente de Lançamento (Não Consta),Rosangela Pallu,Chamado aberto 389340,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2306538396,Pendente de Lançamento (Não Consta),Rosangela Pallu,Chamado aberto 389340,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2306836340,Pendente de Lançamento (Não Consta),Rosangela Pallu,Chamado aberto 389340,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2306867640,Pendente de Lançamento (Não Consta),Rosangela Pallu,Chamado aberto 389340,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2306977464,Pendente de Lançamento (Não Consta),Rosangela Pallu,Chamado aberto 389340,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2307065082,Pendente de Lançamento (Não Consta),Rosangela Pallu,Chamado aberto 389340,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2307266442,Pendente de Lançamento (Não Consta),Rosangela Pallu,Chamado aberto 389340,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2307266447,Pendente de Lançamento (Não Consta),Rosangela Pallu,Chamado aberto 389340,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2307266561,Pendente de Lançamento (Não Consta),Rosangela Pallu,Chamado aberto 389340,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2307272478,Pendente de Lançamento (Não Consta),Rosangela Pallu,Chamado aberto 389340,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2307273160,Pendente de Lançamento (Não Consta),Rosangela Pallu,Chamado aberto 389340,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2307273508,Pendente de Lançamento (Não Consta),Rosangela Pallu,Chamado aberto 389340,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2307414957,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-2305331033,Em Análise Backoffice,Rosangela Pallu,POSITIVO - CHAMADO ABERTO 388014 - Rosangela Pallu,Operação,Matriz (Barueri),57-51159-1,-,Invoice,-
-4480031114,Pendente de Lançamento (Não Consta),Keli Santi,integrado Lemon SV 20409029 mesmo dia da emissão.,Operação,Porto Alegre,57-51823-0,-,Invoice,-
+70107763769,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-74046-5,-,Cartão,ALEIQJ
+70108057112,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-74046-5,-,Cartão,RSGYTH
+70107880220,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-74820-2,-,Cartão,BFW66Y
+70107170206,Solicitado Conciliação,João Paulo,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Matriz (Barueri),57-74825-0,20391821,Cartão Amex,VLWRMM
+70107174219,Solicitado Conciliação,João Paulo,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Matriz (Barueri),57-74825-0,20391822,Cartão Amex,YR8FFK
+70107178252,Solicitado Conciliação,João Paulo,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Matriz (Barueri),57-74825-0,20391801,Cartão Amex,KRBC4U
+70107178270,Solicitado Conciliação,João Paulo,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Matriz (Barueri),57-74825-0,20391823,Cartão Amex,PSSQFE
+70107186845,Solicitado Conciliação,João Paulo,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Matriz (Barueri),57-74825-0,20388016,Cartão Amex,VLZE6M
+70107959295,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,20476152,MC,YWULUT
 4478744918,Já Lançado no ERP,Fabiano Souza,VANILDA BARROS DE SOUSA - Lazer,Central de Eventos,São Paulo,57-51829-6,-,Invoice,-
 3996479681,Pendente de Lançamento (Não Consta),Keli Santi,"concur, chamado número 387770",Operação,Porto Alegre,57-53486-4,-,Cartão,-
 3996479686,Pendente de Lançamento (Não Consta),Keli Santi,"concur, chamado número 387770",Operação,Porto Alegre,57-53486-4,-,Cartão,-
 3996479708,Pendente de Lançamento (Não Consta),Keli Santi,"concur, chamado número 387770",Operação,Porto Alegre,57-53486-4,-,Cartão,-
 3996479727,Pendente de Lançamento (Não Consta),Keli Santi,Concur tirou da fila sem integrar PNR NRCHLI *ABRIR CHAMADO   389481,Operação,Porto Alegre,57-53486-4,-,Cartão,-
-3996479728,Pendente de Lançamento (Não Consta),Keli Santi,Concur tirou da fila sem integrar PNR EFJVGI * ABRIR CHAMADO  389481,Operação,Porto Alegre,57-53486-4,-,Cartão Amex,EFJVGI
-3996479732,Pendente de Lançamento (Não Consta),Keli Santi,Concur tirou  da fila sem integrar PNR FBLERZ * ABRIR CHAMADO   389481,Operação,Porto Alegre,57-53486-4,-,Cartão,FBLERZ
 3996479735,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-53486-4,-,Cartão,EAYZUG
-3996479737,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-53486-4,-,Cartão Amex,FPHOKK
-3996479738,Emitido e Lançado,Keli Santi,,Operação,Porto Alegre,57-53486-4,-,Cartão,WMNPPO
-4480207980,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53486-4,-,Cartão,-
-2306448116,Pendente de Lançamento (Não Consta),Keli Santi,"Chamado aberto 390401 - dia 30/10 ás 13:20. 
-No aguardo.",Operação,Porto Alegre,57-53490-1,20392446,Cartão,EEIEMQ
-2306448117,Pendente de Lançamento (Não Consta),Keli Santi,"Chamado aberto 390401 - dia 30/10 ás 13:20. 
-No aguardo.",Operação,Porto Alegre,57-53490-1,20392444,MC,-
+4480540627,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53490-1,-,Invoice,-
 1992878174,Já Lançado no ERP,Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Cartão,-
-3996439674,Pendente de Lançamento (Não Consta),João Paulo Sousa,Area Responsavel ajustada para o devido gestor - chamado  389317,Operação,São Paulo,57-53515-5,-,Invoice,-
-2307344151,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-54714-0,-,Invoice,-
-2306447387,Pendente de Lançamento (Não Consta),Rosangela Pallu,"Chamado aberto 390401 - dia 30/10 ás 13:20. 
-No aguardo.",Operação,Curitiba,57-55772-1,20391888,MC,-
+2308368697,Pendente de Lançamento (Não Consta),Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Cartão,-
+3996553928,Pendente de Lançamento (Não Consta),Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Cartão,-
+2308512347,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,São Paulo,57-53512-2,-,Invoice,-
+2308575926,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,São Paulo,57-53512-2,20509967,MC,-
+2308418168,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-54714-0,20508993,MC,-
+4480486376,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-54714-0,-,Cartão,-
+2308200683,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-54714-0,-,Invoice,-
+2308388272,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-55772-1,20498274,MC,-
 3996415715,Já Lançado no ERP,Rosangela Pallu,,Operação,Curitiba,57-55772-1,-,Invoice,-
 3996415716,Já Lançado no ERP,Rosangela Pallu,,Operação,Curitiba,57-55772-1,-,Invoice,-
-3996516911,Emitido e Lançado,João Paulo Sousa,,Operação,São Paulo,57-55903-6,20429806,Cartão,YSUKQK
-2304147753,Pendente de Lançamento (Não Consta),Ivanete Bertasol,erro de integração - chamado 388537,Operação,São Paulo,57-56042-5,20296065,MC,-
-2307335016,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,São Paulo,57-56042-5,20436421,MC,-
-5232445130,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-56134-6,-,Cartão,-
-2307420959,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Rio de Janeiro,57-56138-3,20446245,MC,-
-2306222115,Já Lançado no ERP,João Paulo,VIAGENS INTERNAS,Operação,São Paulo,57-56139-4,-,Despesas internas,WQIWXR
-2307252216,Pendente de Lançamento (Não Consta),Ivanete Bertasol,"Chamado aberto 390401 - dia 30/10 ás 13:20. 
-No aguardo.",Operação,São Paulo,57-56139-4,20436323,MC,-
-2307417778,Emitido e Lançado,Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Cash,FYPPPI
-2307419445,Emitido e Lançado,Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Cash,CFRZCW
-2306222267,Já Lançado no ERP,João Paulo,VIAGENS INTERNAS,Operação,São Paulo,57-56139-4,-,Despesas internas,AMYUBK
-4480206504,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Invoice,-
-2306446471,Pendente de Lançamento (Não Consta),Marcelo Pereira,"Chamado aberto 390401 - dia 30/10 ás 13:20. 
-No aguardo.",Operação,Rio de Janeiro,57-56170-0,20392801,MC,-
+1957926828,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-55903-6,-,Invoice,-
+4480487632,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-55903-6,-,Invoice,-
+2308488039,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-55956-3,-,Cartão,-
+3996487834,Divergência de Receita e Cia Aérea,Rosangela Pallu,,Operação,Curitiba,57-55956-3,20500050,Cartão Amex,KSRFJS
+3996487844,Divergência de Receita,Rosangela Pallu,,Operação,Curitiba,57-55956-3,-,Cartão Amex,GYZFDJ
+2308202285,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-55956-3,20485910,AX,-
+2304147753,Pendente de Lançamento (Não Consta),Keli Santi,"Marcos,
+Boa tarde,
+
+Esse caso ainda está em tratativa, recentemente tivemos uma conversa com uma pessoa do Lemontech, sobre a disponibilização dos remarks no momento da captura, e o que foi constatado é que não há como identificar se o erro ocorre na disponibilização do remarks por parte do Lemontech, ou se ocorre no momento da captura.
+
+Temos um chamado aberto com a Benner solicitando uma reunião, para que possamos tratar este caso de maneira mais assertiva, nesta reunião, irão participar analistas da Lemontech e Benner, e acreditamos que com esse contato direto entre os dois lados, podemos ter uma resolução definitiva para este processo que vem gerando impactos a dias.
+
+Att,
+
+Paulo Feitosa
+Suporte BackOffice | Fulfillment | Controle de Vendas",Operação,São Paulo,57-56042-5,20296065,MC,-
+2307335016,Pendente de Lançamento (Não Consta),Ivanete Bertasol,TKT Não pertence a Filial POA (CHURCH),Operação,São Paulo,57-56042-5,20436421,Faturado,ARRATQ
+2308087781,Pendente de Lançamento (Não Consta),Ivanete Bertasol,TKT Não pertence a Filial POA (CHURCH),Operação,São Paulo,57-56042-5,-,Cartão,-
+2308491650,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,São Paulo,57-56042-5,20502901,MC,-
+2308616169,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-56134-6,-,Cartão,-
+2308579962,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Rio de Janeiro,57-56138-3,20509627,AX,-
+2308264981,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Cartão,-
+2308267546,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Cartão,-
+2308271448,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Cartão,-
+2308276113,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Cartão,-
+2308454027,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Cartão,-
+2308268303,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Invoice,-
+3996425260,Divergência de Receita,Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Sem adicional,CINQHO
+2308230285,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Rio de Janeiro,57-56170-0,-,Cartão,-
+2308167910,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
+2308232249,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
+2308232250,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
+4480585412,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Rio de Janeiro,57-64486-0,-,Invoice,-
+1992879502,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Cartão,-
+1992879503,Divergência de Receita e Cia Aérea,João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Faturado,GCJCHD
 3996443455,Pendente de Lançamento (Não Consta),Keli Santi,Concur - internacional - lançado manual,Operação,Matriz (Barueri),57-75220-3,-,Cartão,IHBSWT
-3996543885,Emitido e Lançado,João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Cartão,HKGKVC
+3996588451,Divergência de Receita e Cia Aérea,João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Cartão Amex,GCJCHD
+3996588462,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Cartão,-
+3996588471,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Cartão,-
+4886060964,Divergência de Receita e Cia Aérea,João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Faturado,KHSGXY
 2142081226,Pendente de Lançamento (Não Consta),Keli Santi,chamado 389378  conujgar tkt - Tkt final 225 conjugado 226,Operação,Matriz (Barueri),57-75220-3,-,Invoice,-
-1957915557,Emitido e Lançado,João Paulo Sousa,RLOC DWQAOF-1 Processo Regularizado,Operação,São Paulo,57-97101-2,-,Cartão Amex,DWQAOF
+1957931652,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-97101-2,-,Cartão,-
+1957931654,Divergência de Receita e Cia Aérea,João Paulo Sousa,,Operação,São Paulo,57-97101-2,-,Cartão,ECVEXW
+2308319582,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-97101-2,-,Cartão,-
 1957931648,Já Lançado no ERP,João Paulo,,Operação,São Paulo,57-97101-2,-,Invoice,-
-2306446777,Pendente de Lançamento (Não Consta),Guilherme Silva,"Chamado aberto 390401 - dia 30/10 ás 13:20. 
-No aguardo.",Operação,São Paulo,57-97157-2,20388436,MC,-
-2307353410,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,Curitiba,57-97223-5,-,Cartão,-
-1957935157,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
-1957935158,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
-1957935159,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
-1957935160,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
-1957935161,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
-3996533043,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
-3996533044,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
-3996533045,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
-3996533046,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
-3996533047,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
+2308388097,Pendente de Lançamento (Não Consta),Guilherme Silva,,Operação,São Paulo,57-97157-2,-,Cartão,-
+2308509787,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
+2308509788,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
 2300601904,Emitido e Lançado,Rosangela Pallu,Esta no backoffice,Operação,Curitiba,57-97926-1,18882973,Cartão,KYGKYB
-9572307570861,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-9572307578749,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-9572307868194,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-9572307997574,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-9572307997575,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-9572308021059,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-9572308021287,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-9572308021818,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
-9572307839661,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-51823-0,20462475,MC,-
-1813996540518,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-51829-6,-,Cartão,-
-9572307533966,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-51829-6,-,Cartão,-
-9573996540517,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-51829-6,-,Cartão,-
-9574480412600,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53486-4,-,Cartão,-
-9572307919912,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,Porto Alegre,57-53489-0,-,Cartão,-
-441992878179,Pendente de Lançamento (Não Consta),Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Cartão,-
-441992878180,Pendente de Lançamento (Não Consta),Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Cartão,-
-441992878181,Pendente de Lançamento (Não Consta),Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Cartão,-
-443996553904,Pendente de Lançamento (Não Consta),Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Cartão,-
-443996553906,Pendente de Lançamento (Não Consta),Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Cartão,-
-473996352561,Pendente de Lançamento (Não Consta),Jaime Schnaider,,Unique,São Paulo,57-53501-5,20479319,MC,-
-9572307538272,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-53517-0,20454365,AX,-
-9572307546373,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-53517-0,20455043,AX,-
-9572307546377,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-53517-0,20455040,AX,-
-9572307546209,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-53533-2,20453914,AX,-
-2205232557969,Emitido e Lançado,Marcelo Pereira,,Operação,Rio de Janeiro,57-54647-3,20478648,Cartão Amex,MJNFCH
-9572307538414,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-54714-0,20453383,MC,-
-9572307538535,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-54714-0,20453383,MC,-
-9572308116956,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-54714-0,20481415,MC,-
-9572307507279,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-55772-1,20450419,MC,-
-9572307508961,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-55772-1,20449669,MC,-
-9572307517649,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-55772-1,-,Cartão,-
-9572308007378,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-55772-1,20473930,MC,-
-9572307492467,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-55903-6,20448565,AX,-
-9572307520861,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-55903-6,-,Cartão,-
-9572307824943,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-55903-6,20459749,AX,-
-9572308058006,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-55903-6,20478010,MC,-
-13996487822,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-55956-3,20491635,MC,-
-9573996487817,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-55956-3,-,Cartão,-
-9573996487821,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-55956-3,20499438,Cartão,-
-9572308087781,Pendente de Lançamento (Não Consta),Keli Santi,,Operação,São Paulo,57-56042-5,-,Cartão,-
-9572308041104,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-56134-6,-,Cartão,-
-9574480387271,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-56134-6,-,Cartão,-
-9572307845124,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Rio de Janeiro,57-56138-3,20460634,MC,-
-9572307926551,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Rio de Janeiro,57-56138-3,20470547,MC,-
-9572307551741,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Cartão,-
-9572308089555,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Cartão,-
-9572308089556,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Cartão,-
-9572307754197,Emitido e Lançado,Marcelo Pereira,,Operação,Rio de Janeiro,57-56170-0,20458673,Faturado,MUVKSQ
-9572307570702,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
-9572307575860,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
-9572307575861,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
-9572307575862,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
-9572307575863,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
-9572307575864,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
-9572307575865,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
-9572308035878,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
-1183996588398,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,20481223,MC,-
-1253996588416,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Cartão,-
-1253996588417,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Cartão,-
-1253996588418,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Cartão,-
-1573996577257,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Cartão,-
-1763996577260,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Cartão,-
-9573996588388,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Cartão,-
-9572307517857,Pendente de Lançamento (Não Consta),Guilherme Silva,,Operação,São Paulo,57-97157-2,-,Cartão,-
-9572307564670,Pendente de Lançamento (Não Consta),Guilherme Silva,,Operação,São Paulo,57-97157-2,20456498,MC,-
-9572307684927,Pendente de Lançamento (Não Consta),Guilherme Silva,,Operação,São Paulo,57-97157-2,-,Cartão,-
-9574480440600,Pendente de Lançamento (Não Consta),Guilherme Silva,,Operação,São Paulo,57-97157-2,-,Cartão,-
-9572307552930,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,Curitiba,57-97223-5,-,Cartão,-
-9574480388653,Pendente de Lançamento (Não Consta),Ivanete Bertasol,,Operação,Curitiba,57-97223-5,-,Cartão,-
-9572307490952,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,20448376,MC,-
-9573996533058,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
-9573996533060,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
-9573996533061,Pendente de Lançamento (Não Consta),Fabiano Souza,,Concierge/Lazer,São Paulo,57-97922-4,-,Cartão,-
+9572309142569,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Matriz (Barueri),57-51159-1,-,Cartão,-
+743996352568,Pendente de Lançamento (Não Consta),Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Cartão,-
+1393996553952,Emitido e Lançado,Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Cartão,FXPBWB
+1693996553946,Emitido e Lançado,Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Sem adicional,SFDLXX
+1693996553947,Emitido e Lançado,Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Sem adicional,SFDLXX
+1693996553948,Emitido e Lançado,Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Sem adicional,SFDLXX
+1693996553949,Emitido e Lançado,Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Sem adicional,SFDLXX
+9573996352572,Emitido e Lançado,Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Faturado,OYJOTB
+9573996553945,Emitido e Lançado,Jaime Schnaider,,Unique,São Paulo,57-53501-5,20534345,Faturado,FKYIVC
+9573996553950,Emitido e Lançado,Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Cartão,EIZPVH
+9573996553951,Emitido e Lançado,Jaime Schnaider,,Unique,São Paulo,57-53501-5,-,Cartão,EIZPVH
+9572309193079,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,São Paulo,57-53512-2,-,Cartão,-
+9572309194943,Divergência de Cia Aérea,Rosangela Pallu,,Operação,São Paulo,57-53512-2,19817390,Pagamento Direto,SULXAI
+2201957921395,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-54714-0,-,Cartão,-
+9572309077135,Pendente de Lançamento (Não Consta),Rosangela Pallu,,Operação,Curitiba,57-55772-1,20518426,MC,-
+573996630775,Emitido e Lançado,João Paulo Sousa,,Operação,São Paulo,57-55903-6,20539062,Cartão,SOHBGZ
+9574480798616,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,São Paulo,57-55903-6,-,Cartão,-
+9574480815898,Emitido e Lançado,Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Faturado,MASXFH
+9574480816427,Emitido e Lançado,Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Faturado,MAIHAB
+9574480816729,Emitido e Lançado,Ivanete Bertasol,,Operação,São Paulo,57-56139-4,-,Faturado,OIMMVX
+9572309148319,Pendente de Lançamento (Não Consta),Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão,-
+9572309178868,Emitido e Lançado,Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Faturado,JHESHR
+9575232552054,Divergência de Cia Aérea,Central de Eventos,,Central de Eventos,São Paulo,57-56513-0,-,Cartão Amex,IHRECV
+9574480686785,Pendente de Lançamento (Não Consta),Marcelo Pereira,,Operação,Rio de Janeiro,57-64486-0,-,Cartão,-
+1253996620977,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,20527375,MC,-
+7243996620983,Pendente de Lançamento (Não Consta),João Paulo Sousa,,Operação,Matriz (Barueri),57-75220-3,-,Cartão,-
 2153393188,Emitido e Lançado,Fabiano Souza,,Operação,Não Mapeado,DIRETO,-,Cash,LDKWSG
 2154280020,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - WQYVMI,Operação,Não Mapeado,DIRETO,-,Cartão,FSLWZK
 2155147957,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - ICNXMI,Operação,Não Mapeado,DIRETO,-,Cartão,SYKLOP
 2155441284,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - WRHNGL,Operação,Não Mapeado,DIRETO,-,Cartão,FHNZNZ
-2300489881,Pendente de Lançamento (Não Consta),Não Mapeado,"Chamado aberto 390401 - dia 30/10 ás 13:20. 
-No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
-2301951497,Emitido e Lançado,Ivanete Bertasol,,Operação,Não Mapeado,DIRETO,19004407,Cartão,NLXMKD
 2302457354,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - KUSXQK,Operação,Não Mapeado,DIRETO,-,Cartão,SZUAFO
 2302738976,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - NXTCDO,Operação,Não Mapeado,DIRETO,-,Cartão,AOFEKS
 2302800278,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - OORWPH,Operação,Não Mapeado,DIRETO,-,Cartão,QYSAHU
@@ -710,8 +645,6 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2303674719,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - NTJYYP,Operação,Não Mapeado,DIRETO,-,Cartão,SGTCLC
 2304033520,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - WWQJAF,Operação,Não Mapeado,DIRETO,-,Cartão,YJFQXJ
 2304295588,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - CEZFIZ,Operação,Não Mapeado,DIRETO,-,Cartão,HOFZDT
-2304398902,Emitido e Lançado,Rosangela Pallu,,Operação,Não Mapeado,DIRETO,19312268,Cartão,GDRLVS
-2304398903,Emitido e Lançado,Rosangela Pallu,,Operação,Não Mapeado,DIRETO,19312268,Cartão,GDRLVS
 2305556643,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - FVMGWJ,Operação,Não Mapeado,DIRETO,-,Cartão,KZDOYY
 2305688675,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - UDCJBQ,Operação,Não Mapeado,DIRETO,-,Cartão,UANNYZ
 2305969004,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - FSXAFC,Operação,Não Mapeado,DIRETO,-,Cartão,DJMKHW
@@ -721,7 +654,7 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2308232699,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - LYJSXM,Operação,Não Mapeado,DIRETO,-,Cartão,LZJPKS
 2308234835,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - LYXTFP,Operação,Não Mapeado,DIRETO,-,Cartão,OUSKJZ
 2308493249,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - OAQJHH,Operação,Não Mapeado,DIRETO,-,Cartão,YEOXNA
-2309193827,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - MJVLNG,Operação,Não Mapeado,DIRETO,-,Cartão,SVMFYP
+2309193827,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - MJVLNG,Operação,Não Mapeado,DIRETO,20527718,Cartão,QTJINQ
 2309193944,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - STXIDO,Operação,Não Mapeado,DIRETO,-,Cartão,SSXDIK
 2309436450,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - NEEJJA,Operação,Não Mapeado,DIRETO,-,Cartão,AVKPHF
 2309437432,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - QXRMEE,Operação,Não Mapeado,DIRETO,-,Cartão,ASPNPW
@@ -778,7 +711,6 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2310337798,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - KEVCZW,Operação,Não Mapeado,DIRETO,-,Cartão,UWVCBX
 2310338498,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - KFIQXI,Operação,Não Mapeado,DIRETO,-,Cartão,IJLHYM
 2310339260,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - MPKLBI,Operação,Não Mapeado,DIRETO,-,Cartão,MPPHJE
-2310355012,Emitido e Lançado,Não Mapeado,,Operação,Não Mapeado,DIRETO,19973161,Cartão,MCNQHN
 2310358841,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - SJDKLC,Operação,Não Mapeado,DIRETO,-,Cartão,MEXVGK
 2310358971,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - WDDDFO,Operação,Não Mapeado,DIRETO,-,Cartão,SLOMVM
 2310361518,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - OSWGXF,Operação,Não Mapeado,DIRETO,-,Cartão,OVKVSM
@@ -797,7 +729,6 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2310550081,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - IYWIYL,Operação,Não Mapeado,DIRETO,-,Cartão,IZBBVZ
 2310561295,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - MYHJLL,Operação,Não Mapeado,DIRETO,-,Cartão,NIICJU
 2310571055,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - QMMBLQ,Operação,Não Mapeado,DIRETO,-,Cartão,CPZUXG
-2310575116,Já Lançado no ERP,Keli Santi,RANDON - JADER DE BITTENCOURT VIEIRA,Operação,Não Mapeado,DIRETO,-,Cartão,GIBETG
 2310594528,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - GWLRKG,Operação,Não Mapeado,DIRETO,-,Cartão,GWLUVG
 2310596834,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - YGRXMY,Operação,Não Mapeado,DIRETO,-,Cartão,YIEGLA
 2310613188,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - CDXYTC,Operação,Não Mapeado,DIRETO,-,Cartão,CIYDKJ
@@ -854,7 +785,6 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2311184435,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - IAXONN,Operação,Não Mapeado,DIRETO,-,Cartão,UIYKBO
 2311191606,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - ULYIUL,Operação,Não Mapeado,DIRETO,-,Cartão,HFTWFK
 2311204795,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - YBLEGJ,Operação,Não Mapeado,DIRETO,-,Cartão,MOZXVI
-2311207237,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - YALLZI,Operação,Não Mapeado,DIRETO,-,Cartão,MQBKBA
 2311207624,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - UYWMNL,Operação,Não Mapeado,DIRETO,-,Cartão,ETTLTS
 2311210254,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - AIQVBL,Operação,Não Mapeado,DIRETO,-,Cartão,AHMQCP
 2311287971,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - DZQSGL,Operação,Não Mapeado,DIRETO,-,Cartão,NJKGOY
@@ -878,7 +808,7 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2311519960,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - YNRUXV,Operação,Não Mapeado,DIRETO,-,Cartão,ATZKIX
 2311523199,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - AAEDVZ,Operação,Não Mapeado,DIRETO,-,Cartão,ABCMBF
 2311540597,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - KVTJXJ,Operação,Não Mapeado,DIRETO,-,Cartão,KZUWBL
-2311544933,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - MOILHV,Operação,Não Mapeado,DIRETO,-,Cartão,UWKRGD
+2311544933,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - MOILHV,Operação,Não Mapeado,DIRETO,20558053,Cartão,UWKRGD
 2311545221,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - UXMOQV,Operação,Não Mapeado,DIRETO,-,Cartão,ESBUWA
 2311550971,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - UTHIQC,Operação,Não Mapeado,DIRETO,-,Cartão,MQJEGM
 2311551367,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - URNVWK,Operação,Não Mapeado,DIRETO,-,Cartão,UWVSYA
@@ -907,7 +837,6 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2311726858,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - MVCMBM,Operação,Não Mapeado,DIRETO,-,Cartão,JNAWDA
 2311728188,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - AKGHQF,Operação,Não Mapeado,DIRETO,-,Cartão,JNBUSM
 2311785437,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - YFAVRE,Operação,Não Mapeado,DIRETO,-,Cartão,FTPVUL
-2311786210,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - AWQZQB,Operação,Não Mapeado,DIRETO,-,Cartão,QNAXYC
 2311793293,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - NDLOUM,Operação,Não Mapeado,DIRETO,-,Cartão,IWHZWT
 2311793470,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - HPLEAO,Operação,Não Mapeado,DIRETO,-,Cartão,IMCCQR
 2311793471,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - HOWDTL,Operação,Não Mapeado,DIRETO,-,Cartão,KFVFGX
@@ -965,8 +894,6 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2312459147,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - CNSRMM,Operação,Não Mapeado,DIRETO,-,Cartão,FYJZPB
 2312463798,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - CPWIZP,Operação,Não Mapeado,DIRETO,-,Cartão,CFBBQC
 2312469614,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - NWNKWX,Operação,Não Mapeado,DIRETO,-,Cartão,MJMDUS
-2312483204,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - DTVMJR,Operação,Não Mapeado,DIRETO,-,Cartão,SJZRPS
-2312483247,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - SJVFWS,Operação,Não Mapeado,DIRETO,-,Cartão,DTYOSH
 2312572887,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - HMKEXF,Operação,Não Mapeado,DIRETO,-,Cartão,HIVOJQ
 2312589541,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - QDYSBP,Operação,Não Mapeado,DIRETO,-,Cartão,AKPWVW
 2312601287,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - MEDGIE,Operação,Não Mapeado,DIRETO,-,Cartão,MDWMPP
@@ -989,7 +916,6 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2312909996,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - QAZCEP,Operação,Não Mapeado,DIRETO,-,Cartão,WKPAEI
 2312910621,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - WFBYFX,Operação,Não Mapeado,DIRETO,-,Cartão,WFORGO
 2312915497,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - SZHVDO,Operação,Não Mapeado,DIRETO,-,Cartão,DAOYMW
-2312926653,Pendente de Lançamento (Não Consta),Rosangela Pallu,Chamado aberto 389328,Operação,Não Mapeado,DIRETO,-,Cartão,NUIZDT
 2312932644,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - UZOXHY,Operação,Não Mapeado,DIRETO,-,Cartão,NIAWPV
 2312963436,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - WVBPVD,Operação,Não Mapeado,DIRETO,-,Cartão,WUPIAK
 2312963881,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - FMRSGT,Operação,Não Mapeado,DIRETO,-,Cartão,WSBGHS
@@ -998,7 +924,6 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2312965529,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - CXYBFM,Operação,Não Mapeado,DIRETO,-,Cartão,WPMICE
 2312976124,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - OEUQUY,Operação,Não Mapeado,DIRETO,-,Cartão,OGOPIJ
 2312976826,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - AMKMMD,Operação,Não Mapeado,DIRETO,-,Cartão,CQZJRE
-2312977129,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - SSIMUC,Operação,Não Mapeado,DIRETO,-,Cartão,OGZGFC
 2312977500,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - FBPVPT,Operação,Não Mapeado,DIRETO,-,Cartão,FCFSUL
 2312990146,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - WZYUNC,Operação,Não Mapeado,DIRETO,-,Cartão,KRIRAX
 2312990173,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - HGXZKK,Operação,Não Mapeado,DIRETO,-,Cartão,FROAYI
@@ -1009,10 +934,8 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2313011777,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - SJWQXU,Operação,Não Mapeado,DIRETO,-,Cartão,MTPGCD
 2313013110,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - WBMBWC,Operação,Não Mapeado,DIRETO,-,Cartão,QNSZGZ
 2313017078,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - FXWQCQ,Operação,Não Mapeado,DIRETO,-,Cartão,FWRIPQ
-2313057677,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - AXPPFJ,Operação,Não Mapeado,DIRETO,-,Cartão,OAWBRS
 2313061199,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - IMEKXO,Operação,Não Mapeado,DIRETO,-,Cartão,HVMUYB
 2313061856,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - IKVMCD,Operação,Não Mapeado,DIRETO,-,Cartão,SWLHWZ
-2313062203,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - CBDOFL,Operação,Não Mapeado,DIRETO,-,Cartão,CCBTPM
 2313074441,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - HLYOZE,Operação,Não Mapeado,DIRETO,-,Cartão,UCQUNS
 2313075049,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - YVPOET,Operação,Não Mapeado,DIRETO,-,Cartão,UBYIHQ
 2313075615,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - EORIMS,Operação,Não Mapeado,DIRETO,-,Cartão,EPZOIB
@@ -1051,37 +974,47 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 2313875635,Pendente de Lançamento (Não Consta),Keli Santi,CONCUR - AG. GESTORA DA RANDON APROVAR O ID KGMQ/ sem dados gerenciais para lançar,Operação,Não Mapeado,DIRETO,-,Cartão,KCBPNI
 2313976825,Pendente de Lançamento (Não Consta),Keli Santi,AG. GESTORA DA RANDON APROVAR O ID KGTT,Operação,Não Mapeado,DIRETO,-,Cartão,IEVSWD
 2313988039,Pendente de Lançamento (Não Consta),Keli Santi,Concur,Operação,Não Mapeado,DIRETO,-,Cartão,KLGDJS
-2313988066,Pendente de Lançamento (Não Consta),Keli Santi,Concur,Operação,Não Mapeado,DIRETO,-,Cartão,DSYBHR
 2314006938,Pendente de Lançamento (Não Consta),Keli Santi,CONCUR - AG. GESTORA DA RANDON APROVAR O ID KGW6/ sem dados gerenciais para lançar,Operação,Não Mapeado,DIRETO,-,Cartão,ICKKQF
-2314074533,Pendente de Lançamento (Não Consta),Keli Santi,Concur,Operação,Não Mapeado,DIRETO,-,Cartão,SJZRPS
-2314075345,Pendente de Lançamento (Não Consta),Keli Santi,Concur,Operação,Não Mapeado,DIRETO,-,Cartão,DTYOSH
-2314100170,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20391128,MC,QIDVLU
-2314100184,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20388016,MC,KGISQM
-2314100271,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,MMIEHW
-2314100709,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20391492,MC,QGRHOP
-2314100717,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20391801,MC,HSOEII
-2314100770,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20389684,MC,KRLPOE
-2314100773,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20388875,MC,UQPACU
-2314100774,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20389286,MC,UOZUGX
-2314100933,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20391801,MC,HTDSHL
-2314101259,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20386172,MC,OTCFJQ
-2314101439,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20386159,MC,LQHEZS
-2314101926,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20393002,VI,YZLUHD
-2314102204,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20383117,MC,NIAYOU
-2314102210,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20370466,MC,YHBRCH
-2314108272,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,QAAWTX
-2314268109,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20411633,AX,FSZRYM
-2314280358,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,UEZGKL
-2314313608,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,20415298,MC,QNYXAR
-2314317277,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,OUIPBQ
-2314319291,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,KMFLYF
-2314324625,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,SOAVDQ
-2314415393,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,FREABF
-2314417986,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,HCJURW
-2314502640,Emitido e Lançado,Não Mapeado,,Operação,Não Mapeado,DIRETO,20447319,Faturado,CLTIAT
-2314519808,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,GAFUSG
+2314100170,Solicitado Conciliação,Não Mapeado,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Não Mapeado,DIRETO,20391128,Cartão,QIDVLU
+2314100184,Solicitado Conciliação,Não Mapeado,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Não Mapeado,DIRETO,20388016,Cartão Amex,KGISQM
+2314100271,Pendente de Lançamento (Não Consta),Keli Santi,Douglas Aurelio - Randon,Operação,Não Mapeado,DIRETO,-,Cartão,MMIEHW
+2314100709,Solicitado Conciliação,Não Mapeado,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Não Mapeado,DIRETO,20391492,Cartão,QGRHOP
+2314100717,Solicitado Conciliação,Não Mapeado,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Não Mapeado,DIRETO,20391801,Cartão Amex,HSOEII
+2314100770,Solicitado Conciliação,Não Mapeado,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Não Mapeado,DIRETO,20389684,Faturado,KRLPOE
+2314100773,Solicitado Conciliação,Não Mapeado,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Não Mapeado,DIRETO,20388875,Cartão,UQPACU
+2314100774,Solicitado Conciliação,Não Mapeado,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Não Mapeado,DIRETO,20389286,Cartão,UOZUGX
+2314100933,Solicitado Conciliação,Não Mapeado,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Não Mapeado,DIRETO,20391801,Cartão Amex,HTDSHL
+2314101259,Solicitado Conciliação,Não Mapeado,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Não Mapeado,DIRETO,20386172,Cartão,OTCFJQ
+2314101439,Solicitado Conciliação,Não Mapeado,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Não Mapeado,DIRETO,20386159,Cartão,LQHEZS
+2314101926,Solicitado Conciliação,Não Mapeado,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Não Mapeado,DIRETO,20393002,Cartão,YZLUHD
+2314102204,Solicitado Conciliação,Não Mapeado,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Não Mapeado,DIRETO,20383117,Cartão,NIAYOU
+2314102210,Solicitado Conciliação,Não Mapeado,Chamado aberto  390794 dia 03/11 ás 15:16,Operação,Não Mapeado,DIRETO,20370466,Cartão,YHBRCH
+2314108272,Pendente de Lançamento (Não Consta),Keli Santi,VALERIA CRISTINA DA CUNHA CARDOSO - Randon,Operação,Não Mapeado,DIRETO,-,Cartão,QAAWTX
+2314280358,Pendente de Lançamento (Não Consta),Keli Santi,PAULO SERGIO VANNUCCI - Randon,Operação,Não Mapeado,DIRETO,-,Cartão,UEZGKL
+2314317277,Pendente de Lançamento (Não Consta),Keli Santi,FERNANDO JOSE BADIM JUNIOR - Randon,Operação,Não Mapeado,DIRETO,-,Cartão,OUIPBQ
+2314319291,Pendente de Lançamento (Não Consta),Keli Santi,ELTON JUNIOR SARAIVA - Randon,Operação,Não Mapeado,DIRETO,-,Cartão,KMFLYF
+2314324625,Pendente de Lançamento (Não Consta),Keli Santi,PAULO SERGIO VANNUCCI - Randon,Operação,Não Mapeado,DIRETO,-,Cartão,SOAVDQ
+2314415393,Pendente de Lançamento (Não Consta),Keli Santi,FELIPE DA CUNHA E SILVA - Randon,Operação,Não Mapeado,DIRETO,-,Cartão,FREABF
+2314519808,Pendente de Lançamento (Não Consta),Keli Santi,CLARICE DO NASCIMENTO - EBD  - BTC POA,Operação,Não Mapeado,DIRETO,-,Cartão,GAFUSG
+2314646533,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,UEXXBK
+2314681865,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,CNXRTP
+2314712790,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,GMEWZZ
+2314766609,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,YAYVXV
+2314766613,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,YAYVXV
+2314805207,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,CFBWMU
+2314805208,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,CFBWMU
+2314807616,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,DRCLKL
+2314807644,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,QYORPB
+2314891582,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,LNCMGC
+2314896883,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,AGFFCX
+2314906906,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,NMJMTK
+2314924303,Pendente de Lançamento (Não Consta),Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão,WZWGOY
+2314935077,Divergência de Tarifa e Taxa e Receita e Cia Aérea,Não Mapeado,,Operação,Não Mapeado,DIRETO,20504015,Cartão Amex,KPHGNI
+2314935791,Divergência de Tarifa e Taxa e Receita e Cia Aérea,Não Mapeado,,Operação,Não Mapeado,DIRETO,20504014,Cartão Amex,KPWFPR
+2314960841,Divergência de Receita,Não Mapeado,,Operação,Não Mapeado,DIRETO,20512520,Cartão,DOGAEO
+2314976460,Divergência de Receita,Não Mapeado,,Operação,Não Mapeado,DIRETO,20512963,Cartão,IQLUTL
 4436998222,Emitido e Lançado,Jaime Schnaider,,Operação,Não Mapeado,DIRETO,-,Cash,MGNCBU
-[MGNCBU-1],Emitido e Lançado,Jaime Schnaider,"Lançado corretamente - GOL,  por favor verificar com a conciliação.",Operação,Não Mapeado,DIRETO,18307000,Faturado,EURBDY
+[MGNCBU-1],Emitido e Lançado,Jaime Schnaider,"Lançado corretamente - GOL,  por favor verificar com a conciliação.",Operação,Não Mapeado,DIRETO,18307000,Cash,MGNCBU
 4436998223,Emitido e Lançado,Jaime Schnaider,,Operação,Não Mapeado,DIRETO,-,Cash,MGNCBU
 4436998224,Emitido e Lançado,Jaime Schnaider,,Operação,Não Mapeado,DIRETO,-,Cash,MGNCBU
 4436998225,Emitido e Lançado,Jaime Schnaider,,Operação,Não Mapeado,DIRETO,-,Cash,MGNCBU
@@ -1090,14 +1023,65 @@ No aguardo.",Operação,Não Mapeado,DIRETO,18869951,Cartão,IMRLKT
 4443671734,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - SPWOGH,Operação,Não Mapeado,DIRETO,-,Cartão,WAEBAC
 4443671735,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - SPWOGH,Operação,Não Mapeado,DIRETO,-,Cartão,WAEBAC
 4443900879,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - IAJFNO,Operação,Não Mapeado,DIRETO,-,Cartão,IGKSXD
-4444026107,Emitido e Lançado,Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão Amex,GLAEDL
-4444026277,Emitido e Lançado,Não Mapeado,,Operação,Não Mapeado,DIRETO,-,Cartão Amex,IEAUSW
 4444377073,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - UOKLBR,Operação,Não Mapeado,DIRETO,-,Cartão,SXYKQK
 4444421522,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - OSOEUL,Operação,Não Mapeado,DIRETO,-,Cartão,LJMVTX
 4444425644,Pendente de Lançamento (Não Consta),Keli Santi,Emissão Concur- Rloc - AXRSHY,Operação,Não Mapeado,DIRETO,-,Cartão,IIGFOB
-2307926587,Pendente de Lançamento (Não Consta),Fabiano Souza,Gladston Rodrigues de Assis,Operação,Não Mapeado,DIRETO,-,Invoice,QMNWPY
-2307926588,Pendente de Lançamento (Não Consta),Fabiano Souza,Gladston Rodrigues de Assis,Operação,Não Mapeado,DIRETO,-,Invoice,QMNWPY
+2307926587,Solicitado Conciliação,Fabiano Souza,"Gladston Rodrigues de Assis - 
+
+Boa tarde, Prezados, 
+ 
+Tudo bem?
+ 
+A emissão abaixo foi feita, indevidamente, diretamente pela GOL em nosso OAC. A mesma não deverá ser contabilizada, pois não foi uma compra feita pela Maringá.
+ 
+A @Glauce já está em contato com eles para solicitar a retirada de nosso volume. 
+ 
+ 
+Localizador Gol: QMNWPY
+Bilhetes:
+2307926587
+2307926588
+ 
+Obrigada, 
+ 
+ 
+   
+CAMILA LINARES NUNES
+Gerente de Implantação, Processos, Qualidade e Suporte
+cnunes@maringaturismo.com.br
+55 11 3156-7622 | Ramal: 7622
+Avenida São Luís - 165 - 10º Andar – 01046 001 - São Paulo / SP
+plantao@maringaturismo.com.br • +55 11 3156-7600 • 0800-770 0750
+sac@maringaturismo.com.br",Operação,Não Mapeado,DIRETO,-,Invoice,QMNWPY
+2307926588,Solicitado Conciliação,Fabiano Souza,"Gladston Rodrigues de Assis - 
+
+Boa tarde, Prezados, 
+ 
+Tudo bem?
+ 
+A emissão abaixo foi feita, indevidamente, diretamente pela GOL em nosso OAC. A mesma não deverá ser contabilizada, pois não foi uma compra feita pela Maringá.
+ 
+A @Glauce já está em contato com eles para solicitar a retirada de nosso volume. 
+ 
+ 
+Localizador Gol: QMNWPY
+Bilhetes:
+2307926587
+2307926588
+ 
+Obrigada, 
+ 
+ 
+   
+CAMILA LINARES NUNES
+Gerente de Implantação, Processos, Qualidade e Suporte
+cnunes@maringaturismo.com.br
+55 11 3156-7622 | Ramal: 7622
+Avenida São Luís - 165 - 10º Andar – 01046 001 - São Paulo / SP
+plantao@maringaturismo.com.br • +55 11 3156-7600 • 0800-770 0750
+sac@maringaturismo.com.br",Operação,Não Mapeado,DIRETO,-,Invoice,QMNWPY
 2309448565,Já Lançado no ERP,Ivanete Bertasol,"Retorno da Camila: Não se trata de uma emissão da Maringá, porém foi utilizada a credencial webservices da Maringá, pela Lemontech para efetuar teste.
 
 Foi solicitado baixa manual na conciliação.",Operação,Não Mapeado,DIRETO,-,Invoice,ALTTVC
-4443258767,Pendente de Lançamento (Não Consta),Fabiano Souza,EMITIDO at BJPGQ BY bjp m1j - não encontado nenhum lançamento,Operação,Não Mapeado,DIRETO,-,Invoice,KLKSZV
+4443258767,Pendente de Lançamento (Não Consta),Fabiano Souza,"EMITIDO at BJPGQ BY bjp m1j - 
+Aguardando retorno da GOL com mais informações para identificar se é realmente uma emissão da Maringá",Operação,Não Mapeado,DIRETO,-,Invoice,KLKSZV

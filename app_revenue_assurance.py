@@ -77,7 +77,7 @@ def consolidar_emissor_consultor(row):
     return "-"
 
 def formatar_data_br(dt_val):
-    """Converte horários vindo do PostgreSQL/UTC para o fuso horário de Brasília (UTC-3)."""
+    """Converte horários para o fuso horário de Brasília (UTC-3)."""
     if pd.isna(dt_val) or dt_val is None:
         tz_br = datetime.timezone(datetime.timedelta(hours=-3))
         return datetime.datetime.now(tz_br).strftime("%d/%m/%Y às %H:%M:%S")
@@ -376,7 +376,7 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
         return False, f"Erro ao salvar tratativas: {e}", 0, 0, len(dados_lote)
 
 def mesclar_com_supabase(df_excel):
-    """Garante que as tratativas salvas no Supabase sobrescrevam os dados originais do Excel/View."""
+    """Garante que as tratativas salvas no Supabase sobrescrevam os dados originais do Excel."""
     if df_excel is None or df_excel.empty: return df_excel
     df_db = carregar_tratativas_db()
     if df_db.empty: return df_excel
@@ -754,7 +754,6 @@ def rotear_bases_mestra(df_master):
         if div in ["valores corretos", "sem divergência", "sem divergencia"] and not any(p in st for p in ["pendente", "erro", "divergência", "divergencia", "análise", "analise", "virtual"]):
             return True
         return False
-
     mask_ok = df_master.apply(e_conciliado_ok, axis=1)
     df_ok = df_master[mask_ok].copy()
     df_pend = df_master[~mask_ok].copy()
@@ -827,61 +826,60 @@ def rotear_bases_mestra(df_master):
     
     return df_falta, df_concur, df_erros, df_bo, df_eventos, df_lemon_virt, df_ok
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def carregar_bases():
+    """Prioriza o arquivo Dashboard_Revenue_Assurance_Consolidado.xlsx quando ele for atualizado no repositório."""
     dt_atualizacao = datetime.datetime.now()
     df_m = pd.DataFrame()
-    engine = get_db_engine()
     
-    if engine:
+    # 1. Carrega primeiro do arquivo Excel atualizado do repositório
+    if os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
+        fonte = ARQUIVO_DASHBOARD_PADRAO
         try:
-            query = "SELECT * FROM vw_conciliacao_mestra"
-            df_m = pd.read_sql(query, engine)
-            
-            if not df_m.empty:
-                if "Ultima_Alteracao" in df_m.columns and df_m["Ultima_Alteracao"].notna().any():
-                    dt_val = pd.to_datetime(df_m["Ultima_Alteracao"]).max()
-                    if pd.notna(dt_val):
-                        dt_atualizacao = dt_val
-        except Exception as e:
-            try:
-                query_base = "SELECT * FROM tb_conciliacao_base"
-                df_m = pd.read_sql(query_base, engine)
-            except Exception: pass
-
-    if df_m.empty:
-        if os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
-            fonte = ARQUIVO_DASHBOARD_PADRAO
-            try:
-                mod_time = os.path.getmtime(ARQUIVO_DASHBOARD_PADRAO)
-                dt_atualizacao = datetime.datetime.fromtimestamp(mod_time)
-            except Exception: pass
-            
-            try:
-                xls = pd.ExcelFile(fonte, engine="openpyxl")
-                frames = []
-                for sheet in xls.sheet_names:
-                    if sheet.startswith("99_") or sheet.startswith("98_"):
-                        df_sheet = pd.read_excel(xls, sheet_name=sheet)
+            mod_time = os.path.getmtime(ARQUIVO_DASHBOARD_PADRAO)
+            dt_atualizacao = datetime.datetime.fromtimestamp(mod_time)
+        except Exception: pass
+        
+        try:
+            xls = pd.ExcelFile(fonte, engine="openpyxl")
+            frames = []
+            for sheet in xls.sheet_names:
+                if sheet.startswith("99_") or sheet.startswith("98_") or sheet.startswith("97_") or "base" in sheet.lower() or "diverg" in sheet.lower():
+                    df_sheet = pd.read_excel(xls, sheet_name=sheet)
+                    if not df_sheet.empty:
                         frames.append(df_sheet)
-                if frames:
-                    df_m = pd.concat(frames, ignore_index=True)
-            except Exception: pass
+            if not frames and len(xls.sheet_names) > 0:
+                frames.append(pd.read_excel(xls, sheet_name=xls.sheet_names[0]))
+            if frames:
+                df_m = pd.concat(frames, ignore_index=True)
+        except Exception: pass
+
+    # 2. Fallback para Banco de Dados se o Excel não existir ou estiver vazio
+    if df_m.empty:
+        engine = get_db_engine()
+        if engine:
+            try:
+                query = "SELECT * FROM vw_conciliacao_mestra"
+                df_m = pd.read_sql(query, engine)
+                if not df_m.empty and "Ultima_Alteracao" in df_m.columns and df_m["Ultima_Alteracao"].notna().any():
+                    dt_val = pd.to_datetime(df_m["Ultima_Alteracao"]).max()
+                    if pd.notna(dt_val): dt_atualizacao = dt_val
+            except Exception:
+                try:
+                    df_m = pd.read_sql("SELECT * FROM tb_conciliacao_base", engine)
+                except Exception: pass
 
     if df_m.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), formatar_data_br(dt_atualizacao)
 
-    if "Bilhetes" in df_m.columns:
-        df_m["Bilhete_Clean"] = df_m["Bilhetes"].apply(sanitizar_bilhete)
-        df_m = df_m[df_m["Bilhete_Clean"].astype(str).str.len() > 3]
-        df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
-    elif "bilhete" in df_m.columns:
-        df_m["Bilhete_Clean"] = df_m["bilhete"].apply(sanitizar_bilhete)
+    col_bilhete = "Bilhetes" if "Bilhetes" in df_m.columns else ("bilhete" if "bilhete" in df_m.columns else None)
+    if col_bilhete:
+        df_m["Bilhete_Clean"] = df_m[col_bilhete].apply(sanitizar_bilhete)
         df_m = df_m[df_m["Bilhete_Clean"].astype(str).str.len() > 3]
         df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
         df_m["Bilhetes"] = df_m["Bilhete_Clean"]
 
-    # --- PONTO CRÍTICO CORRIGIDO: Mesclar com as tratativas salvas no banco de dados ---
+    # 3. Mescla com as tratativas salvas no Supabase/PostgreSQL (preserva anotações e status aprovados)
     df_m = padronizar_df(df_m)
     df_m = mesclar_com_supabase(df_m)
     
