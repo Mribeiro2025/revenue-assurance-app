@@ -93,26 +93,28 @@ def formatar_data_br(dt_val):
             return dt_val.strftime("%d/%m/%Y às %H:%M:%S")
         return str(dt_val)
 
-# Estilização CSS Enterprise Avançada
+# Estilização CSS Enterprise (Fontes e Enquadramentos sem Quebrar Ícones)
 st.markdown(
     """
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-        * { font-family: 'Plus Jakarta Sans', -apple-system, sans-serif !important; }
+        
+        .stApp, .stApp p, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6, .stApp label, .stApp button {
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+        }
+        
         .stApp { background-color: #f8fafc; }
         
         /* Banner Executivo com Glassmorphism */
         .main-header {
             background: linear-gradient(135deg, #001e4d 0%, #003366 50%, #0050b3 100%);
-            padding: 24px 32px;
+            padding: 22px 30px;
             border-radius: 16px;
             color: #ffffff;
-            margin-bottom: 24px;
+            margin-bottom: 22px;
             box-shadow: 0 10px 25px -5px rgba(0, 30, 77, 0.25);
-            position: relative;
-            overflow: hidden;
         }
-        .main-header h1 { color: #ffffff !important; margin: 0; font-size: 24px; font-weight: 700; }
+        .main-header h1 { color: #ffffff !important; margin: 0; font-size: 23px; font-weight: 700; }
         .main-header p { color: #b3d1ff !important; margin: 4px 0 0 0; font-size: 13px; }
         
         .fonte-pill {
@@ -185,7 +187,33 @@ st.markdown(
         .section-banner h3 { margin: 0; color: #001e4d; font-size: 18px; font-weight: 700; }
         .section-banner p { margin: 2px 0 0 0; color: #64748b; font-size: 12px; }
         
-        /* Cards & Métricas */
+        /* Enquadramento Perfeito dos Cartões de KPI (Sem corte de valores) */
+        div[data-testid="stMetric"] {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 12px 14px !important;
+            border-top: 4px solid #001e4d;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+            border-left: 1px solid #e2e8f0;
+            border-right: 1px solid #e2e8f0;
+            border-bottom: 1px solid #e2e8f0;
+            min-height: 95px;
+        }
+        div[data-testid="stMetricValue"] > div {
+            font-size: 15px !important;
+            font-weight: 700 !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+            color: #001e4d !important;
+            line-height: 1.2 !important;
+        }
+        div[data-testid="stMetricLabel"] > div {
+            font-size: 11px !important;
+            font-weight: 600 !important;
+            color: #64748b !important;
+            white-space: normal !important;
+        }
+        
         .chart-card {
             background-color: #ffffff;
             border-radius: 12px;
@@ -196,18 +224,7 @@ st.markdown(
         }
         .chart-card h5 { color: #001e4d; font-weight: 700; font-size: 15px; margin-top: 0; margin-bottom: 14px; }
         
-        div[data-testid="stMetric"] {
-            background: #ffffff;
-            border-radius: 10px;
-            padding: 14px 18px;
-            border-top: 4px solid #001e4d;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
-            border-left: 1px solid #e2e8f0;
-            border-right: 1px solid #e2e8f0;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        
-        /* Badges de Status do Sistema */
+        /* Badges de Status de Usuário */
         .status-badge-ativo { background-color: #dcfce7; color: #15803d; padding: 4px 12px; border-radius: 16px; font-weight: 700; font-size: 0.8rem; }
         .status-badge-pendente { background-color: #fef9c3; color: #a16207; padding: 4px 12px; border-radius: 16px; font-weight: 700; font-size: 0.8rem; }
         .status-badge-inativo { background-color: #ffe4e6; color: #be123c; padding: 4px 12px; border-radius: 16px; font-weight: 700; font-size: 0.8rem; }
@@ -236,7 +253,6 @@ def get_db_engine():
             
             try:
                 with engine.begin() as conn:
-                    # Tabela de Tratativas de Bilhetes
                     conn.execute(text("""
                         CREATE TABLE IF NOT EXISTS tratativas (
                             bilhete VARCHAR(255) PRIMARY KEY,
@@ -254,7 +270,6 @@ def get_db_engine():
                         ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS cliente VARCHAR(255);
                     """))
                     
-                    # Tabela de Usuários com Status e Controle Master
                     conn.execute(text("""
                         CREATE TABLE IF NOT EXISTS usuarios (
                             id SERIAL PRIMARY KEY,
@@ -268,7 +283,6 @@ def get_db_engine():
                         );
                     """))
                     
-                    # Tabela de Histórico de Log de Acessos
                     conn.execute(text("""
                         CREATE TABLE IF NOT EXISTS log_acessos (
                             id SERIAL PRIMARY KEY,
@@ -278,11 +292,10 @@ def get_db_engine():
                         );
                     """))
                     
-                    # Garante existencia dos usuarios masters padrão
                     conn.execute(text("""
                         INSERT INTO usuarios (usuario, senha, nome, perfil, status, aprovado_por)
-                        VALUES ('mribeiro', '14052013', 'Marcos Ribeiro', 'Master', 'Ativo', 'Sistema Inicial')
-                        ON CONFLICT (usuario) DO UPDATE SET perfil = 'Master', status = 'Ativo';
+                        VALUES ('mribeiro', '14052013', 'Marcos Ribeiro', 'Master', 'ATIVO', 'Sistema Inicial')
+                        ON CONFLICT (usuario) DO UPDATE SET perfil = 'Master', status = 'ATIVO';
                     """))
             except Exception: pass
             return engine
@@ -413,8 +426,7 @@ def mesclar_com_supabase(df_excel):
     
     df_excel = df_excel.copy()
     col_bilhete_excel = "Bilhetes" if "Bilhetes" in df_excel.columns else ("bilhete" if "bilhete" in df_excel.columns else None)
-    if not col_bilhete_excel:
-        return df_excel
+    if not col_bilhete_excel: return df_excel
         
     df_excel["Bilhete_Clean"] = df_excel[col_bilhete_excel].apply(sanitizar_bilhete)
     df_db["Bilhete_Clean"] = df_db["bilhete"].apply(sanitizar_bilhete)
@@ -537,7 +549,7 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     return buffer.getvalue()
 
 # ==============================================================================
-# 4. GESTÃO DE USUÁRIOS E AUTENTICAÇÃO COM LIBERAÇÃO MASTER
+# 4. GESTÃO DE USUÁRIOS E AUTENTICAÇÃO COM LIBERAÇÃO EXCLUSIVA MASTER
 # ==============================================================================
 def carregar_usuarios_supabase():
     dict_u = {}
@@ -556,7 +568,8 @@ def carregar_usuarios_supabase():
         except Exception: pass
     return dict_u
 
-def solicitar_novo_cadastro(usuario, senha, nome, perfil_desejado="Gestor"):
+def solicitar_novo_cadastro(usuario, senha, nome):
+    """Solicita novo acesso. Perfis públicos são restritos exclusivamente a 'Gestor' com aprovação pendente."""
     engine = get_db_engine()
     if not engine:
         return False, "Banco de dados indisponível no momento."
@@ -573,11 +586,11 @@ def solicitar_novo_cadastro(usuario, senha, nome, perfil_desejado="Gestor"):
             conn.execute(
                 text("""
                     INSERT INTO usuarios (usuario, senha, nome, perfil, status, aprovado_por)
-                    VALUES (:usuario, :senha, :nome, :perfil, 'PENDENTE_APROVACAO', 'Aguardando Master')
+                    VALUES (:usuario, :senha, :nome, 'Gestor', 'PENDENTE_APROVACAO', 'Aguardando Master')
                 """),
-                {"usuario": u_clean, "senha": str(senha).strip(), "nome": str(nome).strip(), "perfil": perfil_desejado}
+                {"usuario": u_clean, "senha": str(senha).strip(), "nome": str(nome).strip()}
             )
-            return True, "✅ Solicitação de cadastro registrada com sucesso! Seu acesso ficará ativo assim que for aprovado por um Administrador Master."
+            return True, "✅ Solicitação de cadastro enviada! O acesso de Gestor será liberado após aprovação do Administrador Master."
     except Exception as e:
         return False, f"Erro ao solicitar cadastro: {e}"
 
@@ -707,15 +720,14 @@ if not st.session_state["autenticado"]:
                 else: st.error("Usuário não encontrado.")
                 
         with tab_solicitar:
-            st.info("ℹ️ Novos acessos dependem da autorização e liberação do Administrador Master.")
+            st.info("ℹ️ As solicitações públicas registram acesso de Gestor pendente. O perfil Master é exclusivo e atribuído via governança interna.")
             with st.form("form_solicitar_acesso"):
                 cad_nome = st.text_input("Nome Completo:")
                 cad_user = st.text_input("Usuário Desejado (ex: nome.sobrenome):").strip().lower()
                 cad_pass = st.text_input("Definir Senha:", type="password")
-                cad_perfil = st.selectbox("Perfil Solicitado:", ["Gestor", "Master"])
                 btn_env_cad = st.form_submit_button("Enviar Solicitação de Acesso", type="primary")
                 if btn_env_cad:
-                    ok_cad, msg_cad = solicitar_novo_cadastro(cad_user, cad_pass, cad_nome, cad_perfil)
+                    ok_cad, msg_cad = solicitar_novo_cadastro(cad_user, cad_pass, cad_nome)
                     if ok_cad: st.success(msg_cad)
                     else: st.error(msg_cad)
     st.stop()
@@ -793,9 +805,11 @@ def padronizar_df(df):
     dias = (hoje - df_out["Dt_Parsed"]).dt.days
     df_out["Dias_Pendente"] = dias
     
+    # 6º PONTO: Aging com camada de Até 15 dias e 16 a 30 dias
     def calc_aging(d):
         if pd.isna(d): return "Sem Data"
-        if d <= 30: return "Até 30 dias"
+        if d <= 15: return "Até 15 dias"
+        elif d <= 30: return "16 a 30 dias"
         elif d <= 60: return "31 a 60 dias"
         elif d <= 90: return "61 a 90 dias"
         else: return "> 90 dias (Crítico)"
@@ -970,10 +984,11 @@ df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_
 df_todos_unificados = pd.concat([df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
 st.sidebar.title("✈️ Grupo Arbaitman")
-st.sidebar.caption("Revenue Assurance & Controladoria v5.2")
+st.sidebar.caption("Revenue Assurance & Controladoria v5.3")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 st.sidebar.info(f"🕒 **Última Atualização:**\n{dt_ultima_atualizacao_str}")
 
+# 1º PONTO: Expander com label limpa sem sobressair texto de ícone
 with st.sidebar.expander("🔑 Alterar Minha Senha"):
     with st.form("form_alterar_senha_sb"):
         pass_act = st.text_input("Senha Atual:", type="password", key="pass_act")
@@ -1029,7 +1044,7 @@ f_sem_div = aplicar_filtros(df_sem_div)
 df_todos_filtrados = pd.concat([f_falta, f_concur, f_erros, f_backoffice, f_eventos, f_lemon_virt, f_sem_div], ignore_index=True)
 
 # ==============================================================================
-# 7. HEADER EXECUTIVO & METRICAS RESUMIDAS
+# 7. HEADER EXECUTIVO & METRICAS RESUMIDAS (7º PONTO: ENQUADRAMENTO SEM CORTE)
 # ==============================================================================
 st.markdown(
     f"""
@@ -1080,10 +1095,10 @@ if e_master():
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO C-LEVEL MODERNIZADO (DONUT & AGING)
+# ABA 0: DASHBOARD EXECUTIVO C-LEVEL (INCLUI GRÁFICOS SOLICITADOS & AGING 15 DIAS)
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
-    st.markdown("<div class='section-banner'><h3>📊 Visão Financeira Global & Indicadores de Performance (FP&A)</h3><p>Resumo de alto nível para tomada de decisão com Two-Click Rule.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>📊 Visão Financeira Global & Indicadores de Performance (FP&A)</h3><p>Resumo de alto nível para tomada de decisão em tempo real.</p></div>", unsafe_allow_html=True)
     
     df_pendentes = pd.concat([f_falta, f_concur, f_erros, f_backoffice, f_eventos, f_lemon_virt], ignore_index=True)
     
@@ -1097,6 +1112,7 @@ with aba_sel[0]:
     receita_total_emitida = df_todos_filtrados["Receita Total Emitida"].sum() if not df_todos_filtrados.empty and "Receita Total Emitida" in df_todos_filtrados.columns else 0.0
     ticket_medio_pendente = (df_pendentes["Tarifa Total Emitida"].sum() / len(df_pendentes)) if not df_pendentes.empty else 0.0
     
+    # Cartões de Métricas Enquadrados sem Cortes
     k1, k2, k3, k4, k5, k6 = st.columns(6)
     k1.metric("Vol. Total Bilhetes", f"{tot_processados:,}")
     k2.metric("Taxa Conciliação", f"{taxa_concil:.1f}%")
@@ -1106,9 +1122,10 @@ with aba_sel[0]:
     k6.metric("Ticket Médio Pendente", f"R$ {ticket_medio_pendente:,.2f}")
     st.markdown("---")
     
+    # PRIMEIRA LINHA DE GRÁFICOS: DONUT + CIAS
     g1, g2 = st.columns(2)
     with g1:
-        st.markdown('<div class="chart-card"><h5>📊 Distribuição de Bilhetes Pendentes (Donut Chart)</h5>', unsafe_allow_html=True)
+        st.markdown('<div class="chart-card"><h5>📊 Distribuição de Pendências por Categoria</h5>', unsafe_allow_html=True)
         dados_abas = [
             {"Aba": "1. Falta Lançamento", "Quantidade": len(f_falta)},
             {"Aba": "2. Erro Concur 🚨", "Quantidade": len(f_concur)},
@@ -1134,7 +1151,7 @@ with aba_sel[0]:
                 text=f"<b>{tot_p_sum:,}</b><br><span style='font-size:12px;color:#64748B;'>Pendências</span>",
                 x=0.5, y=0.5, showarrow=False, font=dict(size=18, color="#001E4D")
             )
-            fig_pie.update_layout(height=340, margin=dict(l=10, r=10, t=10, b=10))
+            fig_pie.update_layout(height=320, margin=dict(l=10, r=10, t=10, b=10))
             st.plotly_chart(fig_pie, use_container_width=True)
         else: st.info("Sem pendências cadastradas.")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1144,18 +1161,51 @@ with aba_sel[0]:
         if not df_pendentes.empty:
             df_cia = df_pendentes["CIA"].value_counts().head(8).reset_index()
             df_cia.columns = ["Companhia", "Quantidade"]
-            fig_bar = px.bar(df_cia, x="Companhia", y="Quantidade", text="Quantidade", color_discrete_sequence=["#001E4D"])
-            fig_bar.update_traces(textposition='outside', texttemplate='%{value:,}', hovertemplate='<b>%{x}</b><br>Pendências: %{y:,}')
-            fig_bar.update_layout(height=340, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Qtd Bilhetes")
-            st.plotly_chart(fig_bar, use_container_width=True)
+            fig_bar_cia = px.bar(df_cia, x="Companhia", y="Quantidade", text="Quantidade", color_discrete_sequence=["#001E4D"])
+            fig_bar_cia.update_traces(textposition='outside', texttemplate='%{value:,}', hovertemplate='<b>%{x}</b><br>Pendências: %{y:,}')
+            fig_bar_cia.update_layout(height=320, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Qtd Bilhetes")
+            st.plotly_chart(fig_bar_cia, use_container_width=True)
         else: st.info("Sem pendências.")
         st.markdown('</div>', unsafe_allow_html=True)
+
+    # 2º PONTO: SEGUNDA LINHA DE GRÁFICOS: GRÁFICO POR GERENTE & 3º PONTO: QUANTIDADE DE BILHETES MENSAL
+    g3, g4 = st.columns(2)
+    with g3:
+        st.markdown('<div class="chart-card"><h5>👤 Pendências por Gerente Responsável</h5>', unsafe_allow_html=True)
+        if not df_pendentes.empty and "Área Resp. Operação" in df_pendentes.columns:
+            df_ger = df_pendentes["Área Resp. Operação"].value_counts().reset_index()
+            df_ger.columns = ["Gerente", "Quantidade"]
+            fig_bar_ger = px.bar(df_ger, y="Gerente", x="Quantidade", text="Quantidade", orientation="h", color_discrete_sequence=["#0050B3"])
+            fig_bar_ger.update_traces(textposition='outside', texttemplate='%{value:,}', hovertemplate='<b>%{y}</b><br>Pendências: %{x:,}')
+            fig_bar_ger.update_layout(height=320, margin=dict(l=10, r=10, t=20, b=10), xaxis_title="Qtd Bilhetes", yaxis_title="", yaxis=dict(autorange="reversed"))
+            st.plotly_chart(fig_bar_ger, use_container_width=True)
+        else: st.info("Sem dados de gerentes.")
+        st.markdown('</div>', unsafe_allow_html=True)
         
+    with g4:
+        st.markdown('<div class="chart-card"><h5>📅 Quantidade Mensal de Bilhetes Emitidos</h5>', unsafe_allow_html=True)
+        if not df_todos_filtrados.empty and "Dt_Parsed" in df_todos_filtrados.columns:
+            df_m_valid = df_todos_filtrados.dropna(subset=["Dt_Parsed"]).copy()
+            if not df_m_valid.empty:
+                df_m_valid["Mes_Ano"] = df_m_valid["Dt_Parsed"].dt.strftime("%Y-%m")
+                df_m_valid["Mes_Ano_Label"] = df_m_valid["Dt_Parsed"].dt.strftime("%b/%Y")
+                df_mensal = df_m_valid.groupby(["Mes_Ano", "Mes_Ano_Label"]).size().reset_index(name="Quantidade").sort_values("Mes_Ano")
+                
+                fig_mensal = px.bar(df_mensal, x="Mes_Ano_Label", y="Quantidade", text="Quantidade", color_discrete_sequence=["#10B981"])
+                fig_mensal.update_traces(textposition='outside', texttemplate='%{value:,}', hovertemplate='<b>%{x}</b><br>Volume: %{y:,} bilhetes')
+                fig_mensal.update_layout(height=320, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="Mês de Emissão", yaxis_title="Qtd Bilhetes")
+                st.plotly_chart(fig_mensal, use_container_width=True)
+            else: st.info("Datas de emissão não identificadas nas bases.")
+        else: st.info("Sem dados mensais.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # 6º PONTO: AGING REFORMULADO (CAMADAS: ATE 15 DIAS, 16 A 30 DIAS, ETC)
     st.markdown('<div class="chart-card"><h5>⏳ Aging / Curva de Envelhecimento das Pendências</h5>', unsafe_allow_html=True)
     if not df_pendentes.empty and "Faixa_Aging" in df_pendentes.columns:
         df_aging = df_pendentes["Faixa_Aging"].value_counts().reset_index()
         df_aging.columns = ["Faixa", "Quantidade"]
-        ordem_aging = ["Até 30 dias", "31 a 60 dias", "61 a 90 dias", "> 90 dias (Crítico)", "Sem Data"]
+        
+        ordem_aging = ["Até 15 dias", "16 a 30 dias", "31 a 60 dias", "61 a 90 dias", "> 90 dias (Crítico)", "Sem Data"]
         df_aging["Faixa"] = pd.Categorical(df_aging["Faixa"], categories=ordem_aging, ordered=True)
         df_aging = df_aging.sort_values("Faixa")
         
@@ -1163,7 +1213,14 @@ with aba_sel[0]:
         with g_ag1:
             fig_aging = px.bar(
                 df_aging, x="Faixa", y="Quantidade", text="Quantidade", color="Faixa",
-                color_discrete_map={"Até 30 dias": "#059669", "31 a 60 dias": "#0284C7", "61 a 90 dias": "#D97706", "> 90 dias (Crítico)": "#E11D48", "Sem Data": "#94A3B8"}
+                color_discrete_map={
+                    "Até 15 dias": "#10B981",
+                    "16 a 30 dias": "#059669",
+                    "31 a 60 dias": "#0284C7",
+                    "61 a 90 dias": "#D97706",
+                    "> 90 dias (Crítico)": "#E11D48",
+                    "Sem Data": "#94A3B8"
+                }
             )
             fig_aging.update_traces(textposition='outside', texttemplate='%{value:,}')
             fig_aging.update_layout(height=300, margin=dict(l=10, r=10, t=25, b=10), showlegend=False, xaxis_title="", yaxis_title="Qtd Bilhetes")
@@ -1343,20 +1400,47 @@ with aba_sel[7]:
     renderizar_tabela_tratativas(f_sem_div, "Bilhetes_Conciliados", "ok")
 
 # ------------------------------------------------------------------------------
-# ABAS DE GOVERNANÇA E GESTÃO EXCLUSIVAS DO MASTER
+# 5º PONTO: VISÃO COMPLETA E GESTÃO EXCLUSIVA DO MASTER
 # ------------------------------------------------------------------------------
 if e_master():
-    # GESTÃO DE ACESSOS E LIBERAÇÃO OBRIGATÓRIA MASTER
     with aba_sel[8]:
-        st.markdown("<div class='section-banner'><h3>⚙️ Gestão de Acessos & Aprovação de Usuários (Exclusivo Master)</h3><p>Controle de permissões, liberação de solicitações e auditoria de perfis.</p></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-banner'><h3>⚙️ Gestão de Acessos & Aprovação de Usuários (Exclusivo Master)</h3><p>Painel de governança restrito para Marcos Ribeiro / Administrador Master.</p></div>", unsafe_allow_html=True)
         
-        tab_aprov, tab_novo_m, tab_geral_usr = st.tabs([
+        tab_geral_usr, tab_aprov, tab_novo_m = st.tabs([
+            "👥 Quadro Geral de Usuários (Visão Completa)",
             "📋 Solicitações Pendentes de Aprovação",
-            "➕ Criar Usuário Diretamente",
-            "👥 Quadro Geral de Usuários Cadastrados"
+            "➕ Criar Usuário Diretamente (Master/Gestor)"
         ])
         
-        # 1. Novas Solicitações Aguardando Aprovação
+        # 1. Visão Completa de Todos os Usuários
+        with tab_geral_usr:
+            st.subheader("Quadro Geral de Contas & Frequência de Acesso")
+            df_all, _ = obter_relatorio_acessos_db()
+            if not df_all.empty:
+                # Exibição estilizada com status
+                st.dataframe(df_all, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                st.subheader("✏️ Alterar Permissões, Perfil ou Inativar Usuário")
+                with st.form("form_edit_existing_user"):
+                    c_u1, c_u2, c_u3 = st.columns(3)
+                    with c_u1:
+                        usr_target = st.selectbox("Selecione a conta de usuário:", options=df_all["usuario"].tolist())
+                    with c_u2:
+                        u_st_new = st.selectbox("Novo Status:", ["ATIVO", "INATIVO", "PENDENTE_APROVACAO"])
+                    with c_u3:
+                        u_pf_new = st.selectbox("Novo Perfil:", ["Gestor", "Master"])
+                    btn_up_usr = st.form_submit_button("Atualizar Acesso de Usuário", type="primary")
+                    if btn_up_usr:
+                        ok_u, msg_u = gerenciar_status_usuario_master(usr_target, u_st_new, u_pf_new, st.session_state['usuario_atual'])
+                        if ok_u:
+                            st.success(msg_u)
+                            time.sleep(1)
+                            st.rerun()
+                        else: st.error(msg_u)
+            else: st.info("Nenhum usuário cadastrado.")
+
+        # 2. Solicitações Pendentes
         with tab_aprov:
             st.subheader("Usuários Aguardando Liberação do Master")
             df_users_all, _ = obter_relatorio_acessos_db()
@@ -1371,16 +1455,16 @@ if e_master():
                         u_perf = u_row["perfil"]
                         u_criado = u_row.get("criado_em", "Recente")
                         
-                        with st.expander(f"👤 {u_nome} (@{u_usr}) - Perfil Solicitado: {u_perf} | Solicitado em: {u_criado}"):
+                        with st.expander(f"👤 {u_nome} (@{u_usr}) - Solicitado em: {u_criado}"):
                             c_p1, c_p2, c_p3 = st.columns([2, 2, 2])
                             with c_p1:
-                                perf_def = st.selectbox("Definir Nível de Perfil:", ["Gestor", "Master"], index=0 if u_perf == "Gestor" else 1, key=f"sel_perf_{u_usr}")
+                                perf_def = st.selectbox("Atribuir Perfil:", ["Gestor", "Master"], index=0 if u_perf == "Gestor" else 1, key=f"sel_perf_{u_usr}")
                             with c_p2:
-                                decisao_st = st.selectbox("Decisão de Acesso:", ["Ativo (Aprovar)", "Inativo (Rejeitar)", "Manter Pendente"], index=0, key=f"sel_dec_{u_usr}")
+                                decisao_st = st.selectbox("Decisão do Master:", ["ATIVO (Aprovar)", "INATIVO (Rejeitar)", "PENDENTE_APROVACAO"], index=0, key=f"sel_dec_{u_usr}")
                             with c_p3:
                                 st.write("")
-                                if st.button("Aplicar Decisão", key=f"btn_aprov_{u_usr}", type="primary"):
-                                    st_map = {"Ativo (Aprovar)": "ATIVO", "Inativo (Rejeitar)": "INATIVO", "Manter Pendente": "PENDENTE_APROVACAO"}
+                                if st.button("Confirmar Liberação", key=f"btn_aprov_{u_usr}", type="primary"):
+                                    st_map = {"ATIVO (Aprovar)": "ATIVO", "INATIVO (Rejeitar)": "INATIVO", "PENDENTE_APROVACAO": "PENDENTE_APROVACAO"}
                                     st_final = st_map[decisao_st]
                                     if st_final != "PENDENTE_APROVACAO":
                                         ok_g, msg_g = gerenciar_status_usuario_master(u_usr, st_final, perf_def, st.session_state['usuario_atual'])
@@ -1392,15 +1476,15 @@ if e_master():
                 else: st.success("🎉 Nenhuma solicitação de acesso pendente no momento.")
             else: st.info("Nenhum usuário cadastrado.")
 
-        # 2. Criar Usuário Diretamente pelo Master
+        # 3. Criar Usuário Diretamente pelo Master
         with tab_novo_m:
-            st.subheader("Cadastrar Novo Usuário Já Aprovado")
+            st.subheader("Cadastrar Novo Usuário Diretamente (Aprovação Imediata)")
             with st.form("form_master_add_user"):
                 m_nome = st.text_input("Nome Completo:")
                 m_user = st.text_input("Usuário (Login):").strip().lower()
                 m_pass = st.text_input("Senha Inicial:", type="password")
                 m_perf = st.selectbox("Perfil de Acesso:", ["Gestor", "Master"])
-                btn_m_create = st.form_submit_button("Criar Usuário Ativo", type="primary")
+                btn_m_create = st.form_submit_button("Criar e Ativar Usuário", type="primary")
                 
                 if btn_m_create:
                     engine = get_db_engine()
@@ -1420,31 +1504,9 @@ if e_master():
                             st.rerun()
                         except Exception as e: st.error(f"Erro ao criar usuário: {e}")
 
-        # 3. Quadro Geral de Usuários
-        with tab_geral_usr:
-            st.subheader("Quadro Geral de Contas & Frequência de Acesso")
-            df_all, _ = obter_relatorio_acessos_db()
-            if not df_all.empty:
-                st.dataframe(df_all, use_container_width=True, hide_index=True)
-                
-                st.markdown("---")
-                st.subheader("✏️ Alterar Status/Perfil de Conta Existente")
-                with st.form("form_edit_existing_user"):
-                    usr_target = st.selectbox("Selecione a conta de usuário:", options=df_all["usuario"].tolist())
-                    u_st_new = st.selectbox("Novo Status:", ["ATIVO", "INATIVO", "PENDENTE_APROVACAO"])
-                    u_pf_new = st.selectbox("Novo Perfil:", ["Gestor", "Master"])
-                    btn_up_usr = st.form_submit_button("Atualizar Cadastro")
-                    if btn_up_usr:
-                        ok_u, msg_u = gerenciar_status_usuario_master(usr_target, u_st_new, u_pf_new, st.session_state['usuario_atual'])
-                        if ok_u:
-                            st.success(msg_u)
-                            time.sleep(1)
-                            st.rerun()
-                        else: st.error(msg_u)
-
     # LOG DE AUDITORIA DE ACESSOS
     with aba_sel[9]:
-        st.markdown("<div class='section-banner'><h3>📜 Log de Histórico de Auditoria (Audit Trail)</h3><p>Trilha de acessos e modificações de login dos usuários no portal.</p></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-banner'><h3>📜 Log de Histórico de Auditoria (Audit Trail)</h3><p>Trilha de acessos e modificações dos usuários no portal.</p></div>", unsafe_allow_html=True)
         _, df_logs_det = obter_relatorio_acessos_db()
         if not df_logs_det.empty:
             st.dataframe(df_logs_det, use_container_width=True, hide_index=True)
