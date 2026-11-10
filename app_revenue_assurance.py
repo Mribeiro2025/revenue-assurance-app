@@ -1,17 +1,26 @@
 import datetime
 import io
-import json
 import os
 import re
 import time
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from sqlalchemy import create_engine, text
+
+# --- NOVOS IMPORTS SAAS C-LEVEL ---
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO DA PÁGINA & DESIGN SYSTEM ENTERPRISE (GLASSMORPHISM)
@@ -52,6 +61,22 @@ DEPARA_GERENTES = {
     "CENTRAL DE EVENTOS": "Central de Eventos", "EVENTOS": "Central de Eventos",
     "EMISSOR VIRTUAL": "Emissor Virtual Lemontech", "EMISSOR VIRTUAL LEMONTECH": "Emissor Virtual Lemontech",
     "LEMONTECH VIRTUAL": "Emissor Virtual Lemontech", "VIRTUAL LEMONTECH": "Emissor Virtual Lemontech", "LEMONTECH": "Emissor Virtual Lemontech"
+}
+
+DEPARA_EMAILS_GERENTES = {
+    "Fabiano Souza": "fabiano.souza@maringaturismo.com.br",
+    "Guilherme Silva": "guilherme.silva@maringaturismo.com.br",
+    "Ivanete Bertasol": "ivanete.bertasol@maringaturismo.com.br",
+    "Keli Santi": "keli.santi@maringaturismo.com.br",
+    "Marcelo Pereira": "marcelo.pereira@maringaturismo.com.br",
+    "Rosangela Pallu": "rosangela.pallu@maringaturismo.com.br",
+    "Jaime Schnaider": "jaime.schnaider@maringaturismo.com.br",
+    "Silvana Celani": "silvana.celani@maringaturismo.com.br",
+    "Katia Martins": "katia.martins@maringaturismo.com.br",
+    "João Paulo": "joao.paulo@maringaturismo.com.br",
+    "Suporte Backoffice": "backoffice@maringaturismo.com.br",
+    "Central de Eventos": "eventos@maringaturismo.com.br",
+    "Emissor Virtual Lemontech": "auditoria.ti@maringaturismo.com.br"
 }
 
 def padronizar_nome_gerente(nome_raw):
@@ -187,7 +212,7 @@ st.markdown(
         .section-banner h3 { margin: 0; color: #001e4d; font-size: 18px; font-weight: 700; }
         .section-banner p { margin: 2px 0 0 0; color: #64748b; font-size: 12px; }
         
-        /* Enquadramento Perfeito dos Cartões de KPI (Sem corte de valores) */
+        /* Enquadramento Perfeito dos Cartões de KPI */
         div[data-testid="stMetric"] {
             background: #ffffff;
             border-radius: 10px;
@@ -223,11 +248,6 @@ st.markdown(
             margin-bottom: 20px;
         }
         .chart-card h5 { color: #001e4d; font-weight: 700; font-size: 15px; margin-top: 0; margin-bottom: 14px; }
-        
-        /* Badges de Status de Usuário */
-        .status-badge-ativo { background-color: #dcfce7; color: #15803d; padding: 4px 12px; border-radius: 16px; font-weight: 700; font-size: 0.8rem; }
-        .status-badge-pendente { background-color: #fef9c3; color: #a16207; padding: 4px 12px; border-radius: 16px; font-weight: 700; font-size: 0.8rem; }
-        .status-badge-inativo { background-color: #ffe4e6; color: #be123c; padding: 4px 12px; border-radius: 16px; font-weight: 700; font-size: 0.8rem; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -457,7 +477,7 @@ def mesclar_com_supabase(df_excel):
     return df_merged
 
 # ==============================================================================
-# 3. EXPORTAÇÃO EXECUTIVA PARA EXCEL (OPENPYXL)
+# 3. EXPORTAÇÃO EXECUTIVA PARA EXCEL (OPENPYXL) E PDF (REPORTLAB)
 # ==============================================================================
 def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"):
     buffer = io.BytesIO()
@@ -548,6 +568,110 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     buffer.seek(0)
     return buffer.getvalue()
 
+def gerar_dossie_pdf_executivo(df_pendentes, tot_processados, taxa_concil, receita_total, dt_atualizacao):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36
+    )
+    story = []
+    styles = getSampleStyleSheet()
+    
+    style_title = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=18, textColor=colors.HexColor('#001E4D'), leading=22)
+    style_sub = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontName='Helvetica', fontSize=10, textColor=colors.HexColor('#64748B'), leading=14)
+    style_h2 = ParagraphStyle('H2Style', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=13, textColor=colors.HexColor('#0050B3'), leading=16)
+
+    story.append(Paragraph("✈️ Grupo Arbaitman — Dossiê Executivo de Revenue Assurance", style_title))
+    story.append(Paragraph(f"Relatório Consolidado de Pendências Aéreas | Emissão: {datetime.datetime.now().strftime('%d/%m/%Y às %H:%M:%S')} | Fonte: {dt_atualizacao}", style_sub))
+    story.append(Spacer(1, 15))
+
+    kpi_data = [
+        ["Total Processado", "Taxa Conciliação", "Pendências Ativas", "Receita Emitida"],
+        [f"{tot_processados:,}", f"{taxa_concil:.1f}%", f"{len(df_pendentes):,}", f"R$ {receita_total:,.2f}"]
+    ]
+    t_kpi = Table(kpi_data, colWidths=[130, 130, 130, 150])
+    t_kpi.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001E4D')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#F1F5F9')),
+        ('TEXTCOLOR', (0, 1), (-1, 1), colors.HexColor('#001E4D')),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    story.append(t_kpi)
+    story.append(Spacer(1, 20))
+
+    story.append(Paragraph("📊 Resumo de Pendências por Gerente Responsável", style_h2))
+    story.append(Spacer(1, 8))
+    
+    if not df_pendentes.empty and "Área Resp. Operação" in df_pendentes.columns:
+        df_g = df_pendentes.groupby("Área Resp. Operação").agg(
+            Qtd=('Bilhetes', 'count'),
+            Valor=('Tarifa Total Emitida', 'sum')
+        ).reset_index().sort_values('Qtd', ascending=False).head(8)
+        
+        ger_data = [["Gerente / Área", "Qtd Bilhetes Pendentes", "Volume Financeiro (Tarifa)"]]
+        for _, r in df_g.iterrows():
+            ger_data.append([str(r["Área Resp. Operação"]), f"{r['Qtd']:,}", f"R$ {r['Valor']:,.2f}"])
+            
+        t_ger = Table(ger_data, colWidths=[240, 140, 160])
+        t_ger.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0050B3')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        story.append(t_ger)
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+def enviar_email_relatorio(smtp_config, destinatario_email, gerente_nome, buffer_excel, total_pendencias):
+    msg = MIMEMultipart()
+    msg['From'] = smtp_config['sender_email']
+    msg['To'] = destinatario_email
+    msg['Subject'] = f"✈️ [Grupo Arbaitman] Pendências de Conciliação Aérea — {gerente_nome} ({datetime.date.today().strftime('%d/%m/%Y')})"
+
+    corpo_html = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; color: #333333;">
+            <div style="background-color: #001E4D; color: #ffffff; padding: 15px 20px; border-radius: 8px;">
+                <h2>Grupo Arbaitman — Controladoria & Revenue Assurance</h2>
+            </div>
+            <p>Olá, <b>{gerente_nome}</b>,</p>
+            <p>Segue em anexo o relatório individualizado atualizado das pendências de conciliação sob sua gestão.</p>
+            <ul>
+                <li><b>Total de Bilhetes Pendentes:</b> {total_pendencias:,}</li>
+                <li><b>Data do Extrato:</b> {datetime.date.today().strftime('%d/%m/%Y')}</li>
+            </ul>
+            <p>Por favor, verifique as tratativas no portal ou atualize o arquivo retornado.</p>
+            <br>
+            <p>Atenciosamente,<br><b>Auditoria & FP&A — Grupo Arbaitman</b></p>
+        </body>
+    </html>
+    """
+    msg.attach(MIMEText(corpo_html, 'html'))
+
+    filename = f"Relatorio_Pendencias_{gerente_nome.replace(' ', '_')}_{datetime.date.today().strftime('%Y%m%d')}.xlsx"
+    part = MIMEApplication(buffer_excel, Name=filename)
+    part['Content-Disposition'] = f'attachment; filename="{filename}"'
+    msg.attach(part)
+
+    server = smtplib.SMTP(smtp_config['server'], smtp_config['port'])
+    server.starttls()
+    server.login(smtp_config['sender_email'], smtp_config['password'])
+    server.sendmail(smtp_config['sender_email'], destinatario_email, msg.as_string())
+    server.quit()
+
 # ==============================================================================
 # 4. GESTÃO DE USUÁRIOS E AUTENTICAÇÃO COM LIBERAÇÃO EXCLUSIVA MASTER
 # ==============================================================================
@@ -569,7 +693,6 @@ def carregar_usuarios_supabase():
     return dict_u
 
 def solicitar_novo_cadastro(usuario, senha, nome):
-    """Solicita novo acesso. Perfis públicos são restritos exclusivamente a 'Gestor' com aprovação pendente."""
     engine = get_db_engine()
     if not engine:
         return False, "Banco de dados indisponível no momento."
@@ -636,7 +759,6 @@ def alterar_senha_usuario(usuario_id, senha_atual, nova_senha):
     except Exception as e:
         return False, f"Erro ao atualizar senha no banco: {e}"
 
-# Gerenciamento de Sessão Streamlit
 if "autenticado" not in st.session_state: st.session_state["autenticado"] = False
 if "usuario_atual" not in st.session_state: st.session_state["usuario_atual"] = None
 if "perfil_atual" not in st.session_state: st.session_state["perfil_atual"] = None
@@ -678,7 +800,6 @@ def e_master():
     perfil = st.session_state.get("perfil_atual", "")
     return u_id in ["mribeiro", "fellipe", "ffernandes"] or perfil in ["Master", "Compliance"]
 
-# TELA DE LOGIN E SOLICITAÇÃO DE NOVO CADASTRO
 if not st.session_state["autenticado"]:
     col_l1, col_l2, col_l3 = st.columns([1, 1.4, 1])
     with col_l2:
@@ -805,7 +926,6 @@ def padronizar_df(df):
     dias = (hoje - df_out["Dt_Parsed"]).dt.days
     df_out["Dias_Pendente"] = dias
     
-    # 6º PONTO: Aging com camada de Até 15 dias e 16 a 30 dias
     def calc_aging(d):
         if pd.isna(d): return "Sem Data"
         if d <= 15: return "Até 15 dias"
@@ -868,7 +988,6 @@ def rotear_bases_mestra(df_master):
     df_ok = df_master[mask_ok].copy()
     df_pend = df_master[~mask_ok].copy()
     
-    # 2. Concur
     def e_concur(r):
         obs_val = str(r.get("Obs. Operação", "")).lower()
         st_val = str(r.get("Status_Geral", "")).lower()
@@ -878,7 +997,6 @@ def rotear_bases_mestra(df_master):
     df_concur = df_pend[mask_concur].copy()
     df_rest = df_pend[~mask_concur].copy()
     
-    # 3. Emissor Virtual Lemontech
     def e_emissor_virtual_lemon(r):
         st_val = str(r.get("Status_Geral", "")).lower().strip()
         obs_val = str(r.get("Obs. Operação", "")).lower().strip()
@@ -890,7 +1008,6 @@ def rotear_bases_mestra(df_master):
     df_lemon_virt = df_rest[mask_lemon].copy()
     df_rest = df_rest[~mask_lemon].copy()
     
-    # 4. Suporte Backoffice
     def e_suporte_backoffice(r):
         ar_val = str(r.get("Área Resp. Operação", "")).lower()
         ger_val = str(r.get("Gerentes", "")).lower()
@@ -901,12 +1018,10 @@ def rotear_bases_mestra(df_master):
     df_bo = df_rest[mask_bo].copy()
     df_rest = df_rest[~mask_bo].copy()
     
-    # 5. Central de Eventos
     mask_evt = df_rest.apply(lambda r: "eventos" in str(r.get("Área Resp. Operação", "")).lower() or "eventos" in str(r.get("Gerentes", "")).lower(), axis=1)
     df_eventos = df_rest[mask_evt].copy()
     df_rest = df_rest[~mask_evt].copy()
     
-    # 6. Falta de Lançamento vs Erros de Valores
     mask_falta = df_rest.apply(lambda r: "falta de lançamento" in str(r.get("Status_Geral", "")).lower() or "não consta" in str(r.get("Status_Geral", "")).lower() or str(r.get("Status_Geral", "")).lower() in ["-", "", "none"], axis=1)
     df_falta = df_rest[mask_falta].copy()
     df_erros = df_rest[~mask_falta].copy()
@@ -946,7 +1061,6 @@ def carregar_bases():
             if frames:
                 df_m = pd.concat(frames, ignore_index=True)
         except Exception: pass
-
     if df_m.empty:
         engine = get_db_engine()
         if engine:
@@ -960,7 +1074,6 @@ def carregar_bases():
                 try:
                     df_m = pd.read_sql("SELECT * FROM tb_conciliacao_base", engine)
                 except Exception: pass
-
     if df_m.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), formatar_data_br(dt_atualizacao)
         
@@ -988,7 +1101,6 @@ st.sidebar.caption("Revenue Assurance & Controladoria v5.3")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 st.sidebar.info(f"🕒 **Última Atualização:**\n{dt_ultima_atualizacao_str}")
 
-# 1º PONTO: Expander com label limpa sem sobressair texto de ícone
 with st.sidebar.expander("🔑 Alterar Minha Senha"):
     with st.form("form_alterar_senha_sb"):
         pass_act = st.text_input("Senha Atual:", type="password", key="pass_act")
@@ -1044,7 +1156,7 @@ f_sem_div = aplicar_filtros(df_sem_div)
 df_todos_filtrados = pd.concat([f_falta, f_concur, f_erros, f_backoffice, f_eventos, f_lemon_virt, f_sem_div], ignore_index=True)
 
 # ==============================================================================
-# 7. HEADER EXECUTIVO & METRICAS RESUMIDAS (7º PONTO: ENQUADRAMENTO SEM CORTE)
+# 7. HEADER EXECUTIVO & METRICAS RESUMIDAS
 # ==============================================================================
 st.markdown(
     f"""
@@ -1089,13 +1201,14 @@ abas = [
     "🤖 6. Emissor Virtual Lemontech",
     "✅ 7. Bilhetes Solicitados Conciliação"
 ]
+
 if e_master():
-    abas.extend(["⚙️ Gestão de Acessos", "📜 Log de Histórico", "📥 Carga em Lote Avançada"])
+    abas.extend(["⚙️ Gestão de Acessos", "📜 Log de Histórico", "📥 Carga em Lote Avançada", "📧 Disparo de E-mails"])
     
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO C-LEVEL (INCLUI GRÁFICOS SOLICITADOS & AGING 15 DIAS)
+# ABA 0: DASHBOARD EXECUTIVO C-LEVEL 
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
     st.markdown("<div class='section-banner'><h3>📊 Visão Financeira Global & Indicadores de Performance (FP&A)</h3><p>Resumo de alto nível para tomada de decisão em tempo real.</p></div>", unsafe_allow_html=True)
@@ -1112,7 +1225,6 @@ with aba_sel[0]:
     receita_total_emitida = df_todos_filtrados["Receita Total Emitida"].sum() if not df_todos_filtrados.empty and "Receita Total Emitida" in df_todos_filtrados.columns else 0.0
     ticket_medio_pendente = (df_pendentes["Tarifa Total Emitida"].sum() / len(df_pendentes)) if not df_pendentes.empty else 0.0
     
-    # Cartões de Métricas Enquadrados sem Cortes
     k1, k2, k3, k4, k5, k6 = st.columns(6)
     k1.metric("Vol. Total Bilhetes", f"{tot_processados:,}")
     k2.metric("Taxa Conciliação", f"{taxa_concil:.1f}%")
@@ -1120,9 +1232,19 @@ with aba_sel[0]:
     k4.metric("Taxa Total Emitida", f"R$ {taxa_total_emitida:,.2f}")
     k5.metric("Receita Total Emitida", f"R$ {receita_total_emitida:,.2f}")
     k6.metric("Ticket Médio Pendente", f"R$ {ticket_medio_pendente:,.2f}")
+    
+    # [NOVO]: BOTÃO DE DOSSIÊ EM PDF AQUI
+    st.write("")
+    pdf_data = gerar_dossie_pdf_executivo(df_pendentes, tot_processados, taxa_concil, receita_total_emitida, dt_ultima_atualizacao_str)
+    st.download_button(
+        label="📄 Baixar Dossiê Executivo PDF",
+        data=pdf_data,
+        file_name=f"Dossie_Executivo_Revenue_Assurance_{datetime.date.today().strftime('%Y%m%d')}.pdf",
+        mime="application/pdf",
+        type="primary"
+    )
     st.markdown("---")
     
-    # PRIMEIRA LINHA DE GRÁFICOS: DONUT + CIAS
     g1, g2 = st.columns(2)
     with g1:
         st.markdown('<div class="chart-card"><h5>📊 Distribuição de Pendências por Categoria</h5>', unsafe_allow_html=True)
@@ -1168,7 +1290,6 @@ with aba_sel[0]:
         else: st.info("Sem pendências.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # 2º PONTO: SEGUNDA LINHA DE GRÁFICOS: GRÁFICO POR GERENTE & 3º PONTO: QUANTIDADE DE BILHETES MENSAL
     g3, g4 = st.columns(2)
     with g3:
         st.markdown('<div class="chart-card"><h5>👤 Pendências por Gerente Responsável</h5>', unsafe_allow_html=True)
@@ -1199,7 +1320,6 @@ with aba_sel[0]:
         else: st.info("Sem dados mensais.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # 6º PONTO: AGING REFORMULADO (CAMADAS: ATE 15 DIAS, 16 A 30 DIAS, ETC)
     st.markdown('<div class="chart-card"><h5>⏳ Aging / Curva de Envelhecimento das Pendências</h5>', unsafe_allow_html=True)
     if not df_pendentes.empty and "Faixa_Aging" in df_pendentes.columns:
         df_aging = df_pendentes["Faixa_Aging"].value_counts().reset_index()
@@ -1237,7 +1357,7 @@ with aba_sel[0]:
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
-# TABELAS INTERATIVAS & TRATATIVAS EM LOTE
+# TABELAS INTERATIVAS (ST-AGGRID) & TRATATIVAS EM LOTE
 # ------------------------------------------------------------------------------
 def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
     if df_tab.empty:
@@ -1277,10 +1397,40 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
         df_exib = df_exib[m_s]
         
     st.write(f"**Registros Visíveis:** {len(df_exib):,}")
-    bilhet_sel = st.multiselect("Selecione Bilhetes para Atualização em Lote:", options=df_exib["Bilhetes"].tolist(), key=f"ms_{key_pfx}")
     
-    if bilhet_sel:
-        df_sel = df_exib[df_exib["Bilhetes"].isin(bilhet_sel)]
+    # --- [NOVO] TABELAS INTERATIVAS AGGRID ---
+    gb = GridOptionsBuilder.from_dataframe(df_exib)
+    gb.configure_selection(selection_mode="multiple", use_checkbox=True, header_checkbox=True)
+    gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=15)
+    gb.configure_default_column(resizable=True, filter=True, sortable=True)
+    
+    currency_cols = [c for c in ["A vista", "A credito", "Tarifa Total Emitida", "Tarifa_Sistema", "Dif_Tarifa", "Taxa", "Taxa_Sistema", "Dif_Taxa", "Comissão", "Taxa DU", "Incentivo", "Receita Total Emitida", "Receita_Sistema", "Dif_Receita"] if c in df_exib.columns]
+    for c in currency_cols:
+        gb.configure_column(c, type=["numericColumn", "numberColumnFilter"], valueFormatter="javascript: Math.floor(x).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})")
+
+    grid_options = gb.build()
+
+    grid_response = AgGrid(
+        df_exib,
+        gridOptions=grid_options,
+        update_mode=GridUpdateMode.SELECTION_CHANGED,
+        theme="alpine",
+        height=450,
+        fit_columns_on_grid_load=False,
+        allow_unsafe_jscode=True,
+        key=f"grid_{key_pfx}"
+    )
+
+    # Coleta de Bilhetes Selecionados na Grid
+    selected_rows = grid_response.get("selected_rows", [])
+    if selected_rows is None:
+        df_sel = pd.DataFrame()
+    elif isinstance(selected_rows, pd.DataFrame):
+        df_sel = selected_rows
+    else:
+        df_sel = pd.DataFrame(selected_rows)
+
+    if not df_sel.empty:
         st.info(f"🎯 **{len(df_sel)} bilhete(s) selecionado(s)** para atualização de tratativa.")
         
         is_single = len(df_sel) == 1
@@ -1353,20 +1503,6 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
                     st.cache_data.clear()
                     st.rerun()
                 else: st.error(msg)
-                
-    currency_cols_app = [c for c in ["A vista", "A credito", "Tarifa Total Emitida", "Taxa", "Comissão", "Taxa DU", "Incentivo", "Receita Total Emitida", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita"] if c in df_exib.columns]
-    
-    def formatar_moeda_br(val):
-        if pd.isna(val) or val is None or str(val).strip() in ["-", "", "nan", "None", "<na>"]: return "-"
-        try:
-            v = float(val)
-            return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        except (ValueError, TypeError): return str(val)
-        
-    df_styled = df_exib.style
-    if currency_cols_app:
-        df_styled = df_styled.format(formatar_moeda_br, subset=currency_cols_app)
-    st.dataframe(df_styled, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------------------------
 # CONTEÚDO DAS ABAS OPERACIONAIS 1 A 7
@@ -1374,33 +1510,27 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
 with aba_sel[1]:
     st.markdown("<div class='section-banner'><h3>📋 1. Falta de Lançamento no ERP (Maringá)</h3><p>Emissões pendentes de lançamento no ERP Benner.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_falta, "Falta_Lancamento", "fl")
-
 with aba_sel[2]:
     st.markdown("<div class='section-banner'><h3>🚨 2. Erro de Integração Concur</h3><p>Falhas de integração com a plataforma Concur.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_concur, "Erro_Concur", "conc")
-
 with aba_sel[3]:
     st.markdown("<div class='section-banner'><h3>⚠️ 3. Erros de Valores & CIA (Maringá)</h3><p>Divergências de Tarifa, Taxa ou Companhia Aérea.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_erros, "Erros_Valores", "ev")
-
 with aba_sel[4]:
     st.markdown("<div class='section-banner'><h3>🎧 4. Suporte Backoffice</h3><p>Análise da equipe de Backoffice.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_backoffice, "Suporte_Backoffice", "sb")
-
 with aba_sel[5]:
     st.markdown("<div class='section-banner'><h3>🎪 5. Central de Eventos</h3><p>Emissões do setor de Eventos.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_eventos, "Central_Eventos", "ce")
-
 with aba_sel[6]:
     st.markdown("<div class='section-banner'><h3>🤖 6. Emissor Virtual Lemontech</h3><p>Emissões via robô Lemontech.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_lemon_virt, "Emissor_Virtual", "evl")
-
 with aba_sel[7]:
     st.markdown("<div class='section-banner'><h3>✅ 7. Bilhetes Solicitados Conciliação</h3><p>Bilhetes conciliados sem divergências.</p></div>", unsafe_allow_html=True)
     renderizar_tabela_tratativas(f_sem_div, "Bilhetes_Conciliados", "ok")
 
 # ------------------------------------------------------------------------------
-# 5º PONTO: VISÃO COMPLETA E GESTÃO EXCLUSIVA DO MASTER
+# VISÃO COMPLETA E GESTÃO EXCLUSIVA DO MASTER
 # ------------------------------------------------------------------------------
 if e_master():
     with aba_sel[8]:
@@ -1412,12 +1542,10 @@ if e_master():
             "➕ Criar Usuário Diretamente (Master/Gestor)"
         ])
         
-        # 1. Visão Completa de Todos os Usuários
         with tab_geral_usr:
             st.subheader("Quadro Geral de Contas & Frequência de Acesso")
             df_all, _ = obter_relatorio_acessos_db()
             if not df_all.empty:
-                # Exibição estilizada com status
                 st.dataframe(df_all, use_container_width=True, hide_index=True)
                 
                 st.markdown("---")
@@ -1439,8 +1567,7 @@ if e_master():
                             st.rerun()
                         else: st.error(msg_u)
             else: st.info("Nenhum usuário cadastrado.")
-
-        # 2. Solicitações Pendentes
+            
         with tab_aprov:
             st.subheader("Usuários Aguardando Liberação do Master")
             df_users_all, _ = obter_relatorio_acessos_db()
@@ -1475,8 +1602,7 @@ if e_master():
                                         else: st.error(msg_g)
                 else: st.success("🎉 Nenhuma solicitação de acesso pendente no momento.")
             else: st.info("Nenhum usuário cadastrado.")
-
-        # 3. Criar Usuário Diretamente pelo Master
+            
         with tab_novo_m:
             st.subheader("Cadastrar Novo Usuário Diretamente (Aprovação Imediata)")
             with st.form("form_master_add_user"):
@@ -1529,3 +1655,78 @@ if e_master():
                         time.sleep(1)
                         st.rerun()
             except Exception as e: st.error(f"Erro ao ler arquivo: {e}")
+
+    # --- [NOVO] ABA 11: DISPARO DE E-MAILS MANUAIS ---
+    with aba_sel[11]:
+        st.markdown("<div class='section-banner'><h3>📧 Disparo Manual de Relatórios por E-mail</h3><p>Gere e envie relatórios Excel customizados em anexo para cada gerente.</p></div>", unsafe_allow_html=True)
+
+        with st.expander("⚙️ Configurações do Servidor de E-mail (SMTP)", expanded=False):
+            col_m1, col_m2, col_m3 = st.columns(3)
+            with col_m1:
+                smtp_server = st.text_input("Servidor SMTP:", value="smtp.office365.com")
+            with col_m2:
+                smtp_port = st.number_input("Porta SMTP:", value=587)
+            with col_m3:
+                smtp_user = st.text_input("E-mail Remetente:", value="auditoria@arbaitman.com.br")
+            smtp_pass = st.text_input("Senha / Token de Aplicativo:", type="password")
+
+        gerentes_disponiveis = sorted(list(set(df_todos_filtrados["Área Resp. Operação"].dropna().unique())))
+        gerentes_selecionados = st.multiselect(
+            "Selecione os Gerentes para envio do relatório:",
+            options=gerentes_disponiveis,
+            default=gerentes_disponiveis
+        )
+
+        preview_data = []
+        for g in gerentes_selecionados:
+            df_g = df_todos_filtrados[df_todos_filtrados["Área Resp. Operação"] == g]
+            email_dest = DEPARA_EMAILS_GERENTES.get(g, "Não cadastrado")
+            preview_data.append({
+                "Gerente": g,
+                "E-mail Destinatário": email_dest,
+                "Qtd Pendências": len(df_g),
+                "Volume Tarifa (R$)": f"R$ {df_g['Tarifa Total Emitida'].sum():,.2f}"
+            })
+
+        st.subheader("📋 Resumo do Lote de Envio")
+        st.dataframe(pd.DataFrame(preview_data), use_container_width=True, hide_index=True)
+
+        if st.button("🚀 Confirmar e Disparar E-mails Agora", type="primary", use_container_width=True):
+            if not smtp_pass:
+                st.error("Por favor, informe a senha/token do servidor SMTP.")
+            elif not gerentes_selecionados:
+                st.warning("Selecione pelo menos um gerente para realizar o envio.")
+            else:
+                smtp_config = {
+                    "server": smtp_server,
+                    "port": int(smtp_port),
+                    "sender_email": smtp_user,
+                    "password": smtp_pass
+                }
+                
+                progresso = st.progress(0)
+                status_text = st.empty()
+                sucessos, erros = 0, 0
+
+                for i, g in enumerate(gerentes_selecionados):
+                    status_text.text(f"Enviando relatório para {g}...")
+                    df_g = df_todos_filtrados[df_todos_filtrados["Área Resp. Operação"] == g]
+                    email_dest = DEPARA_EMAILS_GERENTES.get(g)
+
+                    if email_dest and email_dest != "Não cadastrado":
+                        try:
+                            # Gera o Excel em memória especificamente para este gerente
+                            excel_bytes = gerar_excel_estilizado(df_g, nome_aba="Pendencias", nome_gerente=g)
+                            enviar_email_relatorio(smtp_config, email_dest, g, excel_bytes, len(df_g))
+                            sucessos += 1
+                        except Exception as e:
+                            st.error(f"Erro ao enviar para {g} ({email_dest}): {e}")
+                            erros += 1
+                    else:
+                        st.warning(f"E-mail não encontrado para o gerente: {g}")
+                        erros += 1
+
+                    progresso.progress((i + 1) / len(gerentes_selecionados))
+
+                status_text.empty()
+                st.success(f"✅ Processo concluído! {sucessos} e-mails enviados com sucesso. ({erros} falhas)")
