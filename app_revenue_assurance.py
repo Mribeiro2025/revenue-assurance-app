@@ -14,16 +14,17 @@ import streamlit as st
 from sqlalchemy import create_engine, text
 
 # ==============================================================================
-# 1. CONFIGURAÇÃO INICIAL E ESTILOS CSS EXECUTIVOS (C-LEVEL STYLING)
+# 1. CONFIGURAÇÃO DA PÁGINA & DESIGN SYSTEM ENTERPRISE (GLASSMORPHISM)
 # ==============================================================================
 st.set_page_config(
-    page_title="Grupo Arbaitman | Portal de Conciliação Aérea (FP&A)",
+    page_title="Grupo Arbaitman | Portal Executivo de Conciliação Aérea (FP&A)",
     page_icon="✈️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 ARQUIVO_DASHBOARD_PADRAO = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
-TEMPO_MAXIMO_SESSAO_HORAS = 8.0 
+TEMPO_MAXIMO_SESSAO_HORAS = 8.0
 
 DEPARA_CIAS = {
     "G3": "GOL (G3)", "AD": "AZUL (AD)", "LA": "LATAM (LA)", "JJ": "LATAM (JJ)",
@@ -66,18 +67,15 @@ def padronizar_nome_gerente(nome_raw):
 def consolidar_emissor_consultor(row):
     emis = str(row.get("Emissor") or row.get("Emissor_Reserva_Lemon") or "").strip()
     emis_clean = emis.replace("Sem emissor", "").replace("Sem consultor", "").strip()
-    
     if emis_clean and emis_clean.lower() not in ["nan", "none", "", "-", "null"]:
         return emis_clean
     cons = str(row.get("Consultor") or row.get("Consultor_Lemon") or "").strip()
     cons_clean = cons.replace("Sem consultor", "").replace("Sem emissor", "").strip()
-    
     if cons_clean and cons_clean.lower() not in ["nan", "none", "", "-", "null"]:
         return cons_clean
     return "-"
 
 def formatar_data_br(dt_val):
-    """Converte horários para o fuso horário de Brasília (UTC-3)."""
     if pd.isna(dt_val) or dt_val is None:
         tz_br = datetime.timezone(datetime.timedelta(hours=-3))
         return datetime.datetime.now(tz_br).strftime("%d/%m/%Y às %H:%M:%S")
@@ -95,20 +93,24 @@ def formatar_data_br(dt_val):
             return dt_val.strftime("%d/%m/%Y às %H:%M:%S")
         return str(dt_val)
 
+# Estilização CSS Enterprise Avançada
 st.markdown(
     """
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        * { font-family: 'Inter', -apple-system, sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        * { font-family: 'Plus Jakarta Sans', -apple-system, sans-serif !important; }
         .stApp { background-color: #f8fafc; }
         
+        /* Banner Executivo com Glassmorphism */
         .main-header {
-            background: linear-gradient(135deg, #001e4d 0%, #003366 50%, #004080 100%);
-            padding: 22px 30px;
-            border-radius: 12px;
-            color: white;
-            margin-bottom: 20px;
-            box-shadow: 0 8px 20px rgba(0, 32, 96, 0.2);
+            background: linear-gradient(135deg, #001e4d 0%, #003366 50%, #0050b3 100%);
+            padding: 24px 32px;
+            border-radius: 16px;
+            color: #ffffff;
+            margin-bottom: 24px;
+            box-shadow: 0 10px 25px -5px rgba(0, 30, 77, 0.25);
+            position: relative;
+            overflow: hidden;
         }
         .main-header h1 { color: #ffffff !important; margin: 0; font-size: 24px; font-weight: 700; }
         .main-header p { color: #b3d1ff !important; margin: 4px 0 0 0; font-size: 13px; }
@@ -126,17 +128,17 @@ st.markdown(
             margin-top: 8px;
         }
         .update-badge {
-            background: rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.22);
             border: 1px solid rgba(255, 255, 255, 0.4);
             color: #ffffff;
-            padding: 4px 12px;
+            padding: 6px 14px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
             display: inline-block;
-            margin-top: 8px;
-            float: right;
         }
+        
+        /* Abas Estilizadas */
         div[data-baseweb="tab-list"] {
             gap: 8px;
             background-color: #f1f5f9;
@@ -147,9 +149,9 @@ st.markdown(
             white-space: nowrap;
         }
         button[data-baseweb="tab"] {
-            height: 40px;
+            height: 42px;
             border-radius: 8px !important;
-            padding: 8px 16px !important;
+            padding: 8px 18px !important;
             background-color: transparent !important;
             color: #334155 !important;
             font-weight: 600 !important;
@@ -159,59 +161,63 @@ st.markdown(
         }
         button[data-baseweb="tab"]:hover {
             background-color: #e2e8f0 !important;
-            color: #002060 !important;
+            color: #001e4d !important;
         }
         button[data-baseweb="tab"][aria-selected="true"] {
-            background-color: #002060 !important;
+            background-color: #001e4d !important;
             color: #ffffff !important;
             border-radius: 8px !important;
-            box-shadow: 0 4px 12px rgba(0, 32, 96, 0.25) !important;
+            box-shadow: 0 4px 12px rgba(0, 30, 77, 0.25) !important;
         }
         div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {
             display: none !important;
         }
+        
+        /* Banners de Seção */
         .section-banner {
             background: #ffffff;
-            border-left: 5px solid #002060;
-            padding: 14px 20px;
-            border-radius: 8px;
-            margin-bottom: 18px;
+            border-left: 5px solid #001e4d;
+            padding: 16px 22px;
+            border-radius: 10px;
+            margin-bottom: 20px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         }
-        .section-banner h3 { margin: 0; color: #002060; font-size: 18px; font-weight: 700; }
+        .section-banner h3 { margin: 0; color: #001e4d; font-size: 18px; font-weight: 700; }
         .section-banner p { margin: 2px 0 0 0; color: #64748b; font-size: 12px; }
         
+        /* Cards & Métricas */
         .chart-card {
             background-color: #ffffff;
-            border-radius: 10px;
-            padding: 18px;
+            border-radius: 12px;
+            padding: 20px;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
             border: 1px solid #e2e8f0;
-            margin-bottom: 18px;
+            margin-bottom: 20px;
         }
-        .chart-card h5 { color: #002060; font-weight: 700; font-size: 15px; margin-top: 0; margin-bottom: 12px; }
+        .chart-card h5 { color: #001e4d; font-weight: 700; font-size: 15px; margin-top: 0; margin-bottom: 14px; }
         
         div[data-testid="stMetric"] {
             background: #ffffff;
-            border-radius: 8px;
-            padding: 14px;
-            border-top: 4px solid #002060;
+            border-radius: 10px;
+            padding: 14px 18px;
+            border-top: 4px solid #001e4d;
             box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+            border-left: 1px solid #e2e8f0;
+            border-right: 1px solid #e2e8f0;
+            border-bottom: 1px solid #e2e8f0;
         }
         
-        div[data-testid="stDataFrame"] {
-            background-color: #ffffff;
-            border-radius: 8px;
-            border: 1px solid #cbd5e1;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-        }
+        /* Badges de Status do Sistema */
+        .status-badge-ativo { background-color: #dcfce7; color: #15803d; padding: 4px 12px; border-radius: 16px; font-weight: 700; font-size: 0.8rem; }
+        .status-badge-pendente { background-color: #fef9c3; color: #a16207; padding: 4px 12px; border-radius: 16px; font-weight: 700; font-size: 0.8rem; }
+        .status-badge-inativo { background-color: #ffe4e6; color: #be123c; padding: 4px 12px; border-radius: 16px; font-weight: 700; font-size: 0.8rem; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ==============================================================================
-# 2. CONEXÃO COM BANCO DE DADOS, MIGRAÇÃO & LOGS DE ACESSO
+# 2. CONEXÃO BANCO DE DADOS, SCHEMA E TABELAS
 # ==============================================================================
 def sanitizar_bilhete(val):
     if pd.isna(val) or val is None: return ""
@@ -230,6 +236,7 @@ def get_db_engine():
             
             try:
                 with engine.begin() as conn:
+                    # Tabela de Tratativas de Bilhetes
                     conn.execute(text("""
                         CREATE TABLE IF NOT EXISTS tratativas (
                             bilhete VARCHAR(255) PRIMARY KEY,
@@ -245,13 +252,37 @@ def get_db_engine():
                         ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS fop VARCHAR(255);
                         ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS rloc_cia VARCHAR(255);
                         ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS cliente VARCHAR(255);
-                        
+                    """))
+                    
+                    # Tabela de Usuários com Status e Controle Master
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS usuarios (
+                            id SERIAL PRIMARY KEY,
+                            usuario VARCHAR(255) UNIQUE NOT NULL,
+                            senha VARCHAR(255) NOT NULL,
+                            nome VARCHAR(255) NOT NULL,
+                            perfil VARCHAR(255) NOT NULL DEFAULT 'Gestor',
+                            status VARCHAR(255) NOT NULL DEFAULT 'PENDENTE_APROVACAO',
+                            criado_em TIMESTAMP DEFAULT NOW(),
+                            aprovado_por VARCHAR(255)
+                        );
+                    """))
+                    
+                    # Tabela de Histórico de Log de Acessos
+                    conn.execute(text("""
                         CREATE TABLE IF NOT EXISTS log_acessos (
                             id SERIAL PRIMARY KEY,
                             usuario VARCHAR(255),
                             nome VARCHAR(255),
                             data_acesso TIMESTAMP DEFAULT NOW()
                         );
+                    """))
+                    
+                    # Garante existencia dos usuarios masters padrão
+                    conn.execute(text("""
+                        INSERT INTO usuarios (usuario, senha, nome, perfil, status, aprovado_por)
+                        VALUES ('mribeiro', '14052013', 'Marcos Ribeiro', 'Master', 'Ativo', 'Sistema Inicial')
+                        ON CONFLICT (usuario) DO UPDATE SET perfil = 'Master', status = 'Ativo';
                     """))
             except Exception: pass
             return engine
@@ -282,15 +313,15 @@ def obter_relatorio_acessos_db():
             
         df_users = pd.DataFrame()
         try:
-            df_users = pd.read_sql("SELECT usuario, nome, perfil, status FROM usuarios", engine)
+            df_users = pd.read_sql("SELECT id, usuario, nome, perfil, status, criado_em, aprovado_por FROM usuarios ORDER BY id DESC", engine)
             df_users["usuario"] = df_users["usuario"].astype(str).str.strip().str.lower()
         except Exception: pass
+        
         if not df_logs.empty and not df_users.empty:
             df_agg = df_logs.groupby("usuario").agg(
                 ultimo_acesso=("data_acesso", "max"),
                 total_acessos=("data_acesso", "count")
             ).reset_index()
-            
             df_m = pd.merge(df_users, df_agg, on="usuario", how="left")
         elif not df_users.empty:
             df_m = df_users.copy()
@@ -376,13 +407,11 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
         return False, f"Erro ao salvar tratativas: {e}", 0, 0, len(dados_lote)
 
 def mesclar_com_supabase(df_excel):
-    """Garante que as tratativas salvas no Supabase sobrescrevam os dados originais do Excel."""
     if df_excel is None or df_excel.empty: return df_excel
     df_db = carregar_tratativas_db()
     if df_db.empty: return df_excel
     
     df_excel = df_excel.copy()
-    
     col_bilhete_excel = "Bilhetes" if "Bilhetes" in df_excel.columns else ("bilhete" if "bilhete" in df_excel.columns else None)
     if not col_bilhete_excel:
         return df_excel
@@ -416,7 +445,7 @@ def mesclar_com_supabase(df_excel):
     return df_merged
 
 # ==============================================================================
-# 3. GERADOR DE EXCEL ESTILIZADO
+# 3. EXPORTAÇÃO EXECUTIVA PARA EXCEL (OPENPYXL)
 # ==============================================================================
 def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"):
     buffer = io.BytesIO()
@@ -433,18 +462,17 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     ws.views.sheetView[0].showGridLines = True
     
     header_title_fill = PatternFill(start_color="001E4D", end_color="001E4D", fill_type="solid")
-    header_title_font = Font(name="Calibri", color="FFFFFF", bold=True, size=14)
+    header_title_font = Font(name="Plus Jakarta Sans", color="FFFFFF", bold=True, size=14)
     subtitle_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
-    subtitle_font = Font(name="Calibri", color="002060", bold=True, size=10)
+    subtitle_font = Font(name="Plus Jakarta Sans", color="001E4D", bold=True, size=10)
     
     max_cols = max(len(df_clean.columns), 6)
-    
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max_cols)
     cell_title = ws.cell(row=1, column=1, value="✈️ Grupo Arbaitman | Relatório Executivo de Conciliação Aérea (FP&A)")
     cell_title.fill = header_title_fill
     cell_title.font = header_title_font
     cell_title.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-    ws.row_dimensions[1].height = 28
+    ws.row_dimensions[1].height = 30
     
     dt_str = formatar_data_br(None)
     gerente_label = f"Gerente Responsável: {nome_gerente}" if nome_gerente and nome_gerente != "Geral" else "Escopo: Geral (Todos os Gerentes)"
@@ -454,11 +482,11 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     cell_sub.fill = subtitle_fill
     cell_sub.font = subtitle_font
     cell_sub.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-    ws.row_dimensions[2].height = 20
+    ws.row_dimensions[2].height = 22
     ws.row_dimensions[3].height = 10
     
     header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
-    header_font = Font(name="Calibri", color="FFFFFF", bold=True, size=11)
+    header_font = Font(name="Plus Jakarta Sans", color="FFFFFF", bold=True, size=11)
     thin_border = Border(
         left=Side(style="thin", color="CBD5E1"), right=Side(style="thin", color="CBD5E1"),
         top=Side(style="thin", color="CBD5E1"), bottom=Side(style="thin", color="CBD5E1")
@@ -478,10 +506,10 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
         cell.font = header_font
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = thin_border
-    ws.row_dimensions[4].height = 24
+    ws.row_dimensions[4].height = 26
     
     for r_idx, row_data in enumerate(df_clean.values, start=5):
-        ws.row_dimensions[r_idx].height = 19
+        ws.row_dimensions[r_idx].height = 20
         for c_idx, val in enumerate(row_data, start=1):
             cell = ws.cell(row=r_idx, column=c_idx, value=val)
             cell.border = thin_border
@@ -509,7 +537,7 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     return buffer.getvalue()
 
 # ==============================================================================
-# 4. AUTENTICAÇÃO E PERSISTÊNCIA DE SESSÃO
+# 4. GESTÃO DE USUÁRIOS E AUTENTICAÇÃO COM LIBERAÇÃO MASTER
 # ==============================================================================
 def carregar_usuarios_supabase():
     dict_u = {}
@@ -520,11 +548,56 @@ def carregar_usuarios_supabase():
             for _, row in df_u.iterrows():
                 u_key = str(row["usuario"]).strip().lower()
                 dict_u[u_key] = {
-                    "senha": str(row["senha"]).strip(), "nome": str(row["nome"]).strip(),
-                    "perfil": str(row["perfil"]).strip(), "status": str(row["status"]).strip().upper()
+                    "senha": str(row["senha"]).strip(),
+                    "nome": str(row["nome"]).strip(),
+                    "perfil": str(row["perfil"]).strip(),
+                    "status": str(row["status"]).strip().upper()
                 }
         except Exception: pass
     return dict_u
+
+def solicitar_novo_cadastro(usuario, senha, nome, perfil_desejado="Gestor"):
+    engine = get_db_engine()
+    if not engine:
+        return False, "Banco de dados indisponível no momento."
+    u_clean = str(usuario).strip().lower()
+    if not u_clean or not senha or not nome:
+        return False, "Preencha todos os campos do formulário."
+        
+    try:
+        with engine.begin() as conn:
+            check = conn.execute(text("SELECT id FROM usuarios WHERE LOWER(usuario) = :u"), {"u": u_clean}).fetchone()
+            if check:
+                return False, "Este nome de usuário já está cadastrado no sistema."
+                
+            conn.execute(
+                text("""
+                    INSERT INTO usuarios (usuario, senha, nome, perfil, status, aprovado_por)
+                    VALUES (:usuario, :senha, :nome, :perfil, 'PENDENTE_APROVACAO', 'Aguardando Master')
+                """),
+                {"usuario": u_clean, "senha": str(senha).strip(), "nome": str(nome).strip(), "perfil": perfil_desejado}
+            )
+            return True, "✅ Solicitação de cadastro registrada com sucesso! Seu acesso ficará ativo assim que for aprovado por um Administrador Master."
+    except Exception as e:
+        return False, f"Erro ao solicitar cadastro: {e}"
+
+def gerenciar_status_usuario_master(usuario_alvo, novo_status, novo_perfil, master_user):
+    engine = get_db_engine()
+    if not engine:
+        return False, "Banco de dados indisponível."
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("""
+                    UPDATE usuarios
+                    SET status = :status, perfil = :perfil, aprovado_por = :master
+                    WHERE LOWER(usuario) = LOWER(:usuario)
+                """),
+                {"status": novo_status, "perfil": novo_perfil, "master": master_user, "usuario": usuario_alvo}
+            )
+            return True, f"Usuário {usuario_alvo} atualizado para status '{novo_status}' ({novo_perfil})."
+    except Exception as e:
+        return False, f"Erro ao atualizar usuário: {e}"
 
 def alterar_senha_usuario(usuario_id, senha_atual, nova_senha):
     engine = get_db_engine()
@@ -550,6 +623,7 @@ def alterar_senha_usuario(usuario_id, senha_atual, nova_senha):
     except Exception as e:
         return False, f"Erro ao atualizar senha no banco: {e}"
 
+# Gerenciamento de Sessão Streamlit
 if "autenticado" not in st.session_state: st.session_state["autenticado"] = False
 if "usuario_atual" not in st.session_state: st.session_state["usuario_atual"] = None
 if "perfil_atual" not in st.session_state: st.session_state["perfil_atual"] = None
@@ -579,55 +653,75 @@ if not st.session_state["autenticado"]:
     sessao_valida, u_key = validar_sessao_url()
     if sessao_valida and u_key:
         usuarios_db = carregar_usuarios_supabase()
-        if u_key in usuarios_db:
+        if u_key in usuarios_db and usuarios_db[u_key]["status"] == "ATIVO":
             st.session_state["autenticado"] = True
             st.session_state["usuario_atual"] = usuarios_db[u_key]["nome"]
             st.session_state["perfil_atual"] = usuarios_db[u_key]["perfil"]
             st.session_state["login_user_id"] = u_key
             registrar_log_acesso(u_key, usuarios_db[u_key]["nome"])
-        elif u_key == "mribeiro":
-            st.session_state["autenticado"] = True
-            st.session_state["usuario_atual"] = "Marcos Ribeiro"
-            st.session_state["perfil_atual"] = "Master"
-            st.session_state["login_user_id"] = "mribeiro"
-            registrar_log_acesso("mribeiro", "Marcos Ribeiro")
 
 def e_master():
     u_id = st.session_state.get("login_user_id", "")
     perfil = st.session_state.get("perfil_atual", "")
     return u_id in ["mribeiro", "fellipe", "ffernandes"] or perfil in ["Master", "Compliance"]
 
+# TELA DE LOGIN E SOLICITAÇÃO DE NOVO CADASTRO
 if not st.session_state["autenticado"]:
-    col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
+    col_l1, col_l2, col_l3 = st.columns([1, 1.4, 1])
     with col_l2:
-        st.markdown("<div class='main-header'><h1>✈️ Grupo Arbaitman</h1><p>Portal de Conciliação Aérea & Gestão de Bilhetes (FP&A)</p></div>", unsafe_allow_html=True)
-        u_input = st.text_input("Usuário:", key="l_user").strip().lower()
-        p_input = str(st.text_input("Senha:", type="password", key="l_pass")).strip()
-        if st.button("Acessar Portal", type="primary"):
-            usuarios_db = carregar_usuarios_supabase()
-            if u_input in usuarios_db and usuarios_db[u_input]["senha"] == p_input:
-                st.session_state["autenticado"] = True
-                st.session_state["usuario_atual"] = usuarios_db[u_input]["nome"]
-                st.session_state["perfil_atual"] = usuarios_db[u_input]["perfil"]
-                st.session_state["login_user_id"] = u_input
-                st.query_params["session_user"] = u_input
-                st.query_params["session_time"] = str(time.time())
-                registrar_log_acesso(u_input, usuarios_db[u_input]["nome"])
-                st.rerun()
-            elif u_input == "mribeiro" and p_input in ["14052013", "123"]:
-                st.session_state["autenticado"] = True
-                st.session_state["usuario_atual"] = "Marcos Ribeiro"
-                st.session_state["perfil_atual"] = "Master"
-                st.session_state["login_user_id"] = "mribeiro"
-                st.query_params["session_user"] = "mribeiro"
-                st.query_params["session_time"] = str(time.time())
-                registrar_log_acesso("mribeiro", "Marcos Ribeiro")
-                st.rerun()
-            else: st.error("Usuário ou senha incorretos.")
+        st.markdown("<div class='main-header'><h1>✈️ Grupo Arbaitman</h1><p>Portal Executivo de Conciliação Aérea & Revenue Assurance (FP&A)</p></div>", unsafe_allow_html=True)
+        
+        tab_login, tab_solicitar = st.tabs(["🔒 Entrar no Sistema", "📝 Solicitar Novo Cadastro"])
+        
+        with tab_login:
+            u_input = st.text_input("Usuário:", key="l_user").strip().lower()
+            p_input = str(st.text_input("Senha:", type="password", key="l_pass")).strip()
+            if st.button("Acessar Painel", type="primary", use_container_width=True):
+                usuarios_db = carregar_usuarios_supabase()
+                if u_input in usuarios_db:
+                    usr_data = usuarios_db[u_input]
+                    if usr_data["senha"] == p_input:
+                        if usr_data["status"] == "PENDENTE_APROVACAO":
+                            st.warning("⏳ Sua conta está PENDENTE DE APROVAÇÃO pelo perfil Master.")
+                        elif usr_data["status"] == "INATIVO":
+                            st.error("⛔ Sua conta está INATIVA no sistema. Entre em contato com a Auditoria Master.")
+                        else:
+                            st.session_state["autenticado"] = True
+                            st.session_state["usuario_atual"] = usr_data["nome"]
+                            st.session_state["perfil_atual"] = usr_data["perfil"]
+                            st.session_state["login_user_id"] = u_input
+                            st.query_params["session_user"] = u_input
+                            st.query_params["session_time"] = str(time.time())
+                            registrar_log_acesso(u_input, usr_data["nome"])
+                            st.rerun()
+                    else: st.error("Senha incorreta.")
+                elif u_input == "mribeiro" and p_input in ["14052013", "123"]:
+                    st.session_state["autenticado"] = True
+                    st.session_state["usuario_atual"] = "Marcos Ribeiro"
+                    st.session_state["perfil_atual"] = "Master"
+                    st.session_state["login_user_id"] = "mribeiro"
+                    st.query_params["session_user"] = "mribeiro"
+                    st.query_params["session_time"] = str(time.time())
+                    registrar_log_acesso("mribeiro", "Marcos Ribeiro")
+                    st.rerun()
+                else: st.error("Usuário não encontrado.")
+                
+        with tab_solicitar:
+            st.info("ℹ️ Novos acessos dependem da autorização e liberação do Administrador Master.")
+            with st.form("form_solicitar_acesso"):
+                cad_nome = st.text_input("Nome Completo:")
+                cad_user = st.text_input("Usuário Desejado (ex: nome.sobrenome):").strip().lower()
+                cad_pass = st.text_input("Definir Senha:", type="password")
+                cad_perfil = st.selectbox("Perfil Solicitado:", ["Gestor", "Master"])
+                btn_env_cad = st.form_submit_button("Enviar Solicitação de Acesso", type="primary")
+                if btn_env_cad:
+                    ok_cad, msg_cad = solicitar_novo_cadastro(cad_user, cad_pass, cad_nome, cad_perfil)
+                    if ok_cad: st.success(msg_cad)
+                    else: st.error(msg_cad)
     st.stop()
 
 # ==============================================================================
-# 5. ROTEADOR DE BASES E COMPATIBILIDADE DE COLUNAS
+# 5. ROTEADOR DE BASES E REGRAS DE NEGÓCIO DA CONCILIAÇÃO
 # ==============================================================================
 def clean_str(val):
     if pd.isna(val) or val is None: return "-"
@@ -660,14 +754,17 @@ def padronizar_df(df):
             mask_val = val_clean.notna() & ~val_clean.str.lower().isin(["nan", "none", "", "-", "null", "<na>"])
             sv_series = sv_series.where(~mask_val, val_clean)
     df_out["SV"] = sv_series
+    
     for c_fop in ["Forma de Recebimento", "Pagto", "FOP"]:
         if c_fop in df_out.columns and "FOP" not in df_out.columns:
             df_out["FOP"] = df_out[c_fop]
     if "FOP" not in df_out.columns: df_out["FOP"] = "-"
+    
     for c_rloc in ["Rloc_Cia", "Localizador_Sistema", "Rloc_CIA"]:
         if c_rloc in df_out.columns and "Rloc_CIA" not in df_out.columns:
             df_out["Rloc_CIA"] = df_out[c_rloc]
     if "Rloc_CIA" not in df_out.columns: df_out["Rloc_CIA"] = "-"
+    
     if "CIA" in df_out.columns:
         df_out["CIA"] = df_out["CIA"].astype(str).str.upper().str.strip().replace(DEPARA_CIAS)
         
@@ -686,10 +783,12 @@ def padronizar_df(df):
             except Exception: return pd.NaT
         try: return pd.to_datetime(val, dayfirst=True, errors="coerce")
         except Exception: return pd.NaT
+        
     if "Data Emissão" in df_out.columns:
         df_out["Dt_Parsed"] = df_out["Data Emissão"].apply(converter_data_flexivel)
     else:
         df_out["Dt_Parsed"] = pd.NaT
+        
     hoje = pd.to_datetime(datetime.date.today())
     dias = (hoje - df_out["Dt_Parsed"]).dt.days
     df_out["Dias_Pendente"] = dias
@@ -701,7 +800,6 @@ def padronizar_df(df):
         elif d <= 90: return "61 a 90 dias"
         else: return "> 90 dias (Crítico)"
     df_out["Faixa_Aging"] = dias.apply(calc_aging)
-    
     return df_out
 
 def reordenar_colunas(df, modo="completo"):
@@ -739,21 +837,19 @@ def rotear_bases_mestra(df_master):
         
     df_master = padronizar_df(df_master)
     
-    # 1. OK / Conciliados / Solicitados Conciliação
     def e_conciliado_ok(r):
-        st = str(r.get("Status_Geral", "")).lower().strip()
+        st_val = str(r.get("Status_Geral", "")).lower().strip()
         div = str(r.get("Status_Divergencia", "")).lower().strip()
-        
         terms_ok = [
             "já lançado", "ja lancado", "regularizado", "conciliado", "conciliação", "conciliacao",
             "solicitado conciliação", "solicitados conciliação", "solicitado conciliacao", "solicitados conciliacao",
             "solicitado", "solicitados", "valores corretos", "emitido e lançado", "emitido e lancado", "lançado"
         ]
-        if any(term in st for term in terms_ok):
-            return True
-        if div in ["valores corretos", "sem divergência", "sem divergencia"] and not any(p in st for p in ["pendente", "erro", "divergência", "divergencia", "análise", "analise", "virtual"]):
+        if any(term in st_val for term in terms_ok): return True
+        if div in ["valores corretos", "sem divergência", "sem divergencia"] and not any(p in st_val for p in ["pendente", "erro", "divergência", "divergencia", "análise", "analise", "virtual"]):
             return True
         return False
+        
     mask_ok = df_master.apply(e_conciliado_ok, axis=1)
     df_ok = df_master[mask_ok].copy()
     df_pend = df_master[~mask_ok].copy()
@@ -773,28 +869,13 @@ def rotear_bases_mestra(df_master):
         st_val = str(r.get("Status_Geral", "")).lower().strip()
         obs_val = str(r.get("Obs. Operação", "")).lower().strip()
         emis_cons = str(r.get("Emissor / Consultor", "")).lower().strip()
-        emis_raw = str(r.get("Emissor", "")).lower().strip()
-        cons_raw = str(r.get("Consultor", "")).lower().strip()
-        emis_lemon = str(r.get("Emissor_Reserva_Lemon", "")).lower().strip()
         ar_val = str(r.get("Área Resp. Operação", "")).lower().strip()
-        ger_val = str(r.get("Gerentes", "")).lower().strip()
-        
-        if "emissor virtual" in st_val or "virtual lemontech" in st_val or "lemontech virtual" in st_val:
-            return True
-        if "emissor virtual" in ar_val or "virtual lemontech" in ar_val or "lemontech virtual" in ar_val:
-            return True
-        if "emissor virtual" in ger_val or "virtual lemontech" in ger_val or "lemontech virtual" in ger_val:
-            return True
-            
-        text_combined = f"{emis_cons} {emis_raw} {cons_raw} {emis_lemon} {obs_val} {st_val}"
-        termos = ["emissor virtual", "virtual lemon", "lemontech virtual", "robô lemon", "robo lemon"]
-        if any(t in text_combined for t in termos):
-            return True
-        return False
+        text_combined = f"{emis_cons} {obs_val} {st_val} {ar_val}"
+        return any(t in text_combined for t in ["emissor virtual", "virtual lemon", "lemontech virtual", "robô lemon", "robo lemon"])
     mask_lemon = df_rest.apply(e_emissor_virtual_lemon, axis=1)
     df_lemon_virt = df_rest[mask_lemon].copy()
     df_rest = df_rest[~mask_lemon].copy()
-
+    
     # 4. Suporte Backoffice
     def e_suporte_backoffice(r):
         ar_val = str(r.get("Área Resp. Operação", "")).lower()
@@ -828,11 +909,9 @@ def rotear_bases_mestra(df_master):
 
 @st.cache_data(ttl=30, show_spinner=False)
 def carregar_bases():
-    """Prioriza o arquivo Dashboard_Revenue_Assurance_Consolidado.xlsx quando ele for atualizado no repositório."""
     dt_atualizacao = datetime.datetime.now()
     df_m = pd.DataFrame()
     
-    # 1. Carrega primeiro do arquivo Excel atualizado do repositório
     if os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
         fonte = ARQUIVO_DASHBOARD_PADRAO
         try:
@@ -854,7 +933,6 @@ def carregar_bases():
                 df_m = pd.concat(frames, ignore_index=True)
         except Exception: pass
 
-    # 2. Fallback para Banco de Dados se o Excel não existir ou estiver vazio
     if df_m.empty:
         engine = get_db_engine()
         if engine:
@@ -871,31 +949,28 @@ def carregar_bases():
 
     if df_m.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), formatar_data_br(dt_atualizacao)
-
+        
     col_bilhete = "Bilhetes" if "Bilhetes" in df_m.columns else ("bilhete" if "bilhete" in df_m.columns else None)
     if col_bilhete:
         df_m["Bilhete_Clean"] = df_m[col_bilhete].apply(sanitizar_bilhete)
         df_m = df_m[df_m["Bilhete_Clean"].astype(str).str.len() > 3]
         df_m = df_m.drop_duplicates(subset=["Bilhete_Clean"], keep="first").reset_index(drop=True)
         df_m["Bilhetes"] = df_m["Bilhete_Clean"]
-
-    # 3. Mescla com as tratativas salvas no Supabase/PostgreSQL (preserva anotações e status aprovados)
+        
     df_m = padronizar_df(df_m)
     df_m = mesclar_com_supabase(df_m)
     
     f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
-    
-    dt_str = formatar_data_br(dt_atualizacao)
-    return f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok, dt_str
+    return f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok, formatar_data_br(dt_atualizacao)
 
 # ==============================================================================
-# 6. CARREGAMENTO E FILTROS OPERACIONAIS
+# 6. SIDEBAR & FILTROS OPERACIONAIS UNIFICADOS
 # ==============================================================================
 df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div, dt_ultima_atualizacao_str = carregar_bases()
 df_todos_unificados = pd.concat([df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
-st.sidebar.title("Grupo Arbaitman")
-st.sidebar.caption("Conciliação Aérea FP&A v5.0")
+st.sidebar.title("✈️ Grupo Arbaitman")
+st.sidebar.caption("Revenue Assurance & Controladoria v5.2")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 st.sidebar.info(f"🕒 **Última Atualização:**\n{dt_ultima_atualizacao_str}")
 
@@ -904,13 +979,10 @@ with st.sidebar.expander("🔑 Alterar Minha Senha"):
         pass_act = st.text_input("Senha Atual:", type="password", key="pass_act")
         pass_new = st.text_input("Nova Senha:", type="password", key="pass_new")
         pass_cnf = st.text_input("Confirmar Nova Senha:", type="password", key="pass_cnf")
-        if st.form_submit_button("Atualizar Senha"):
-            if not pass_act or not pass_new:
-                st.error("Preencha todos os campos.")
-            elif pass_new != pass_cnf:
-                st.error("As senhas não coincidem.")
-            elif len(pass_new) < 3:
-                st.error("A nova senha deve ter no mínimo 3 caracteres.")
+        if st.form_submit_button("Atualizar Senha", use_container_width=True):
+            if not pass_act or not pass_new: st.error("Preencha todos os campos.")
+            elif pass_new != pass_cnf: st.error("As senhas não coincidem.")
+            elif len(pass_new) < 3: st.error("A nova senha deve ter no mínimo 3 caracteres.")
             else:
                 u_id = st.session_state.get("login_user_id", "")
                 ok, msg = alterar_senha_usuario(u_id, pass_act, pass_new)
@@ -919,11 +991,11 @@ with st.sidebar.expander("🔑 Alterar Minha Senha"):
 
 col_sb1, col_sb2 = st.sidebar.columns(2)
 with col_sb1:
-    if st.button("🔄 Recarregar", key="btn_recarregar_sb"):
+    if st.button("🔄 Recarregar", key="btn_recarregar_sb", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 with col_sb2:
-    if st.button("🚪 Sair", key="btn_logout_sb"):
+    if st.button("🚪 Sair", key="btn_logout_sb", use_container_width=True):
         st.session_state["autenticado"] = False
         st.session_state["usuario_atual"] = None
         st.session_state["perfil_atual"] = None
@@ -957,7 +1029,7 @@ f_sem_div = aplicar_filtros(df_sem_div)
 df_todos_filtrados = pd.concat([f_falta, f_concur, f_erros, f_backoffice, f_eventos, f_lemon_virt, f_sem_div], ignore_index=True)
 
 # ==============================================================================
-# 7. BANNER PRINCIPAL COM FONTES DE DADOS E MÉTRICAS
+# 7. HEADER EXECUTIVO & METRICAS RESUMIDAS
 # ==============================================================================
 st.markdown(
     f"""
@@ -990,7 +1062,6 @@ c4.metric("Backoffice", f"{len(f_backoffice):,}")
 c5.metric("Central Eventos", f"{len(f_eventos):,}")
 c6.metric("Emissor Virtual", f"{len(f_lemon_virt):,}")
 c7.metric("Solicitados Conciliação", f"{len(f_sem_div):,}")
-
 st.markdown("---")
 
 abas = [
@@ -1005,13 +1076,14 @@ abas = [
 ]
 if e_master():
     abas.extend(["⚙️ Gestão de Acessos", "📜 Log de Histórico", "📥 Carga em Lote Avançada"])
+    
 aba_sel = st.tabs(abas)
 
 # ------------------------------------------------------------------------------
-# ABA 0: DASHBOARD EXECUTIVO C-LEVEL
+# ABA 0: DASHBOARD EXECUTIVO C-LEVEL MODERNIZADO (DONUT & AGING)
 # ------------------------------------------------------------------------------
 with aba_sel[0]:
-    st.markdown("<div class='section-banner'><h3>📊 Visão Financeira Global & Indicadores de Performance (FP&A)</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-banner'><h3>📊 Visão Financeira Global & Indicadores de Performance (FP&A)</h3><p>Resumo de alto nível para tomada de decisão com Two-Click Rule.</p></div>", unsafe_allow_html=True)
     
     df_pendentes = pd.concat([f_falta, f_concur, f_erros, f_backoffice, f_eventos, f_lemon_virt], ignore_index=True)
     
@@ -1032,12 +1104,11 @@ with aba_sel[0]:
     k4.metric("Taxa Total Emitida", f"R$ {taxa_total_emitida:,.2f}")
     k5.metric("Receita Total Emitida", f"R$ {receita_total_emitida:,.2f}")
     k6.metric("Ticket Médio Pendente", f"R$ {ticket_medio_pendente:,.2f}")
-    
     st.markdown("---")
     
     g1, g2 = st.columns(2)
     with g1:
-        st.markdown('<div class="chart-card"><h5>📊 Distribuição de Bilhetes Pendentes por Aba do Sistema</h5>', unsafe_allow_html=True)
+        st.markdown('<div class="chart-card"><h5>📊 Distribuição de Bilhetes Pendentes (Donut Chart)</h5>', unsafe_allow_html=True)
         dados_abas = [
             {"Aba": "1. Falta Lançamento", "Quantidade": len(f_falta)},
             {"Aba": "2. Erro Concur 🚨", "Quantidade": len(f_concur)},
@@ -1049,9 +1120,21 @@ with aba_sel[0]:
         df_abas = pd.DataFrame(dados_abas)
         df_abas = df_abas[df_abas["Quantidade"] > 0]
         if not df_abas.empty:
-            fig_pie = px.pie(df_abas, values="Quantidade", names="Aba", hole=0.5, color_discrete_sequence=["#002060", "#d90429", "#fa8c16", "#0050b3", "#0086c0", "#722ed1"])
-            fig_pie.update_traces(textposition='inside', textinfo='value+percent', hovertemplate='<b>%{label}</b><br>Volume: %{value:,}<br>Representação: %{percent}')
-            fig_pie.update_layout(height=330, margin=dict(l=10, r=10, t=10, b=10))
+            fig_pie = px.pie(
+                df_abas, values="Quantidade", names="Aba", hole=0.6,
+                color_discrete_sequence=["#001E4D", "#E11D48", "#D97706", "#0050B3", "#0284C7", "#7C3AED"]
+            )
+            fig_pie.update_traces(
+                textposition='inside', textinfo='percent+value',
+                hovertemplate='<b>%{label}</b><br>Volume: <b>%{value:,}</b> bilhetes<br>Representação: <b>%{percent}</b>',
+                marker=dict(line=dict(color='#FFFFFF', width=2))
+            )
+            tot_p_sum = df_abas["Quantidade"].sum()
+            fig_pie.add_annotation(
+                text=f"<b>{tot_p_sum:,}</b><br><span style='font-size:12px;color:#64748B;'>Pendências</span>",
+                x=0.5, y=0.5, showarrow=False, font=dict(size=18, color="#001E4D")
+            )
+            fig_pie.update_layout(height=340, margin=dict(l=10, r=10, t=10, b=10))
             st.plotly_chart(fig_pie, use_container_width=True)
         else: st.info("Sem pendências cadastradas.")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1061,13 +1144,13 @@ with aba_sel[0]:
         if not df_pendentes.empty:
             df_cia = df_pendentes["CIA"].value_counts().head(8).reset_index()
             df_cia.columns = ["Companhia", "Quantidade"]
-            fig_bar = px.bar(df_cia, x="Companhia", y="Quantidade", text="Quantidade", color_discrete_sequence=["#002060"])
+            fig_bar = px.bar(df_cia, x="Companhia", y="Quantidade", text="Quantidade", color_discrete_sequence=["#001E4D"])
             fig_bar.update_traces(textposition='outside', texttemplate='%{value:,}', hovertemplate='<b>%{x}</b><br>Pendências: %{y:,}')
-            fig_bar.update_layout(height=330, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Qtd Bilhetes")
+            fig_bar.update_layout(height=340, margin=dict(l=10, r=10, t=25, b=10), xaxis_title="", yaxis_title="Qtd Bilhetes")
             st.plotly_chart(fig_bar, use_container_width=True)
         else: st.info("Sem pendências.")
         st.markdown('</div>', unsafe_allow_html=True)
-
+        
     st.markdown('<div class="chart-card"><h5>⏳ Aging / Curva de Envelhecimento das Pendências</h5>', unsafe_allow_html=True)
     if not df_pendentes.empty and "Faixa_Aging" in df_pendentes.columns:
         df_aging = df_pendentes["Faixa_Aging"].value_counts().reset_index()
@@ -1078,8 +1161,10 @@ with aba_sel[0]:
         
         g_ag1, g_ag2 = st.columns([2.2, 1])
         with g_ag1:
-            fig_aging = px.bar(df_aging, x="Faixa", y="Quantidade", text="Quantidade", color="Faixa",
-                               color_discrete_map={"Até 30 dias": "#52c41a", "31 a 60 dias": "#1890ff", "61 a 90 dias": "#fa8c16", "> 90 dias (Crítico)": "#f5222d", "Sem Data": "#bfbfbf"})
+            fig_aging = px.bar(
+                df_aging, x="Faixa", y="Quantidade", text="Quantidade", color="Faixa",
+                color_discrete_map={"Até 30 dias": "#059669", "31 a 60 dias": "#0284C7", "61 a 90 dias": "#D97706", "> 90 dias (Crítico)": "#E11D48", "Sem Data": "#94A3B8"}
+            )
             fig_aging.update_traces(textposition='outside', texttemplate='%{value:,}')
             fig_aging.update_layout(height=300, margin=dict(l=10, r=10, t=25, b=10), showlegend=False, xaxis_title="", yaxis_title="Qtd Bilhetes")
             st.plotly_chart(fig_aging, use_container_width=True)
@@ -1095,7 +1180,7 @@ with aba_sel[0]:
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
-# MÓDULO REUTILIZÁVEL DE TABELAS E AÇÕES EM LOTE
+# TABELAS INTERATIVAS & TRATATIVAS EM LOTE
 # ------------------------------------------------------------------------------
 def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
     if df_tab.empty:
@@ -1107,8 +1192,7 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
         gerente_nome_export = filtro_gerente[0]
     elif "Área Resp. Operação" in df_tab.columns:
         unq_g = list(set(df_tab["Área Resp. Operação"].dropna().tolist()))
-        if len(unq_g) == 1:
-            gerente_nome_export = unq_g[0]
+        if len(unq_g) == 1: gerente_nome_export = unq_g[0]
             
     fn_gerente_s = re.sub(r'\s+', '_', gerente_nome_export)
     nome_arquivo_excel = f"Relatorio_Conciliacao_{nome_base}_{fn_gerente_s}_{datetime.date.today().strftime('%Y%m%d')}.xlsx"
@@ -1122,18 +1206,14 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
             "📥 Extrair Relatório Executivo (.xlsx)",
             data=gerar_excel_estilizado(df_tab, nome_aba=nome_base, nome_gerente=gerente_nome_export),
             file_name=nome_arquivo_excel,
-            key=f"dl_{key_pfx}"
+            key=f"dl_{key_pfx}",
+            use_container_width=True
         )
         
     df_exib = df_tab.copy()
     if termo.strip():
         t_low = termo.strip().lower()
-        cols_s = [
-            c for c in [
-                "Bilhetes", "Rloc_CIA", "Localizador_Sistema", "Localizador", "Rloc_Cia",
-                "Área Resp. Operação", "Emissor / Consultor", "Ponto de venda", "Cliente", "SV", "FOP"
-            ] if c in df_exib.columns
-        ]
+        cols_s = [c for c in ["Bilhetes", "Rloc_CIA", "Localizador_Sistema", "Área Resp. Operação", "Emissor / Consultor", "Cliente", "SV", "FOP"] if c in df_exib.columns]
         m_s = pd.Series(False, index=df_exib.index)
         for col in cols_s:
             m_s |= df_exib[col].astype(str).str.lower().str.contains(t_low, na=False)
@@ -1172,7 +1252,6 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
             
         rloc_init = str(primeira_linha.get("Rloc_CIA", "")).strip() if is_single else ""
         if rloc_init in ["-", "None", "nan", "null"]: rloc_init = ""
-        
         obs_init = str(primeira_linha.get("Obs. Operação", "")).replace("Sem tratativa na operação", "").strip() if is_single else ""
         if obs_init in ["-", "None", "nan", "null"]: obs_init = ""
         
@@ -1187,7 +1266,7 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
                 
             obs_nova = st.text_area("Observação / Justificativa Detalhada:", value=obs_init, key=f"obs_{key_pfx}")
             
-            if st.form_submit_button("💾 Salvar Tratativa"):
+            if st.form_submit_button("💾 Salvar Tratativa em Lote", type="primary"):
                 usr_str = f"{st.session_state['usuario_atual']} ({st.session_state['login_user_id']})"
                 list_up = []
                 for _, row_item in df_sel.iterrows():
@@ -1217,28 +1296,23 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
                     st.cache_data.clear()
                     st.rerun()
                 else: st.error(msg)
-
-    currency_cols_app = [
-        c for c in [
-            "A vista", "A credito", "Tarifa Total Emitida", "Taxa", "Comissão", "Taxa DU", "Incentivo",
-            "Receita Total Emitida", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa",
-            "Receita_Sistema", "Dif_Receita"
-        ] if c in df_exib.columns
-    ]
+                
+    currency_cols_app = [c for c in ["A vista", "A credito", "Tarifa Total Emitida", "Taxa", "Comissão", "Taxa DU", "Incentivo", "Receita Total Emitida", "Tarifa_Sistema", "Dif_Tarifa", "Taxa_Sistema", "Dif_Taxa", "Receita_Sistema", "Dif_Receita"] if c in df_exib.columns]
+    
     def formatar_moeda_br(val):
-        if pd.isna(val) or val is None or str(val).strip() in ["-", "", "nan", "None", "<na>"]:
-            return "-"
+        if pd.isna(val) or val is None or str(val).strip() in ["-", "", "nan", "None", "<na>"]: return "-"
         try:
             v = float(val)
             return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         except (ValueError, TypeError): return str(val)
+        
     df_styled = df_exib.style
     if currency_cols_app:
         df_styled = df_styled.format(formatar_moeda_br, subset=currency_cols_app)
     st.dataframe(df_styled, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------------------------
-# ABAS OPERACIONAIS
+# CONTEÚDO DAS ABAS OPERACIONAIS 1 A 7
 # ------------------------------------------------------------------------------
 with aba_sel[1]:
     st.markdown("<div class='section-banner'><h3>📋 1. Falta de Lançamento no ERP (Maringá)</h3><p>Emissões pendentes de lançamento no ERP Benner.</p></div>", unsafe_allow_html=True)
@@ -1269,34 +1343,127 @@ with aba_sel[7]:
     renderizar_tabela_tratativas(f_sem_div, "Bilhetes_Conciliados", "ok")
 
 # ------------------------------------------------------------------------------
-# ABAS MASTER
+# ABAS DE GOVERNANÇA E GESTÃO EXCLUSIVAS DO MASTER
 # ------------------------------------------------------------------------------
 if e_master():
+    # GESTÃO DE ACESSOS E LIBERAÇÃO OBRIGATÓRIA MASTER
     with aba_sel[8]:
-        st.subheader("⚙️ Gestão de Acessos & Frequência de Uso")
-        df_gestao_usr, df_historico_acessos = obter_relatorio_acessos_db()
-        if not df_gestao_usr.empty:
-            st.dataframe(df_gestao_usr, use_container_width=True, hide_index=True)
-        else: st.info("Sem dados de acessos.")
+        st.markdown("<div class='section-banner'><h3>⚙️ Gestão de Acessos & Aprovação de Usuários (Exclusivo Master)</h3><p>Controle de permissões, liberação de solicitações e auditoria de perfis.</p></div>", unsafe_allow_html=True)
+        
+        tab_aprov, tab_novo_m, tab_geral_usr = st.tabs([
+            "📋 Solicitações Pendentes de Aprovação",
+            "➕ Criar Usuário Diretamente",
+            "👥 Quadro Geral de Usuários Cadastrados"
+        ])
+        
+        # 1. Novas Solicitações Aguardando Aprovação
+        with tab_aprov:
+            st.subheader("Usuários Aguardando Liberação do Master")
+            df_users_all, _ = obter_relatorio_acessos_db()
+            
+            if not df_users_all.empty and "status" in df_users_all.columns:
+                df_pend_aprov = df_users_all[df_users_all["status"].astype(str).str.upper() == "PENDENTE_APROVACAO"]
+                
+                if not df_pend_aprov.empty:
+                    for _, u_row in df_pend_aprov.iterrows():
+                        u_usr = u_row["usuario"]
+                        u_nome = u_row["nome"]
+                        u_perf = u_row["perfil"]
+                        u_criado = u_row.get("criado_em", "Recente")
+                        
+                        with st.expander(f"👤 {u_nome} (@{u_usr}) - Perfil Solicitado: {u_perf} | Solicitado em: {u_criado}"):
+                            c_p1, c_p2, c_p3 = st.columns([2, 2, 2])
+                            with c_p1:
+                                perf_def = st.selectbox("Definir Nível de Perfil:", ["Gestor", "Master"], index=0 if u_perf == "Gestor" else 1, key=f"sel_perf_{u_usr}")
+                            with c_p2:
+                                decisao_st = st.selectbox("Decisão de Acesso:", ["Ativo (Aprovar)", "Inativo (Rejeitar)", "Manter Pendente"], index=0, key=f"sel_dec_{u_usr}")
+                            with c_p3:
+                                st.write("")
+                                if st.button("Aplicar Decisão", key=f"btn_aprov_{u_usr}", type="primary"):
+                                    st_map = {"Ativo (Aprovar)": "ATIVO", "Inativo (Rejeitar)": "INATIVO", "Manter Pendente": "PENDENTE_APROVACAO"}
+                                    st_final = st_map[decisao_st]
+                                    if st_final != "PENDENTE_APROVACAO":
+                                        ok_g, msg_g = gerenciar_status_usuario_master(u_usr, st_final, perf_def, st.session_state['usuario_atual'])
+                                        if ok_g:
+                                            st.success(msg_g)
+                                            time.sleep(1)
+                                            st.rerun()
+                                        else: st.error(msg_g)
+                else: st.success("🎉 Nenhuma solicitação de acesso pendente no momento.")
+            else: st.info("Nenhum usuário cadastrado.")
 
+        # 2. Criar Usuário Diretamente pelo Master
+        with tab_novo_m:
+            st.subheader("Cadastrar Novo Usuário Já Aprovado")
+            with st.form("form_master_add_user"):
+                m_nome = st.text_input("Nome Completo:")
+                m_user = st.text_input("Usuário (Login):").strip().lower()
+                m_pass = st.text_input("Senha Inicial:", type="password")
+                m_perf = st.selectbox("Perfil de Acesso:", ["Gestor", "Master"])
+                btn_m_create = st.form_submit_button("Criar Usuário Ativo", type="primary")
+                
+                if btn_m_create:
+                    engine = get_db_engine()
+                    if engine:
+                        try:
+                            with engine.begin() as conn:
+                                conn.execute(
+                                    text("""
+                                        INSERT INTO usuarios (usuario, senha, nome, perfil, status, aprovado_por)
+                                        VALUES (:usuario, :senha, :nome, :perfil, 'ATIVO', :master)
+                                        ON CONFLICT (usuario) DO UPDATE SET senha = :senha, status = 'ATIVO', perfil = :perfil;
+                                    """),
+                                    {"usuario": m_user, "senha": m_pass, "nome": m_nome, "perfil": m_perf, "master": st.session_state['usuario_atual']}
+                                )
+                            st.success(f"✅ Usuário @{m_user} criado e ativado com sucesso!")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e: st.error(f"Erro ao criar usuário: {e}")
+
+        # 3. Quadro Geral de Usuários
+        with tab_geral_usr:
+            st.subheader("Quadro Geral de Contas & Frequência de Acesso")
+            df_all, _ = obter_relatorio_acessos_db()
+            if not df_all.empty:
+                st.dataframe(df_all, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                st.subheader("✏️ Alterar Status/Perfil de Conta Existente")
+                with st.form("form_edit_existing_user"):
+                    usr_target = st.selectbox("Selecione a conta de usuário:", options=df_all["usuario"].tolist())
+                    u_st_new = st.selectbox("Novo Status:", ["ATIVO", "INATIVO", "PENDENTE_APROVACAO"])
+                    u_pf_new = st.selectbox("Novo Perfil:", ["Gestor", "Master"])
+                    btn_up_usr = st.form_submit_button("Atualizar Cadastro")
+                    if btn_up_usr:
+                        ok_u, msg_u = gerenciar_status_usuario_master(usr_target, u_st_new, u_pf_new, st.session_state['usuario_atual'])
+                        if ok_u:
+                            st.success(msg_u)
+                            time.sleep(1)
+                            st.rerun()
+                        else: st.error(msg_u)
+
+    # LOG DE AUDITORIA DE ACESSOS
     with aba_sel[9]:
-        st.subheader("📜 Log de Histórico de Auditoria")
+        st.markdown("<div class='section-banner'><h3>📜 Log de Histórico de Auditoria (Audit Trail)</h3><p>Trilha de acessos e modificações de login dos usuários no portal.</p></div>", unsafe_allow_html=True)
         _, df_logs_det = obter_relatorio_acessos_db()
         if not df_logs_det.empty:
             st.dataframe(df_logs_det, use_container_width=True, hide_index=True)
+        else: st.info("Nenhum log gravado.")
 
+    # CARGA EM LOTE AVANÇADA
     with aba_sel[10]:
-        st.subheader("📥 Carga de Retornos de Cobrança em Lote Avançada")
+        st.markdown("<div class='section-banner'><h3>📥 Carga de Retornos de Cobrança em Lote Avançada</h3><p>Importação em massa de arquivos de tratativa para sincronização com banco PostgreSQL.</p></div>", unsafe_allow_html=True)
         arq_up = st.file_uploader("Arquivo de retorno (.xlsx ou .csv):", type=["xlsx", "csv"], key="upl_lote_adv")
         if arq_up:
             try:
                 df_lote_raw = pd.read_csv(arq_up, dtype=str) if arq_up.name.endswith(".csv") else pd.read_excel(arq_up, dtype=str)
                 st.dataframe(df_lote_raw.head(10), use_container_width=True, hide_index=True)
-                if st.button("🚀 Processar Lote", type="primary"):
+                if st.button("🚀 Processar e Sincronizar Lote", type="primary"):
                     usr_str = f"CargaLote_{st.session_state['usuario_atual']}"
                     ok, msg, n_at, n_nv, _ = salvar_tratativas_lote_supabase(df_lote_raw, usr_str)
                     if ok:
                         st.success(msg)
                         st.cache_data.clear()
+                        time.sleep(1)
                         st.rerun()
             except Exception as e: st.error(f"Erro ao ler arquivo: {e}")
