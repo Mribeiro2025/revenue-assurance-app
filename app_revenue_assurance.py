@@ -5,13 +5,12 @@ import re
 import time
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter  # <-- IMPORT CORRIGIDO
+from openpyxl.utils import get_column_letter
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from sqlalchemy import create_engine, text
-
 # --- IMPORTS SAAS C-LEVEL & PDF ---
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 from reportlab.lib.pagesizes import letter
@@ -33,7 +32,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
 ARQUIVO_DASHBOARD_PADRAO = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
 TEMPO_MAXIMO_SESSAO_HORAS = 8.0
 
@@ -65,20 +63,22 @@ DEPARA_GERENTES = {
     "LEMONTECH VIRTUAL": "Emissor Virtual Lemontech", "VIRTUAL LEMONTECH": "Emissor Virtual Lemontech", "LEMONTECH": "Emissor Virtual Lemontech"
 }
 
+# --- ATUALIZAÇÃO 1: MÚLTIPLOS E-MAILS DE DESTINO ---
+# Separe os e-mails por vírgula se desejar enviar para gerente e supervisor ao mesmo tempo
 DEPARA_EMAILS_GERENTES = {
-    "Fabiano Souza": "fabiano.souza@maringaturismo.com.br",
-    "Guilherme Silva": "guilherme.silva@maringaturismo.com.br",
-    "Ivanete Bertasol": "ivanete.bertasol@maringaturismo.com.br",
-    "Keli Santi": "keli.santi@maringaturismo.com.br",
-    "Marcelo Pereira": "marcelo.pereira@maringaturismo.com.br",
-    "Rosangela Pallu": "rosangela.pallu@maringaturismo.com.br",
-    "Jaime Schnaider": "jaime.schnaider@maringaturismo.com.br",
-    "Silvana Celani": "silvana.celani@maringaturismo.com.br",
-    "Katia Martins": "katia.martins@maringaturismo.com.br",
-    "João Paulo": "joao.paulo@maringaturismo.com.br",
-    "Suporte Backoffice": "backoffice@maringaturismo.com.br",
+    "Fabiano Souza": "fsouza@maringaturismo.com.br, supervisor.lazer@maringaturismo.com.br",
+    "Guilherme Silva": "ghsilva@maringaturismo.com.br",
+    "Ivanete Bertasol": "ibertasol@maringaturismo.com.br",
+    "Keli Santi": "ksanti@maringaturismo.com.br",
+    "Marcelo Pereira": "mpereira@maringaturismo.com.br",
+    "Rosangela Pallu": "rpallu@maringaturismo.com.br",
+    "Jaime Schnaider": "efarias@maringaturismo.com.br",
+    "Silvana Celani": "scelani@maringaturismo.com.br",
+    "Katia Martins": "kmartins@maringaturismo.com.br",
+    "João Paulo": "jpsousa@maringaturismo.com.br",
+    "Suporte Backoffice": "suportebackoffice@grupoarbaitman.com.br",
     "Central de Eventos": "eventos@maringaturismo.com.br",
-    "Emissor Virtual Lemontech": "auditoria.ti@maringaturismo.com.br"
+    "Emissor Virtual Lemontech": "suportebackoffice@grupoarbaitman.com.br"
 }
 
 def padronizar_nome_gerente(nome_raw):
@@ -435,11 +435,9 @@ class NumberedCanvas(canvas.Canvas):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.pages = []
-
     def showPage(self):
         self.pages.append(dict(self.__dict__))
         self._startPage()
-
     def save(self):
         num_pages = len(self.pages)
         for page in self.pages:
@@ -447,7 +445,6 @@ class NumberedCanvas(canvas.Canvas):
             self.draw_footer(num_pages)
             super().showPage()
         super().save()
-
     def draw_footer(self, page_count):
         self.saveState()
         self.setFont("Helvetica", 8)
@@ -558,11 +555,10 @@ def gerar_dossie_pdf_executivo(df_pendentes, tot_processados, taxa_concil, recei
     style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#1E293B'), leading=11)
     style_cell_bold = ParagraphStyle('CellB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, textColor=colors.HexColor('#1E293B'), leading=11)
     style_cell_header = ParagraphStyle('CellH', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, textColor=colors.white, leading=11, alignment=1)
-
+    
     story.append(Paragraph("✈️ Grupo Arbaitman — Dossiê Executivo de Revenue Assurance", style_title))
     story.append(Paragraph(f"<b>Relatório Consolidado de Pendências & Controladoria</b> | Emissão: {datetime.datetime.now().strftime('%d/%m/%Y às %H:%M:%S')} | Fonte: {dt_atualizacao}", style_sub))
     story.append(Spacer(1, 12))
-
     kpi_data = [
         [Paragraph("Total Processado", style_cell_header), Paragraph("Taxa Conciliação", style_cell_header), Paragraph("Pendências Ativas", style_cell_header), Paragraph("Receita Emitida", style_cell_header)],
         [
@@ -583,7 +579,6 @@ def gerar_dossie_pdf_executivo(df_pendentes, tot_processados, taxa_concil, recei
     ]))
     story.append(t_kpi)
     story.append(Spacer(1, 15))
-
     story.append(Paragraph("📊 Resumo de Pendências por Gerente Responsável", style_h2))
     story.append(Spacer(1, 6))
     
@@ -612,7 +607,6 @@ def gerar_dossie_pdf_executivo(df_pendentes, tot_processados, taxa_concil, recei
         ]))
         story.append(t_ger)
         story.append(Spacer(1, 15))
-
     story.append(Paragraph("⏳ Curva de Envelhecimento (Aging) das Pendências", style_h2))
     story.append(Spacer(1, 6))
     
@@ -645,43 +639,70 @@ def gerar_dossie_pdf_executivo(df_pendentes, tot_processados, taxa_concil, recei
             ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
         ]))
         story.append(t_ag)
-
     doc.build(story, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer.getvalue()
 
-def enviar_email_relatorio(smtp_config, destinatario_email, gerente_nome, buffer_excel, total_pendencias):
+# --- ATUALIZAÇÃO 2: NOVA FUNÇÃO DE DISPARO DE E-MAIL COM CORPO E CÓPIAS PADRONIZADOS ---
+def enviar_email_relatorio(smtp_config, destinatarios_para, gerente_nome, buffer_excel, total_pendencias):
     msg = MIMEMultipart()
     msg['From'] = smtp_config['sender_email']
-    msg['To'] = destinatario_email
+    
+    # Tratamento caso venha uma lista ou string separada por vírgula no destinatários
+    if isinstance(destinatarios_para, list):
+        para_str = ", ".join(destinatarios_para)
+    else:
+        para_str = destinatarios_para
+        
+    msg['To'] = para_str
+    
+    # E-mails fixos em cópia para todos os envios
+    cc_str = "daires@maringaturismo.com.br, conciliacao@maringaturismo.com.br, wfonseca@maringaturismo.com.br"
+    msg['Cc'] = cc_str
+    
     msg['Subject'] = f"✈️ [Grupo Arbaitman] Pendências de Conciliação Aérea — {gerente_nome} ({datetime.date.today().strftime('%d/%m/%Y')})"
+    
     corpo_html = f"""
     <html>
-        <body style="font-family: Arial, sans-serif; color: #333333;">
+        <body style="font-family: Arial, sans-serif; color: #333333; line-height: 1.5;">
             <div style="background-color: #001E4D; color: #ffffff; padding: 15px 20px; border-radius: 8px;">
                 <h2>Grupo Arbaitman — Controladoria & Revenue Assurance</h2>
             </div>
-            <p>Olá, <b>{gerente_nome}</b>,</p>
-            <p>Segue em anexo o relatório individualizado atualizado das pendências de conciliação sob sua gestão.</p>
-            <ul>
-                <li><b>Total de Bilhetes Pendentes:</b> {total_pendencias:,}</li>
-                <li><b>Data do Extrato:</b> {datetime.date.today().strftime('%d/%m/%Y')}</li>
-            </ul>
-            <p>Por favor, verifique as tratativas no portal ou atualize o arquivo retornado.</p>
+            <p>Prezados gestores e equipe técnica <b>({gerente_nome})</b>,</p>
+            <p>Informamos que o relatório atualizado de <b>Pendências de Conciliação Aérea</b> já se encontra disponível. O arquivo em anexo apresenta todos os detalhes e pendências identificadas em seu centro de custo / área de responsabilidade.</p>
+            
+            <table style="border-collapse: collapse; width: 50%; min-width: 300px; margin: 20px 0;">
+                <tr style="background-color: #f1f5f9; border: 1px solid #cbd5e1;">
+                    <td style="padding: 10px; font-weight: bold; border: 1px solid #cbd5e1;">Total de Bilhetes Pendentes:</td>
+                    <td style="padding: 10px; text-align: center; border: 1px solid #cbd5e1;">{total_pendencias:,}</td>
+                </tr>
+                <tr style="border: 1px solid #cbd5e1;">
+                    <td style="padding: 10px; font-weight: bold; border: 1px solid #cbd5e1;">Data do Relatório:</td>
+                    <td style="padding: 10px; text-align: center; border: 1px solid #cbd5e1;">{datetime.date.today().strftime('%d/%m/%Y')}</td>
+                </tr>
+            </table>
+            
+            <p>Por gentileza, verifiquem as tratativas diretamente no <b>Portal de Revenue Assurance</b> ou atualizem o arquivo retornado para nossa equipe de conciliação.</p>
+            <p>Estamos à disposição para eventuais dúvidas de preenchimento ou análise de cenários.</p>
             <br>
             <p>Atenciosamente,<br><b>Auditoria & FP&A — Grupo Arbaitman</b></p>
         </body>
     </html>
     """
     msg.attach(MIMEText(corpo_html, 'html'))
+    
     filename = f"Relatorio_Pendencias_{gerente_nome.replace(' ', '_')}_{datetime.date.today().strftime('%Y%m%d')}.xlsx"
     part = MIMEApplication(buffer_excel, Name=filename)
     part['Content-Disposition'] = f'attachment; filename="{filename}"'
     msg.attach(part)
+    
+    lista_todos_destinatarios = [e.strip() for e in para_str.split(",") if e.strip()] + \
+                                [e.strip() for e in cc_str.split(",") if e.strip()]
+
     server = smtplib.SMTP(smtp_config['server'], smtp_config['port'])
     server.starttls()
     server.login(smtp_config['sender_email'], smtp_config['password'])
-    server.sendmail(smtp_config['sender_email'], destinatario_email, msg.as_string())
+    server.sendmail(smtp_config['sender_email'], lista_todos_destinatarios, msg.as_string())
     server.quit()
 
 # ==============================================================================
@@ -1030,7 +1051,7 @@ df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_
 df_todos_unificados = pd.concat([df_falta, df_concur, df_erros, df_backoffice, df_eventos, df_lemon_virt, df_sem_div], ignore_index=True)
 
 st.sidebar.title("✈️ Grupo Arbaitman")
-st.sidebar.caption("Revenue Assurance & Controladoria v5.3")
+st.sidebar.caption("Revenue Assurance & Controladoria v5.4")
 st.sidebar.write(f"👤 **{st.session_state['usuario_atual']}** ({st.session_state['perfil_atual']})")
 st.sidebar.info(f"🕒 **Última Atualização:**\n{dt_ultima_atualizacao_str}")
 
@@ -1047,7 +1068,6 @@ with st.sidebar.expander("🔑 Alterar Minha Senha"):
                 ok, msg = alterar_senha_usuario(st.session_state.get("login_user_id", ""), pass_act, pass_new)
                 if ok: st.success(msg)
                 else: st.error(msg)
-
 col_sb1, col_sb2 = st.sidebar.columns(2)
 with col_sb1:
     if st.button("🔄 Recarregar", key="btn_recarregar_sb", use_container_width=True):
@@ -1108,7 +1128,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
 c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
 c1.metric("Pendentes ERP", f"{len(f_falta):,}")
 c2.metric("Erro Concur 🚨", f"{len(f_concur):,}")
@@ -1201,7 +1220,7 @@ with aba_sel[0]:
             st.plotly_chart(fig_bar_cia, use_container_width=True)
         else: st.info("Sem pendências.")
         st.markdown('</div>', unsafe_allow_html=True)
-
+        
     g3, g4 = st.columns(2)
     with g3:
         st.markdown('<div class="chart-card"><h5>👤 Pendências por Gerente Responsável</h5>', unsafe_allow_html=True)
@@ -1230,7 +1249,7 @@ with aba_sel[0]:
             else: st.info("Datas de emissão não identificadas.")
         else: st.info("Sem dados mensais.")
         st.markdown('</div>', unsafe_allow_html=True)
-
+        
     st.markdown('<div class="chart-card"><h5>⏳ Aging / Curva de Envelhecimento das Pendências</h5>', unsafe_allow_html=True)
     if not df_pendentes.empty and "Faixa_Aging" in df_pendentes.columns:
         df_aging = df_pendentes["Faixa_Aging"].value_counts().reset_index()
@@ -1295,14 +1314,16 @@ def renderizar_tabela_tratativas(df_tab, nome_base, key_pfx):
     gb.configure_selection(selection_mode="multiple", use_checkbox=True, header_checkbox=True)
     gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=15)
     gb.configure_default_column(resizable=True, filter=True, sortable=True)
+    
     currency_cols = [c for c in ["A vista", "A credito", "Tarifa Total Emitida", "Tarifa_Sistema", "Dif_Tarifa", "Taxa", "Taxa_Sistema", "Dif_Taxa", "Comissão", "Taxa DU", "Incentivo", "Receita Total Emitida", "Receita_Sistema", "Dif_Receita"] if c in df_exib.columns]
     for c in currency_cols: gb.configure_column(c, type=["numericColumn", "numberColumnFilter"], valueFormatter="javascript: Math.floor(x).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})")
-
-    grid_response = AgGrid(df_exib, gridOptions=gb.build(), update_mode=GridUpdateMode.SELECTION_CHANGED, theme="alpine", height=450, fit_columns_on_grid_load=False, allow_unsafe_jscode=True, key=f"grid_{key_pfx}")
-
+    
+    # ATUALIZAÇÃO 3: use_container_width=True PARA RESOLVER A QUESTÃO DA TABELA REDUZIDA
+    grid_response = AgGrid(df_exib, gridOptions=gb.build(), update_mode=GridUpdateMode.SELECTION_CHANGED, theme="alpine", height=450, fit_columns_on_grid_load=False, allow_unsafe_jscode=True, use_container_width=True, key=f"grid_{key_pfx}")
+    
     selected_rows = grid_response.get("selected_rows", [])
     df_sel = pd.DataFrame(selected_rows) if isinstance(selected_rows, list) else (selected_rows if isinstance(selected_rows, pd.DataFrame) else pd.DataFrame())
-
+    
     if not df_sel.empty:
         st.info(f"🎯 **{len(df_sel)} bilhete(s) selecionado(s)** para atualização de tratativa.")
         is_single = len(df_sel) == 1
@@ -1420,12 +1441,10 @@ if e_master():
                         st.success(f"✅ @{m_user} criado com sucesso!")
                         time.sleep(1)
                         st.rerun()
-
     with aba_sel[9]:
         st.markdown("<div class='section-banner'><h3>📜 Log de Histórico de Auditoria</h3><p>Trilha de acessos e modificações.</p></div>", unsafe_allow_html=True)
         _, df_logs_det = obter_relatorio_acessos_db()
         if not df_logs_det.empty: st.dataframe(df_logs_det, use_container_width=True, hide_index=True)
-
     with aba_sel[10]:
         st.markdown("<div class='section-banner'><h3>📥 Carga de Retornos em Lote Avançada</h3><p>Importação em massa via CSV ou Excel.</p></div>", unsafe_allow_html=True)
         arq_up = st.file_uploader("Arquivo (.xlsx ou .csv):", type=["xlsx", "csv"], key="upl_lote_adv")
@@ -1435,22 +1454,23 @@ if e_master():
             if st.button("🚀 Processar e Sincronizar Lote", type="primary"):
                 ok, msg, _, _, _ = salvar_tratativas_lote_supabase(df_lote_raw, f"CargaLote_{st.session_state['usuario_atual']}")
                 if ok: st.success(msg); time.sleep(1); st.cache_data.clear(); st.rerun()
-
+                
     with aba_sel[11]:
         st.markdown("<div class='section-banner'><h3>📧 Disparo Manual de Relatórios por E-mail</h3><p>Gere e envie relatórios customizados em anexo para cada gerente.</p></div>", unsafe_allow_html=True)
         with st.expander("⚙️ Configurações SMTP"):
             col_m1, col_m2, col_m3 = st.columns(3)
             with col_m1: smtp_server = st.text_input("Servidor:", value="smtp.office365.com")
             with col_m2: smtp_port = st.number_input("Porta:", value=587)
-            with col_m3: smtp_user = st.text_input("Remetente:", value="auditoria@arbaitman.com.br")
+            # --- ATUALIZAÇÃO 4: NOVO REMETENTE COMPLIANCE PADRÃO ---
+            with col_m3: smtp_user = st.text_input("Remetente:", value="compliance@grupoarbaitman.com.br")
             smtp_pass = st.text_input("Senha / Token:", type="password")
-
+            
         gerentes_disponiveis = sorted(list(set(df_todos_filtrados["Área Resp. Operação"].dropna().unique())))
         gerentes_selecionados = st.multiselect("Selecione os Gerentes:", options=gerentes_disponiveis, default=gerentes_disponiveis)
         
-        preview_data = [{"Gerente": g, "E-mail": DEPARA_EMAILS_GERENTES.get(g, "Não cadastrado"), "Pendências": len(df_todos_filtrados[df_todos_filtrados["Área Resp. Operação"] == g])} for g in gerentes_selecionados]
+        preview_data = [{"Gerente": g, "E-mail Principal (Para)": DEPARA_EMAILS_GERENTES.get(g, "Não cadastrado"), "Pendências": len(df_todos_filtrados[df_todos_filtrados["Área Resp. Operação"] == g])} for g in gerentes_selecionados]
         st.dataframe(pd.DataFrame(preview_data), use_container_width=True, hide_index=True)
-
+        
         if st.button("🚀 Disparar E-mails Agora", type="primary", use_container_width=True):
             if not smtp_pass: st.error("Informe a senha SMTP.")
             else:
@@ -1461,11 +1481,15 @@ if e_master():
                     status_text.text(f"Enviando para {g}...")
                     df_g = df_todos_filtrados[df_todos_filtrados["Área Resp. Operação"] == g]
                     email_dest = DEPARA_EMAILS_GERENTES.get(g)
+                    
                     if email_dest and email_dest != "Não cadastrado":
                         try:
+                            # A função enviar_email_relatorio já embute a cópia pra todos os e-mails solicitados (Diego, Conciliação, Wender)
                             enviar_email_relatorio(smtp_config, email_dest, g, gerar_excel_estilizado(df_g, "Pendencias", g), len(df_g))
                             sucessos += 1
-                        except Exception: erros += 1
+                        except Exception as e:
+                            st.error(f"Falha de envio para {g}: {e}")
+                            erros += 1
                     else: erros += 1
                     progresso.progress((i + 1) / len(gerentes_selecionados))
                 status_text.empty()
