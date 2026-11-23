@@ -401,15 +401,19 @@ def salvar_tratativas_lote_supabase(df_lote, usuario):
     except Exception as e: return False, f"Erro ao salvar tratativas: {e}", 0, 0, len(dados_lote)
 
 def mesclar_com_supabase(df_excel):
-    if df_excel is None or df_excel.empty: return df_excel
+    if df_excel is None or df_excel.empty:
+        return df_excel
     df_db = carregar_tratativas_db()
-    if df_db.empty: return df_excel
+    if df_db.empty:
+        return df_excel
     df_excel = df_excel.copy()
     col_bilhete_excel = "Bilhetes" if "Bilhetes" in df_excel.columns else ("bilhete" if "bilhete" in df_excel.columns else None)
-    if not col_bilhete_excel: return df_excel
+    if not col_bilhete_excel:
+        return df_excel
     df_excel["Bilhete_Clean"] = df_excel[col_bilhete_excel].apply(sanitizar_bilhete)
     df_db["Bilhete_Clean"] = df_db["bilhete"].apply(sanitizar_bilhete)
-    if "data_modificacao" in df_db.columns: df_db = df_db.sort_values("data_modificacao", ascending=False)
+    if "data_modificacao" in df_db.columns:
+        df_db = df_db.sort_values("data_modificacao", ascending=False)
     df_db = df_db.drop_duplicates("Bilhete_Clean", keep="first").reset_index(drop=True)
     cols_sup_desejadas = ["status_geral", "area_resp", "obs_operacao", "setor", "gerentes", "sv", "fop", "rloc_cia", "cliente"]
     cols_presentes = [c for c in cols_sup_desejadas if c in df_db.columns]
@@ -422,10 +426,101 @@ def mesclar_com_supabase(df_excel):
     for col_excel, col_sb in muta_map:
         if col_sb in df_merged.columns:
             mask_valido = df_merged[col_sb].notna() & ~df_merged[col_sb].astype(str).str.strip().isin(["-", "", "None", "nan", "<na>"])
-            if col_excel not in df_merged.columns: df_merged[col_excel] = df_merged[col_sb]
-            else: df_merged[col_excel] = df_merged[col_sb].where(mask_valido, df_merged[col_excel])
+            # Protege bilhetes já conciliados com valores exatos no ERP contra status antigos do histórico
+            if col_excel == "Status_Geral" and "Status_Divergencia" in df_merged.columns:
+                mask_ja_conciliado = df_merged["Status_Divergencia"].astype(str).str.strip().eq("Valores Corretos")
+                mask_valido = mask_valido & ~mask_ja_conciliado
+            if col_excel not in df_merged.columns:
+                df_merged[col_excel] = df_merged[col_sb]
+            else:
+                df_merged[col_excel] = df_merged[col_sb].where(mask_valido, df_merged[col_excel])
     df_merged.drop(columns=[c for c in cols_presentes if c in df_merged.columns], inplace=True, errors="ignore")
     return df_merged
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def carregar_bases():
+    dt_atualizacao = None
+    df_m = pd.DataFrame()
+    veio_da_view_supabase = False
+
+    # 1. PRIORIDADE: Consulta em tempo real no Supabase (vw_conciliacao_mestra)
+    engine = get_db_engine()
+    if engine:
+        try:
+            df_m = pd.read_sql("SELECT * FROM vw_conciliacao_mestra", engine)
+            if not df_m.empty:
+                veio_da_view_supabase = True
+                if "Ultima_Alteracao" in df_m.columns and df_m["Ultima_Alteracao"].notna().any():
+                    dt_val = pd.to_datetime(df_m["Ultima_Alteracao"], errors="coerce").max()
+                    if pd.notna(dt_val):
+                        dt_atualizacao = dt_val
+        except Exception:
+            # Em caso de falha na View, cai direto no fallback do Excel local
+            # (evita ler tb_conciliacao_base crua em snake_case e causar KeyError)
+            pass
+
+    # 2. FALLBACK: Planilha local caso o Supabase esteja indisponível ou vazio
+    if df_m.empty and os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
+        fonte = ARQUIVO_DASHBOARD_PADRAO
+        try:
+            mod_time = os.path.getmtime(ARQUIVO_DASHBOARD_PADRAO)
+            dt_atualizacao = datetime.datetime.fromtimestamp(mod_time, tz=datetime.timezone.utc)
+        except Exception:
+            pass
+        try:
+            xls = pd.ExcelFile(fonte, engine="openpyxl")
+            frames = []
+            for sheet in xls.sheet_names:
+                if (
+                    sheet.startswith("99_")
+                    or sheet.startswith("98_")
+                    or sheet.startswith("97_")
+                    or "base" in sheet.lower()
+                    or "diverg" in sheet.lower()
+                ):
+                    df_sheet = pd.read_excel(xls, sheet_name=sheet)
+                    if not df_sheet.empty:
+                        frames.append(df_sheet)
+            if not frames and len(xls.sheet_names) > 0:
+                frames.append(pd.read_excel(xls, sheet_name=xls.sheet_names[0]))
+            if frames:
+                df_m = pd.concat(frames, ignore_index=True)
+        except Exception:
+            pass
+
+    # 3. Retorno vazio seguro caso ambas as fontes estejam indisponíveis
+    if df_m.empty:
+        return (
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            formatar_data_br(dt_atualizacao),
+        )
+
+    # 4. Sanitização e deduplicação de bilhetes
+    col_bilhete = "Bilhetes" if "Bilhetes" in df_m.columns else ("bilhete" if "bilhete" in df_m.columns else None)
+    if col_bilhete:
+        df_m["Bilhete_Clean"] = df_m[col_bilhete].apply(sanitizar_bilhete)
+        df_m = (
+            df_m[df_m["Bilhete_Clean"].astype(str).str.len() > 3]
+            .drop_duplicates("Bilhete_Clean", keep="first")
+            .reset_index(drop=True)
+        )
+        df_m["Bilhetes"] = df_m["Bilhete_Clean"]
+
+    # 5. Padronização e mesclagem condicional (a View já faz LEFT JOIN com tratativas no Postgres)
+    df_m = padronizar_df(df_m)
+    if not veio_da_view_supabase:
+        df_m = mesclar_com_supabase(df_m)
+
+    # 6. Roteamento para as 7 abas operacionais
+    f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
+    return f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok, formatar_data_br(dt_atualizacao)
 
 # ==============================================================================
 # 3. EXPORTAÇÃO EXECUTIVA PARA EXCEL & DOSSIÊ PDF ULTRA-PROFISSIONAL (C-LEVEL)
@@ -1000,49 +1095,6 @@ def rotear_bases_mestra(df_master):
     
     return df_falta, df_concur, df_erros, df_bo, df_eventos, df_lemon_virt, df_ok
 
-@st.cache_data(ttl=30, show_spinner=False)
-def carregar_bases():
-    dt_atualizacao = datetime.datetime.now()
-    df_m = pd.DataFrame()
-    if os.path.exists(ARQUIVO_DASHBOARD_PADRAO):
-        fonte = ARQUIVO_DASHBOARD_PADRAO
-        try:
-            mod_time = os.path.getmtime(ARQUIVO_DASHBOARD_PADRAO)
-            dt_atualizacao = datetime.datetime.fromtimestamp(mod_time)
-        except Exception: pass
-        try:
-            xls = pd.ExcelFile(fonte, engine="openpyxl")
-            frames = []
-            for sheet in xls.sheet_names:
-                if sheet.startswith("99_") or sheet.startswith("98_") or sheet.startswith("97_") or "base" in sheet.lower() or "diverg" in sheet.lower():
-                    df_sheet = pd.read_excel(xls, sheet_name=sheet)
-                    if not df_sheet.empty: frames.append(df_sheet)
-            if not frames and len(xls.sheet_names) > 0: frames.append(pd.read_excel(xls, sheet_name=xls.sheet_names[0]))
-            if frames: df_m = pd.concat(frames, ignore_index=True)
-        except Exception: pass
-    if df_m.empty:
-        engine = get_db_engine()
-        if engine:
-            try:
-                query = "SELECT * FROM vw_conciliacao_mestra"
-                df_m = pd.read_sql(query, engine)
-                if not df_m.empty and "Ultima_Alteracao" in df_m.columns and df_m["Ultima_Alteracao"].notna().any():
-                    dt_val = pd.to_datetime(df_m["Ultima_Alteracao"]).max()
-                    if pd.notna(dt_val): dt_atualizacao = dt_val
-            except Exception:
-                try: df_m = pd.read_sql("SELECT * FROM tb_conciliacao_base", engine)
-                except Exception: pass
-    if df_m.empty: return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), formatar_data_br(dt_atualizacao)
-    
-    col_bilhete = "Bilhetes" if "Bilhetes" in df_m.columns else ("bilhete" if "bilhete" in df_m.columns else None)
-    if col_bilhete:
-        df_m["Bilhete_Clean"] = df_m[col_bilhete].apply(sanitizar_bilhete)
-        df_m = df_m[df_m["Bilhete_Clean"].astype(str).str.len() > 3].drop_duplicates("Bilhete_Clean", keep="first").reset_index(drop=True)
-        df_m["Bilhetes"] = df_m["Bilhete_Clean"]
-    df_m = padronizar_df(df_m)
-    df_m = mesclar_com_supabase(df_m)
-    f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok = rotear_bases_mestra(df_m)
-    return f_falta, f_concur, f_erros, f_bo, f_evt, f_lem, f_ok, formatar_data_br(dt_atualizacao)
 
 # ==============================================================================
 # 6. SIDEBAR & FILTROS OPERACIONAIS UNIFICADOS

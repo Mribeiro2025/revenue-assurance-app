@@ -58,11 +58,12 @@ def obter_engine_supabase():
     return None
 
 def criar_tabelas_supabase_se_nao_existirem(engine):
-    """Garante a criação de tabelas, chaves primárias e views no Supabase com lógica corrigida de Status_Geral."""
+    """Garante a criação de tabelas, colunas novas e recriação segura da view no Supabase."""
     if not engine:
         return
     from sqlalchemy import text
-    ddl_script = """
+
+    ddl_tabelas = """
     CREATE TABLE IF NOT EXISTS tb_conciliacao_base (
         bilhete VARCHAR(255) PRIMARY KEY,
         localizador VARCHAR(255),
@@ -113,16 +114,6 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
         data_processamento TIMESTAMP DEFAULT NOW()
     );
 
-    DO $$ 
-    BEGIN 
-        IF NOT EXISTS (
-            SELECT 1 FROM information_schema.table_constraints 
-            WHERE constraint_type = 'PRIMARY KEY' AND table_name = 'tb_conciliacao_base'
-        ) THEN
-            ALTER TABLE tb_conciliacao_base ADD CONSTRAINT pk_tb_conciliacao_base PRIMARY KEY (bilhete);
-        END IF;
-    END $$;
-
     ALTER TABLE tb_conciliacao_base ADD COLUMN IF NOT EXISTS sv VARCHAR(255);
     ALTER TABLE tb_conciliacao_base ADD COLUMN IF NOT EXISTS fop VARCHAR(255);
 
@@ -141,7 +132,15 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
         data_modificacao TIMESTAMP DEFAULT NOW()
     );
 
-    CREATE OR REPLACE VIEW vw_conciliacao_mestra AS
+    ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS sv VARCHAR(255);
+    ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS fop VARCHAR(255);
+    ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS rloc_cia VARCHAR(255);
+    ALTER TABLE tratativas ADD COLUMN IF NOT EXISTS cliente VARCHAR(255);
+    """
+
+    ddl_view = """
+    DROP VIEW IF EXISTS vw_conciliacao_mestra CASCADE;
+    CREATE VIEW vw_conciliacao_mestra AS
     SELECT 
         b.bilhete AS "Bilhetes",
         b.ponto_venda AS "Ponto de venda",
@@ -175,8 +174,8 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
         b.status_divergencia AS "Status_Divergencia",
         b.consultor AS "Consultor",
         CASE 
-            WHEN t.status_geral IS NOT NULL AND t.status_geral NOT IN ('', '-', 'None', 'nan') THEN t.status_geral
             WHEN b.status_divergencia = 'Valores Corretos' THEN 'Emitido e Lançado'
+            WHEN t.status_geral IS NOT NULL AND t.status_geral NOT IN ('', '-', 'None', 'nan') THEN t.status_geral
             WHEN b.status_divergencia = 'Pendente de Lançamento' THEN 'Pendente de Lançamento (Não Consta)'
             ELSE COALESCE(b.status_divergencia, 'Pendente de Lançamento (Não Consta)')
         END AS "Status_Geral",
@@ -206,7 +205,9 @@ def criar_tabelas_supabase_se_nao_existirem(engine):
     """
     try:
         with engine.begin() as conn:
-            conn.execute(text(ddl_script))
+            conn.execute(text(ddl_tabelas))
+        with engine.begin() as conn:
+            conn.execute(text(ddl_view))
         print("⚡ Estrutura do Supabase e Visão Mestra validadas com sucesso!")
     except Exception as e:
         print(f"⚠️ Aviso ao verificar estrutura no Supabase: {e}")
@@ -863,8 +864,10 @@ def executar_auditoria():
                             status_divergencia = "Valores Corretos"
                             aba_destino = "98_OK_Sem_Divergencia_Concil"
                             
-                    st_def = "Emitido e Lançado" if status_divergencia == "Valores Corretos" else status_divergencia
-                    status_geral = hist_data.get("Status_Geral") or st_def
+                    if status_divergencia == "Valores Corretos":
+                        status_geral = "Emitido e Lançado"
+                    else:
+                        status_geral = hist_data.get("Status_Geral") or status_divergencia
                 else:
                     status_sistema = "NAO_CONSTA"
                     fornec_sistema = "-"
