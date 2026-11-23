@@ -22,6 +22,9 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO DA PÁGINA & DESIGN SYSTEM ENTERPRISE (GLASSMORPHISM)
@@ -648,107 +651,551 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     buffer.seek(0)
     return buffer.getvalue()
 
-def gerar_dossie_pdf_executivo(df_pendentes, tot_processados, taxa_concil, receita_total, dt_atualizacao):
+class ExecutiveBoardCanvas(canvas.Canvas):
+    """Canvas corporativo C-Level com barra institucional superior e rodapé paginado."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pages = []
+
+    def showPage(self):
+        self.pages.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        num_pages = len(self.pages)
+        for page in self.pages:
+            self.__dict__.update(page)
+            self._draw_chrome(num_pages)
+            super().showPage()
+        super().save()
+
+    def _draw_chrome(self, page_count):
+        self.saveState()
+        self.setFillColor(colors.HexColor("#001E4D"))
+        self.rect(0, letter[1] - 8, letter[0], 8, fill=1, stroke=0)
+        self.setFont("Helvetica", 7.5)
+        self.setFillColor(colors.HexColor("#64748B"))
+        self.setStrokeColor(colors.HexColor("#CBD5E1"))
+        self.setLineWidth(0.5)
+        self.line(36, 30, letter[0] - 36, 30)
+        self.drawString(36, 18, "Grupo Arbaitman  |  Auditoria, Compliance & Controladoria (FP&A)  —  Documento Confidencial C-Level")
+        self.drawRightString(letter[0] - 36, 18, f"Página {self._pageNumber} de {page_count}")
+        self.restoreState()
+
+
+def _fmt_brl_pdf(valor):
+    try:
+        v = float(valor)
+        return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return "R$ 0,00"
+
+
+def _fmt_int_pdf(valor):
+    try:
+        return f"{int(valor):,}".replace(",", ".")
+    except Exception:
+        return "0"
+
+
+def _fmt_pct_pdf(valor):
+    try:
+        return f"{float(valor):.1f}%".replace(".", ",")
+    except Exception:
+        return "0,0%"
+
+
+def _plot_frentes_pdf(frentes_dict):
+    fig, ax = plt.subplots(figsize=(5.2, 2.65), dpi=300)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+    items = [(k, v) for k, v in frentes_dict.items() if v > 0]
+    if not items:
+        items = [("Sem Pendências", 0)]
+    items.sort(key=lambda x: x[1])
+    labels = [x[0] for x in items]
+    vals = [x[1] for x in items]
+    tot = sum(vals) if sum(vals) > 0 else 1
+    palette = ["#64748B", "#0284C7", "#7C3AED", "#D97706", "#E11D48", "#001E4D"][-len(vals):]
+
+    bars = ax.barh(labels, vals, color=palette, height=0.58)
+    max_v = max(vals) if max(vals) > 0 else 10
+    ax.set_xlim(0, max_v * 1.38)
+    for spine in ["top", "right", "bottom"]:
+        ax.spines[spine].set_visible(False)
+    ax.spines["left"].set_color("#CBD5E1")
+    ax.xaxis.set_visible(False)
+    ax.tick_params(axis="y", labelsize=8.2, colors="#1E293B", length=0)
+
+    for bar, v in zip(bars, vals):
+        pct = (v / tot) * 100
+        ax.text(
+            v + max_v * 0.02,
+            bar.get_y() + bar.get_height() / 2,
+            f"{_fmt_int_pdf(v)} ({_fmt_pct_pdf(pct)})",
+            va="center", ha="left", fontsize=7.8, fontweight="bold", color="#0F172A"
+        )
+    ax.set_title("1. Distribuição por Frente de Atuação (Causa-Raiz)", fontsize=9.2, fontweight="bold", color="#001E4D", loc="left", pad=8)
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def _plot_aging_pdf(df_ag):
+    fig, ax = plt.subplots(figsize=(5.2, 2.65), dpi=300)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+    color_map = {
+        "Até 15 dias": "#10B981",
+        "16 a 30 dias": "#0284C7",
+        "31 a 60 dias": "#F59E0B",
+        "61 a 90 dias": "#EA580C",
+        "> 90 dias (Crítico)": "#E11D48",
+        "Sem Data": "#94A3B8"
+    }
+    labels_short = {
+        "Até 15 dias": "≤ 15d",
+        "16 a 30 dias": "16-30d",
+        "31 a 60 dias": "31-60d",
+        "61 a 90 dias": "61-90d",
+        "> 90 dias (Crítico)": "> 90d\n(Crítico)",
+        "Sem Data": "S/ Data"
+    }
+    x_labels = [labels_short.get(x, x) for x in df_ag["Faixa_Aging"]]
+    vals = df_ag["Qtd"].tolist()
+    val_fin = df_ag["Valor"].tolist()
+    bar_colors = [color_map.get(x, "#001E4D") for x in df_ag["Faixa_Aging"]]
+
+    bars = ax.bar(x_labels, vals, color=bar_colors, width=0.52)
+    max_v = max(vals) if vals and max(vals) > 0 else 10
+    ax.set_ylim(0, max_v * 1.36)
+    for spine in ["top", "right", "left"]:
+        ax.spines[spine].set_visible(False)
+    ax.spines["bottom"].set_color("#CBD5E1")
+    ax.yaxis.set_visible(False)
+    ax.tick_params(axis="x", labelsize=8, colors="#1E293B", length=0)
+
+    for bar, q, vf in zip(bars, vals, val_fin):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            q + max_v * 0.03,
+            f"{_fmt_int_pdf(q)} un.\n({_fmt_brl_pdf(vf).replace(',00', '')})",
+            ha="center", va="bottom", fontsize=7.0, fontweight="bold", color="#0F172A"
+        )
+    ax.set_title("2. Curva de Envelhecimento (Aging & Risco Financeiro)", fontsize=9.2, fontweight="bold", color="#001E4D", loc="left", pad=8)
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def _plot_gerentes_pdf(df_ger_top):
+    fig, ax = plt.subplots(figsize=(5.2, 2.75), dpi=300)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+    df_plot = df_ger_top.iloc[::-1]
+    labels = [str(x)[:20] for x in df_plot["Área Resp. Operação"]]
+    vals = df_plot["Exposicao"].tolist()
+    qtds = df_plot["Qtd"].tolist()
+    bar_colors = ["#E11D48" if "Não Mapeado" in l else "#003366" for l in labels]
+
+    bars = ax.barh(labels, vals, color=bar_colors, height=0.58)
+    max_v = max(vals) if vals and max(vals) > 0 else 10
+    ax.set_xlim(0, max_v * 1.48)
+    for spine in ["top", "right", "bottom"]:
+        ax.spines[spine].set_visible(False)
+    ax.spines["left"].set_color("#CBD5E1")
+    ax.xaxis.set_visible(False)
+    ax.tick_params(axis="y", labelsize=8, colors="#1E293B", length=0)
+
+    for bar, v, q in zip(bars, vals, qtds):
+        ax.text(
+            v + max_v * 0.02,
+            bar.get_y() + bar.get_height() / 2,
+            f"{_fmt_brl_pdf(v)} ({_fmt_int_pdf(q)})",
+            va="center", ha="left", fontsize=7.4, fontweight="bold", color="#0F172A"
+        )
+    ax.set_title("3. Exposição por Liderança (Tarifa + Taxas)", fontsize=9.2, fontweight="bold", color="#001E4D", loc="left", pad=8)
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def _plot_cias_pdf(df_pend):
+    fig, ax = plt.subplots(figsize=(5.2, 2.75), dpi=300)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+    s_cia = df_pend["CIA"].value_counts() if ("CIA" in df_pend.columns and not df_pend.empty) else pd.Series({"Sem CIA": 0})
+    if len(s_cia) > 5:
+        top5 = s_cia.head(5)
+        outros = pd.Series({"Outras CIAs": s_cia.iloc[5:].sum()})
+        s_cia = pd.concat([top5, outros])
+    s_cia = s_cia.iloc[::-1]
+    labels = [str(x)[:18] for x in s_cia.index]
+    vals = s_cia.values.tolist()
+    tot = sum(vals) if sum(vals) > 0 else 1
+    bars = ax.barh(labels, vals, color="#0050B3", height=0.55)
+    max_v = max(vals) if vals and max(vals) > 0 else 10
+    ax.set_xlim(0, max_v * 1.38)
+    for spine in ["top", "right", "bottom"]:
+        ax.spines[spine].set_visible(False)
+    ax.spines["left"].set_color("#CBD5E1")
+    ax.xaxis.set_visible(False)
+    ax.tick_params(axis="y", labelsize=8, colors="#1E293B", length=0)
+    for bar, v in zip(bars, vals):
+        ax.text(
+            v + max_v * 0.02,
+            bar.get_y() + bar.get_height() / 2,
+            f"{_fmt_int_pdf(v)} ({_fmt_pct_pdf(v/tot*100)})",
+            va="center", ha="left", fontsize=7.6, fontweight="bold", color="#0F172A"
+        )
+    ax.set_title("4. Concentração por Companhia Aérea", fontsize=9.2, fontweight="bold", color="#001E4D", loc="left", pad=8)
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def gerar_dossie_pdf_executivo(
+    df_pendentes, tot_processados, taxa_concil, receita_total, dt_atualizacao,
+    f_falta=None, f_concur=None, f_erros=None, f_backoffice=None, f_eventos=None, f_lemon_virt=None
+):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
         pagesize=letter,
-        rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=42
+        rightMargin=36, leftMargin=36, topMargin=26, bottomMargin=42
     )
     story = []
     styles = getSampleStyleSheet()
-    
-    style_title = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=16, textColor=colors.HexColor('#001E4D'), leading=20)
-    style_sub = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontName='Helvetica', fontSize=9, textColor=colors.HexColor('#64748B'), leading=13)
-    style_h2 = ParagraphStyle('H2Style', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=12, textColor=colors.HexColor('#0050B3'), leading=15)
-    style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#1E293B'), leading=11)
-    style_cell_bold = ParagraphStyle('CellB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, textColor=colors.HexColor('#1E293B'), leading=11)
-    style_cell_header = ParagraphStyle('CellH', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, textColor=colors.white, leading=11, alignment=1)
-    
-    story.append(Paragraph("✈️ Grupo Arbaitman — Dossiê Executivo de Revenue Assurance", style_title))
-    story.append(Paragraph(f"<b>Relatório Consolidado de Pendências & Controladoria</b> | Emissão: {datetime.datetime.now().strftime('%d/%m/%Y às %H:%M:%S')} | Fonte: {dt_atualizacao}", style_sub))
-    story.append(Spacer(1, 12))
-    kpi_data = [
-        [Paragraph("Total Processado", style_cell_header), Paragraph("Taxa Conciliação", style_cell_header), Paragraph("Pendências Ativas", style_cell_header), Paragraph("Receita Emitida", style_cell_header)],
-        [
-            Paragraph(f"<b>{tot_processados:,}</b>", ParagraphStyle('C1', parent=style_cell_bold, alignment=1, fontSize=11, textColor=colors.HexColor('#001E4D'))),
-            Paragraph(f"<b>{taxa_concil:.1f}%</b>", ParagraphStyle('C2', parent=style_cell_bold, alignment=1, fontSize=11, textColor=colors.HexColor('#059669'))),
-            Paragraph(f"<b>{len(df_pendentes):,}</b>", ParagraphStyle('C3', parent=style_cell_bold, alignment=1, fontSize=11, textColor=colors.HexColor('#E11D48'))),
-            Paragraph(f"<b>R$ {receita_total:,.2f}</b>", ParagraphStyle('C4', parent=style_cell_bold, alignment=1, fontSize=11, textColor=colors.HexColor('#001E4D')))
-        ]
-    ]
-    t_kpi = Table(kpi_data, colWidths=[135, 135, 135, 135])
-    t_kpi.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001E4D')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#F8FAFC')),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+
+    st_tag = ParagraphStyle("Tag", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=7.8, textColor=colors.HexColor("#93C5FD"), leading=10)
+    st_banner_title = ParagraphStyle("BTitle", parent=styles["Heading1"], fontName="Helvetica-Bold", fontSize=15.5, textColor=colors.white, leading=19)
+    st_banner_sub = ParagraphStyle("BSub", parent=styles["Normal"], fontName="Helvetica", fontSize=8.3, textColor=colors.HexColor("#E2E8F0"), leading=12)
+    st_h2 = ParagraphStyle("H2", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=10.8, textColor=colors.HexColor("#001E4D"), leading=14, spaceBefore=2, spaceAfter=3)
+    st_body = ParagraphStyle("Body", parent=styles["Normal"], fontName="Helvetica", fontSize=8.3, textColor=colors.HexColor("#1E293B"), leading=12.2)
+    st_cell = ParagraphStyle("Cell", parent=styles["Normal"], fontName="Helvetica", fontSize=7.7, textColor=colors.HexColor("#1E293B"), leading=10.5)
+    st_cell_b = ParagraphStyle("CellB", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=7.7, textColor=colors.HexColor("#0F172A"), leading=10.5)
+    st_cell_h = ParagraphStyle("CellH", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=7.8, textColor=colors.white, leading=10.5, alignment=1)
+
+    tz_br = datetime.timezone(datetime.timedelta(hours=-3))
+    emissao_br = datetime.datetime.now(tz_br).strftime("%d/%m/%Y às %H:%M:%S")
+
+    # Cópia segura para não mutar o DataFrame original do Streamlit
+    df_p = df_pendentes.copy() if df_pendentes is not None else pd.DataFrame()
+    if not df_p.empty:
+        for col_n in ["A vista", "A credito", "Taxa", "Tarifa Total Emitida", "Receita Total Emitida"]:
+            if col_n not in df_p.columns:
+                df_p[col_n] = 0.0
+            df_p[col_n] = pd.to_numeric(df_p[col_n], errors="coerce").fillna(0.0)
+        df_p["Exposicao_Bruta"] = df_p["A vista"] + df_p["A credito"] + df_p["Taxa"]
+    else:
+        df_p["Exposicao_Bruta"] = 0.0
+
+    qtd_pend = len(df_p)
+    qtd_concil = max(int(tot_processados) - qtd_pend, 0)
+    exp_bruta = float(df_p["Exposicao_Bruta"].sum()) if not df_p.empty else 0.0
+    tarifa_pend = float(df_p["Tarifa Total Emitida"].sum()) if not df_p.empty else 0.0
+    receita_risco = float(df_p["Receita Total Emitida"].sum()) if not df_p.empty else float(receita_total or 0.0)
+
+    df_crit30 = (
+        df_p[df_p["Faixa_Aging"].isin(["31 a 60 dias", "61 a 90 dias", "> 90 dias (Crítico)"])]
+        if (not df_p.empty and "Faixa_Aging" in df_p.columns) else pd.DataFrame()
+    )
+    qtd_crit30 = len(df_crit30)
+    val_crit30 = float(df_crit30["Exposicao_Bruta"].sum()) if not df_crit30.empty else 0.0
+
+    # 1. BANNER EXECUTIVO C-LEVEL
+    banner_tbl = Table([
+        [Paragraph("RELATÓRIO EXECUTIVO DE GOVERNANÇA &amp; CONTROLADORIA (FP&amp;A)", st_tag)],
+        [Paragraph("GRUPO ARBAITMAN — Dossiê de Revenue Assurance", st_banner_title)],
+        [Paragraph(f"<b>Escopo:</b> Auditoria Aérea (ERP Benner × OBT Lemontech × CIAs × Sabre) &nbsp;|&nbsp; <b>Emissão:</b> {emissao_br} (BRT) &nbsp;|&nbsp; <b>Base:</b> {dt_atualizacao}", st_banner_sub)]
+    ], colWidths=[528])
+    banner_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#001E4D")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+        ("TOPPADDING", (0, 0), (-1, 0), 10),
+        ("BOTTOMPADDING", (0, -1), (-1, -1), 10),
+        ("TOPPADDING", (0, 1), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, 1), 2),
     ]))
-    story.append(t_kpi)
-    story.append(Spacer(1, 15))
-    story.append(Paragraph("📊 Resumo de Pendências por Gerente Responsável", style_h2))
-    story.append(Spacer(1, 6))
-    
-    if not df_pendentes.empty and "Área Resp. Operação" in df_pendentes.columns:
-        df_g = df_pendentes.groupby("Área Resp. Operação").agg(
-            Qtd=('Bilhetes', 'count'),
-            Valor=('Tarifa Total Emitida', 'sum')
-        ).reset_index().sort_values('Qtd', ascending=False).head(8)
-        
-        ger_data = [[Paragraph("Gerente / Área", style_cell_header), Paragraph("Qtd Bilhetes Pendentes", style_cell_header), Paragraph("Volume Financeiro (Tarifa)", style_cell_header)]]
-        for _, r in df_g.iterrows():
-            ger_data.append([
-                Paragraph(str(r["Área Resp. Operação"]), style_cell),
-                Paragraph(f"{r['Qtd']:,}", ParagraphStyle('R1', parent=style_cell, alignment=2)),
-                Paragraph(f"R$ {r['Valor']:,.2f}", ParagraphStyle('R2', parent=style_cell, alignment=2))
+    story.append(banner_tbl)
+    story.append(Spacer(1, 9))
+
+    # 2. SCORECARD DE 6 KPIs EXECUTIVOS
+    def _kpi_cell(titulo, valor, subtitulo, cor_valor="#001E4D"):
+        return Paragraph(
+            f"<font size='7.3' color='#64748B'><b>{titulo.upper()}</b></font><br/>"
+            f"<font size='13' color='{cor_valor}'><b>{valor}</b></font><br/>"
+            f"<font size='7.1' color='#475569'>{subtitulo}</font>",
+            ParagraphStyle("KPI", parent=styles["Normal"], alignment=1, leading=14)
+        )
+
+    kpi_grid = Table([
+        [
+            _kpi_cell("Base Auditada Total", f"{_fmt_int_pdf(tot_processados)} bilhetes", f"{_fmt_int_pdf(qtd_concil)} conciliados sem divergência", "#001E4D"),
+            _kpi_cell("Taxa de Conciliação", _fmt_pct_pdf(taxa_concil), "Meta Governança FP&A: ≥ 95,0%", "#059669" if taxa_concil >= 80 else "#D97706"),
+            _kpi_cell("Passivo em Aberto", f"{_fmt_int_pdf(qtd_pend)} bilhetes", f"{_fmt_pct_pdf((qtd_pend/tot_processados*100) if tot_processados else 0)} do volume auditado", "#E11D48"),
+        ],
+        [
+            _kpi_cell("Exposição Financeira Bruta", _fmt_brl_pdf(exp_bruta), f"Tarifa: {_fmt_brl_pdf(tarifa_pend)} + Taxas", "#001E4D"),
+            _kpi_cell("Receita Direta em Risco", _fmt_brl_pdf(receita_risco), "Comissão + Taxa DU + Incentivo", "#0050B3"),
+            _kpi_cell("Carteira Crítica (&gt; 30 dias)", f"{_fmt_int_pdf(qtd_crit30)} bilhetes", f"Exposição: {_fmt_brl_pdf(val_crit30)} ({_fmt_pct_pdf((qtd_crit30/qtd_pend*100) if qtd_pend else 0)})", "#E11D48"),
+        ]
+    ], colWidths=[176, 176, 176])
+    kpi_grid.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+        ("GRID", (0, 0), (-1, -1), 0.6, colors.HexColor("#CBD5E1")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+    story.append(kpi_grid)
+    story.append(Spacer(1, 9))
+
+    # 3. SEGMENTAÇÃO DE FRENTES (COM INFERÊNCIA AUTOMÁTICA CASO CHAMADO COM 5 PARÂMETROS)
+    if all(x is None for x in [f_falta, f_concur, f_erros, f_backoffice, f_eventos, f_lemon_virt]) and not df_p.empty:
+        st_col = df_p["Status_Geral"].astype(str) if "Status_Geral" in df_p.columns else pd.Series("", index=df_p.index)
+        set_col = df_p["Setor"].astype(str) if "Setor" in df_p.columns else pd.Series("", index=df_p.index)
+        em_col = df_p["Emissor"].astype(str).str.upper() if "Emissor" in df_p.columns else pd.Series("", index=df_p.index)
+
+        m_lemon = em_col.str.contains("LEMONTECH|VIRTUAL|ROBO", na=False)
+        m_evt = set_col.str.contains("Evento", case=False, na=False) & ~m_lemon
+        m_bo = st_col.str.contains("Backoffice|Suporte", case=False, na=False) & ~m_lemon & ~m_evt
+        m_conc = st_col.str.contains("Concur", case=False, na=False) & ~m_lemon & ~m_evt & ~m_bo
+        m_err = st_col.str.contains("Divergência|Valor|Tarifa|Taxa|Receita", case=False, na=False) & ~m_lemon & ~m_evt & ~m_bo & ~m_conc
+        m_flt = ~(m_lemon | m_evt | m_bo | m_conc | m_err)
+
+        qtd_falta_num = int(m_flt.sum())
+        qtd_concur_num = int(m_conc.sum())
+        qtd_erros_num = int(m_err.sum())
+        qtd_bo_num = int(m_bo.sum())
+        qtd_evt_num = int(m_evt.sum())
+        qtd_lem_num = int(m_lemon.sum())
+    else:
+        qtd_falta_num = len(f_falta) if f_falta is not None else 0
+        qtd_concur_num = len(f_concur) if f_concur is not None else 0
+        qtd_erros_num = len(f_erros) if f_erros is not None else 0
+        qtd_bo_num = len(f_backoffice) if f_backoffice is not None else 0
+        qtd_evt_num = len(f_eventos) if f_eventos is not None else 0
+        qtd_lem_num = len(f_lemon_virt) if f_lemon_virt is not None else 0
+
+    # 4. SUMÁRIO EXECUTIVO DINÂMICO (BLUF — BOTTOM LINE UP FRONT)
+    top_ger_nome = "-"
+    top_ger_share = 0.0
+    if not df_p.empty and "Área Resp. Operação" in df_p.columns:
+        s_g = df_p["Área Resp. Operação"].value_counts()
+        if not s_g.empty:
+            top_ger_nome = s_g.index[0]
+            top_ger_share = (s_g.iloc[0] / qtd_pend * 100) if qtd_pend else 0.0
+
+    qtd_nao_map = (
+        int((df_p["Área Resp. Operação"] == "Não Mapeado").sum())
+        if (not df_p.empty and "Área Resp. Operação" in df_p.columns) else 0
+    )
+
+    bluf_text = (
+        f"<b>SÍNTESE EXECUTIVA PARA A PRESIDÊNCIA (BLUF — BOTTOM LINE UP FRONT)</b><br/>"
+        f"• <b>Exposição &amp; Faturamento:</b> Identificados <b>{_fmt_int_pdf(qtd_pend)} bilhetes</b> pendentes de regularização no ERP Benner, totalizando <b>{_fmt_brl_pdf(exp_bruta)}</b> em volume bruto (Tarifa + Taxas) e <b>{_fmt_brl_pdf(receita_risco)}</b> em receita direta da agência.<br/>"
+        f"• <b>Diagnóstico de Causa-Raiz:</b> <b>{_fmt_int_pdf(qtd_falta_num)}</b> casos decorrem de pendência operacional de lançamento, enquanto <b>{_fmt_int_pdf(qtd_concur_num)}</b> são falhas técnicas de integração API (Concur) em tratativa com TI/Backoffice.<br/>"
+        f"• <b>Concentração &amp; Governança:</b> A carteira de <b>{top_ger_nome}</b> concentra <b>{_fmt_pct_pdf(top_ger_share)}</b> do volume pendente. Há <b>{_fmt_int_pdf(qtd_crit30)} bilhetes ({_fmt_brl_pdf(val_crit30)})</b> vencidos há mais de 30 dias e <b>{_fmt_int_pdf(qtd_nao_map)} bilhetes</b> sem gestor mapeado."
+    )
+    bluf_box = Table([[Paragraph(bluf_text, st_body)]], colWidths=[528])
+    bluf_box.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#EFF6FF")),
+        ("LINEBEFORE", (0, 0), (0, -1), 4, colors.HexColor("#0050B3")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#BFDBFE")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+    story.append(bluf_box)
+    story.append(Spacer(1, 9))
+
+    # 5. PAINEL GRÁFICO PÁGINA 1 (CAUSA-RAIZ + AGING)
+    frentes_dict = {
+        "Falta Lançamento ERP": qtd_falta_num,
+        "Erro Integração Concur": qtd_concur_num,
+        "Erros Valores / CIA": qtd_erros_num,
+        "Suporte Backoffice": qtd_bo_num,
+        "Central de Eventos": qtd_evt_num,
+        "Emissor Virtual Lemon": qtd_lem_num,
+    }
+    if sum(frentes_dict.values()) == 0 and qtd_pend > 0:
+        frentes_dict = {"Pendências Ativas": qtd_pend}
+
+    ordem_aging = ["Até 15 dias", "16 a 30 dias", "31 a 60 dias", "61 a 90 dias", "> 90 dias (Crítico)", "Sem Data"]
+    if not df_p.empty and "Faixa_Aging" in df_p.columns:
+        df_ag = df_p.groupby("Faixa_Aging", observed=False).agg(
+            Qtd=("Bilhetes", "count"),
+            Valor=("Exposicao_Bruta", "sum")
+        ).reset_index()
+        df_ag["Faixa_Aging"] = pd.Categorical(df_ag["Faixa_Aging"], categories=ordem_aging, ordered=True)
+        df_ag = df_ag.sort_values("Faixa_Aging").dropna(subset=["Faixa_Aging"])
+        df_ag = df_ag[df_ag["Qtd"] > 0]
+    else:
+        df_ag = pd.DataFrame(columns=["Faixa_Aging", "Qtd", "Valor"])
+
+    img_frentes = Image(_plot_frentes_pdf(frentes_dict), width=258, height=140)
+    img_aging = Image(_plot_aging_pdf(df_ag), width=258, height=140) if not df_ag.empty else Paragraph("Sem dados de aging", st_cell)
+
+    charts_p1 = Table([[img_frentes, img_aging]], colWidths=[264, 264])
+    charts_p1.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BOX", (0, 0), (0, 0), 0.5, colors.HexColor("#E2E8F0")),
+        ("BOX", (1, 0), (1, 0), 0.5, colors.HexColor("#E2E8F0")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(charts_p1)
+
+    # ================= PÁGINA 2: ACCOUNTABILITY & PLANO DE AÇÃO =================
+    story.append(PageBreak())
+    story.append(Paragraph("ACCOUNTABILITY POR LIDERANÇA, MIX DE CIAs &amp; PLANO DE AÇÃO", st_h2))
+    story.append(Paragraph("Detalhamento completo da carteira pendente (100% reconciliada com o total de pendências ativas) e prioridades de regularização.", st_body))
+    story.append(Spacer(1, 8))
+
+    if not df_p.empty and "Área Resp. Operação" in df_p.columns:
+        df_p["Crit30_Flag"] = (
+            df_p["Faixa_Aging"].isin(["31 a 60 dias", "61 a 90 dias", "> 90 dias (Crítico)"]).astype(int)
+            if "Faixa_Aging" in df_p.columns else 0
+        )
+        df_ger_full = df_p.groupby("Área Resp. Operação").agg(
+            Qtd=("Bilhetes", "count"),
+            Tarifa=("Tarifa Total Emitida", "sum"),
+            Exposicao=("Exposicao_Bruta", "sum"),
+            Criticos=("Crit30_Flag", "sum")
+        ).reset_index().sort_values("Exposicao", ascending=False)
+
+        top8_chart = df_ger_full.head(8)
+        img_ger = Image(_plot_gerentes_pdf(top8_chart), width=258, height=144)
+        img_cia = Image(_plot_cias_pdf(df_p), width=258, height=144)
+
+        charts_p2 = Table([[img_ger, img_cia]], colWidths=[264, 264])
+        charts_p2.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("BOX", (0, 0), (0, 0), 0.5, colors.HexColor("#E2E8F0")),
+            ("BOX", (1, 0), (1, 0), 0.5, colors.HexColor("#E2E8F0")),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(charts_p2)
+        story.append(Spacer(1, 9))
+
+        if len(df_ger_full) > 9:
+            df_top = df_ger_full.head(9).copy()
+            df_rest = df_ger_full.iloc[9:]
+            n_rest = len(df_rest)
+            label_rest = f"Demais Áreas ({n_rest} gestor)" if n_rest == 1 else f"Demais Áreas ({n_rest} gestores)"
+            row_outros = pd.DataFrame([{
+                "Área Resp. Operação": label_rest,
+                "Qtd": df_rest["Qtd"].sum(),
+                "Tarifa": df_rest["Tarifa"].sum(),
+                "Exposicao": df_rest["Exposicao"].sum(),
+                "Criticos": df_rest["Criticos"].sum()
+            }])
+            df_tbl_ger = pd.concat([df_top, row_outros], ignore_index=True)
+        else:
+            df_tbl_ger = df_ger_full.copy()
+
+        ger_rows = [[
+            Paragraph("Gerente / Área Responsável", st_cell_h),
+            Paragraph("Qtd", st_cell_h),
+            Paragraph("% Vol.", st_cell_h),
+            Paragraph("Tarifa Emitida", st_cell_h),
+            Paragraph("Exposição c/ Taxas", st_cell_h),
+            Paragraph("Ticket Médio", st_cell_h),
+            Paragraph("&gt; 30 dias", st_cell_h),
+        ]]
+        for _, r in df_tbl_ger.iterrows():
+            t_med = (r["Exposicao"] / r["Qtd"]) if r["Qtd"] > 0 else 0.0
+            share_v = (r["Qtd"] / qtd_pend * 100) if qtd_pend > 0 else 0.0
+            ger_rows.append([
+                Paragraph(str(r["Área Resp. Operação"]), st_cell_b if "Não Mapeado" in str(r["Área Resp. Operação"]) else st_cell),
+                Paragraph(_fmt_int_pdf(r["Qtd"]), ParagraphStyle("R", parent=st_cell, alignment=2)),
+                Paragraph(_fmt_pct_pdf(share_v), ParagraphStyle("R", parent=st_cell, alignment=2)),
+                Paragraph(_fmt_brl_pdf(r["Tarifa"]), ParagraphStyle("R", parent=st_cell, alignment=2)),
+                Paragraph(_fmt_brl_pdf(r["Exposicao"]), ParagraphStyle("R", parent=st_cell_b, alignment=2)),
+                Paragraph(_fmt_brl_pdf(t_med), ParagraphStyle("R", parent=st_cell, alignment=2)),
+                Paragraph(
+                    _fmt_int_pdf(r["Criticos"]),
+                    ParagraphStyle(
+                        "R", parent=st_cell_b, alignment=2,
+                        textColor=colors.HexColor("#E11D48") if r["Criticos"] > 0 else colors.HexColor("#1E293B")
+                    )
+                ),
             ])
-            
-        t_ger = Table(ger_data, colWidths=[200, 140, 200])
+
+        t_med_tot = (exp_bruta / qtd_pend) if qtd_pend > 0 else 0.0
+        ger_rows.append([
+            Paragraph("<b>TOTAL GERAL CONSOLIDADO</b>", st_cell_b),
+            Paragraph(f"<b>{_fmt_int_pdf(qtd_pend)}</b>", ParagraphStyle("RT", parent=st_cell_b, alignment=2)),
+            Paragraph("<b>100,0%</b>", ParagraphStyle("RT", parent=st_cell_b, alignment=2)),
+            Paragraph(f"<b>{_fmt_brl_pdf(tarifa_pend)}</b>", ParagraphStyle("RT", parent=st_cell_b, alignment=2)),
+            Paragraph(f"<b>{_fmt_brl_pdf(exp_bruta)}</b>", ParagraphStyle("RT", parent=st_cell_b, alignment=2)),
+            Paragraph(f"<b>{_fmt_brl_pdf(t_med_tot)}</b>", ParagraphStyle("RT", parent=st_cell_b, alignment=2)),
+            Paragraph(f"<b>{_fmt_int_pdf(qtd_crit30)}</b>", ParagraphStyle("RT", parent=st_cell_b, alignment=2, textColor=colors.HexColor("#E11D48"))),
+        ])
+
+        t_ger = Table(ger_rows, colWidths=[148, 42, 46, 78, 86, 76, 52])
         t_ger.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0050B3')),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#001E4D")),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E2E8F0")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CBD5E1")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#F8FAFC")]),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ]))
         story.append(t_ger)
-        story.append(Spacer(1, 15))
-    story.append(Paragraph("⏳ Curva de Envelhecimento (Aging) das Pendências", style_h2))
-    story.append(Spacer(1, 6))
-    
-    if not df_pendentes.empty and "Faixa_Aging" in df_pendentes.columns:
-        df_pendentes["Valor_Tmp"] = df_pendentes["A vista"] + df_pendentes["A credito"] + df_pendentes["Taxa"]
-        df_ag_pdf = df_pendentes.groupby("Faixa_Aging", observed=False).agg(
-            Qtd=('Bilhetes', 'count'),
-            Valor=('Valor_Tmp', 'sum')
-        ).reset_index()
-        
-        ordem_aging = ["Até 15 dias", "16 a 30 dias", "31 a 60 dias", "61 a 90 dias", "> 90 dias (Crítico)", "Sem Data"]
-        df_ag_pdf["Faixa_Aging"] = pd.Categorical(df_ag_pdf["Faixa_Aging"], categories=ordem_aging, ordered=True)
-        df_ag_pdf = df_ag_pdf.sort_values("Faixa_Aging")
-        
-        ag_data = [[Paragraph("Faixa de Aging", style_cell_header), Paragraph("Quantidade de Bilhetes", style_cell_header), Paragraph("Valor Total Envolvido", style_cell_header)]]
-        for _, r in df_ag_pdf.iterrows():
-            ag_data.append([
-                Paragraph(str(r["Faixa_Aging"]), style_cell),
-                Paragraph(f"{r['Qtd']:,}", ParagraphStyle('R3', parent=style_cell, alignment=2)),
-                Paragraph(f"R$ {r['Valor']:,.2f}", ParagraphStyle('R4', parent=style_cell, alignment=2))
-            ])
-            
-        t_ag = Table(ag_data, colWidths=[200, 140, 200])
-        t_ag.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#003366')),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ]))
-        story.append(t_ag)
-    doc.build(story, canvasmaker=NumberedCanvas)
+        story.append(Spacer(1, 9))
+
+    story.append(Paragraph("PLANO DE AÇÃO &amp; GOVERNANÇA OPERACIONAL (PRÓXIMOS PASSOS)", st_h2))
+    gov_rows = [
+        [Paragraph("Frente / Responsável", st_cell_h), Paragraph("Escopo Atual", st_cell_h), Paragraph("Ação Executiva Recomendada", st_cell_h), Paragraph("Meta / SLA", st_cell_h)],
+        [
+            Paragraph("<b>1. Lideranças Comerciais</b><br/>(Gestores de Atendimento)", st_cell),
+            Paragraph(f"{_fmt_int_pdf(qtd_falta_num)} bilhetes sem lançamento ERP", st_cell),
+            Paragraph("Regularizar emissão de SV e lançamento no Benner, priorizando bilhetes &gt; 30 dias e carteira Concierge/Lazer (alto ticket).", st_cell),
+            Paragraph("<b>48h úteis</b><br/>(Críticos &gt; 30d)", ParagraphStyle("C", parent=st_cell_b, alignment=1, textColor=colors.HexColor("#E11D48")))
+        ],
+        [
+            Paragraph("<b>2. TI &amp; Suporte Backoffice</b><br/>(Integração Concur / Lemon)", st_cell),
+            Paragraph(f"{_fmt_int_pdf(qtd_concur_num)} falhas de fila / XML", st_cell),
+            Paragraph("Reprocessar fila de integração Concur/Lemontech e sanear erros de remark/centro de custo bloqueados na API.", st_cell),
+            Paragraph("<b>72h úteis</b><br/>(Saneamento fila)", ParagraphStyle("C", parent=st_cell_b, alignment=1, textColor=colors.HexColor("#0050B3")))
+        ],
+        [
+            Paragraph("<b>3. Compliance &amp; Auditoria</b><br/>(Governança IATA / Cadastro)", st_cell),
+            Paragraph(f"{_fmt_int_pdf(qtd_nao_map)} bilhetes 'Não Mapeado'", st_cell),
+            Paragraph("Atualizar tabela De/Para de códigos IATA e vincular gerentes responsáveis para eliminar pendências sem dono.", st_cell),
+            Paragraph("<b>Imediato</b><br/>(Ciclo semanal)", ParagraphStyle("C", parent=st_cell_b, alignment=1, textColor=colors.HexColor("#059669")))
+        ]
+    ]
+    t_gov = Table(gov_rows, colWidths=[125, 95, 233, 75])
+    t_gov.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CBD5E1")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+        ("TOPPADDING", (0, 0), (-1, -1), 4.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4.5),
+    ]))
+    story.append(t_gov)
+
+    doc.build(story, canvasmaker=ExecutiveBoardCanvas)
     buffer.seek(0)
     return buffer.getvalue()
 
@@ -1244,13 +1691,28 @@ with aba_sel[0]:
     k6.metric("Ticket Médio Pendente", f"R$ {ticket_medio_pendente:,.2f}")
     
     st.write("")
-    pdf_data = gerar_dossie_pdf_executivo(df_pendentes, tot_processados, taxa_concil, receita_total_emitida, dt_ultima_atualizacao_str)
+    _tz_br_dl = datetime.timezone(datetime.timedelta(hours=-3))
+    _data_arq_br = datetime.datetime.now(_tz_br_dl).strftime("%Y%m%d")
+    pdf_data = gerar_dossie_pdf_executivo(
+        df_pendentes,
+        tot_processados,
+        taxa_concil,
+        receita_total_emitida,
+        dt_ultima_atualizacao_str,
+        f_falta=globals().get("f_falta"),
+        f_concur=globals().get("f_concur"),
+        f_erros=globals().get("f_erros"),
+        f_backoffice=globals().get("f_backoffice"),
+        f_eventos=globals().get("f_eventos"),
+        f_lemon_virt=globals().get("f_lemon_virt"),
+    )
     st.download_button(
-        label="📄 Baixar Dossiê Executivo PDF (C-Level Masterpiece)",
+        label="📄 Baixar Dossiê Executivo PDF (C-Level)",
         data=pdf_data,
-        file_name=f"Dossie_Executivo_Revenue_Assurance_{datetime.date.today().strftime('%Y%m%d')}.pdf",
+        file_name=f"Dossie_Executivo_Revenue_Assurance_{_data_arq_br}.pdf",
         mime="application/pdf",
-        type="primary"
+        type="primary",
+        use_container_width=True,
     )
     st.markdown("---")
     
