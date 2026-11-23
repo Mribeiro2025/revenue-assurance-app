@@ -558,19 +558,22 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     if df_export is None or df_export.empty:
         df_export = pd.DataFrame(columns=["Aviso"], data=[["Nenhum registro encontrado"]])
     cols_remover = [c for c in ["Dt_Parsed", "Bilhete_Clean", "Aba_Origem"] if c in df_export.columns]
-    df_clean = df_export.drop(columns=cols_remover) if cols_remover else df_export.copy()
-    
+    df_clean = df_export.drop(columns=cols_remover).copy() if cols_remover else df_export.copy()
+
+    for col_tz in df_clean.select_dtypes(include=["datetimetz"]).columns:
+        df_clean[col_tz] = df_clean[col_tz].dt.tz_convert("America/Sao_Paulo").dt.tz_localize(None)
+
     wb = openpyxl.Workbook()
     ws = wb.active
     nome_sheet = re.sub(r'[\*\?:/\[\]]', '', nome_aba)[:30]
     ws.title = nome_sheet if nome_sheet else "Relatorio"
     ws.views.sheetView[0].showGridLines = True
-    
+
     header_title_fill = PatternFill(start_color="001E4D", end_color="001E4D", fill_type="solid")
     header_title_font = Font(name="Plus Jakarta Sans", color="FFFFFF", bold=True, size=14)
     subtitle_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
     subtitle_font = Font(name="Plus Jakarta Sans", color="001E4D", bold=True, size=10)
-    
+
     max_cols = max(len(df_clean.columns), 6)
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max_cols)
     cell_title = ws.cell(row=1, column=1, value="✈️ Grupo Arbaitman | Relatório Executivo de Conciliação Aérea (FP&A)")
@@ -578,7 +581,7 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     cell_title.font = header_title_font
     cell_title.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     ws.row_dimensions[1].height = 30
-    
+
     dt_str = formatar_data_br(None)
     gerente_label = f"Gerente Responsável: {nome_gerente}" if nome_gerente and nome_gerente != "Geral" else "Escopo: Geral (Todos os Gerentes)"
     sub_txt = f"Aba: {nome_aba.replace('_', ' ')}  |  {gerente_label}  |  Emissão: {dt_str}"
@@ -589,15 +592,15 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
     cell_sub.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     ws.row_dimensions[2].height = 22
     ws.row_dimensions[3].height = 10
-    
+
     header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
     header_font = Font(name="Plus Jakarta Sans", color="FFFFFF", bold=True, size=11)
     thin_border = Border(left=Side(style="thin", color="CBD5E1"), right=Side(style="thin", color="CBD5E1"), top=Side(style="thin", color="CBD5E1"), bottom=Side(style="thin", color="CBD5E1"))
     fill_alerta = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
     font_alerta = Font(color="9C0006", bold=True)
-    
+
     currency_cols = ["A vista", "A credito", "Tarifa Total Emitida", "Tarifa_Sistema", "Dif_Tarifa", "Taxa", "Taxa_Sistema", "Dif_Taxa", "Comissão", "Taxa DU", "Incentivo", "Receita Total Emitida", "Receita_Sistema", "Dif_Receita"]
-    
+
     for col_idx, col_name in enumerate(df_clean.columns, 1):
         cell = ws.cell(row=4, column=col_idx, value=col_name)
         cell.fill = header_fill
@@ -605,31 +608,42 @@ def gerar_excel_estilizado(df_export, nome_aba="Relatorio", nome_gerente="Geral"
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = thin_border
     ws.row_dimensions[4].height = 26
-    
+
+    tz_br = datetime.timezone(datetime.timedelta(hours=-3))
     for r_idx, row_data in enumerate(df_clean.values, start=5):
         ws.row_dimensions[r_idx].height = 20
         for c_idx, val in enumerate(row_data, start=1):
+            if pd.isna(val):
+                val = None
+            elif isinstance(val, datetime.datetime) and val.tzinfo is not None:
+                val = val.astimezone(tz_br).replace(tzinfo=None)
+
             cell = ws.cell(row=r_idx, column=c_idx, value=val)
             cell.border = thin_border
+            if isinstance(val, datetime.datetime):
+                cell.number_format = "dd/mm/yyyy hh:mm:ss"
+
             col_name = df_clean.columns[c_idx - 1]
             if col_name in currency_cols and val not in ["-", None, ""]:
                 try:
                     cell.value = float(val)
                     cell.number_format = "R$ #,##0.00"
-                except (ValueError, TypeError): pass
+                except (ValueError, TypeError):
+                    pass
             if col_name.startswith("Dif_") and val not in ["-", None, ""]:
                 try:
                     if abs(float(val)) >= 0.01:
                         cell.fill = fill_alerta
                         cell.font = font_alerta
-                except (ValueError, TypeError): pass
-                
+                except (ValueError, TypeError):
+                    pass
+
     for col_idx in range(1, len(df_clean.columns) + 1):
         col_letter = get_column_letter(col_idx)
         len_vals = [len(str(ws.cell(row=r, column=col_idx).value or "")) for r in range(4, min(ws.max_row + 1, 100))]
         max_len = max(len_vals) if len_vals else 10
         ws.column_dimensions[col_letter].width = min(max(max_len + 3, 12), 42)
-        
+
     wb.save(buffer)
     buffer.seek(0)
     return buffer.getvalue()
@@ -959,6 +973,8 @@ def clean_str(val):
 def padronizar_df(df):
     if df is None or df.empty: return pd.DataFrame()
     df_out = df.copy().loc[:, ~df.columns.duplicated()].reset_index(drop=True)
+    for col_tz in df_out.select_dtypes(include=["datetimetz"]).columns:
+        df_out[col_tz] = df_out[col_tz].dt.tz_convert("America/Sao_Paulo").dt.tz_localize(None)
     for c in df_out.columns:
         if df_out[c].dtype == object or df_out[c].dtype == 'string':
             df_out[c] = df_out[c].apply(clean_str)
