@@ -416,15 +416,15 @@ def salvar_csv_atomico(df, caminho_csv):
     os.rename(tmp_path, caminho_csv)
 
 def sincronizar_supabase_tudo(df_master):
-    """Renova a tb_conciliacao_base no Supabase e insere apenas a carga do relatório atual."""
+    """Renova a tb_conciliacao_base no Supabase e insere a carga deduplicada por bilhete."""
     engine_sb = obter_engine_supabase()
     if not engine_sb or df_master.empty:
         print("⚠️ Supabase indisponível ou dataframe mestre vazio.")
         return
-    
+
     criar_tabelas_supabase_se_nao_existirem(engine_sb)
     from sqlalchemy import text
-    
+
     # 1. LIMPA A TABELA BASE PARA REMOVER CASOS OBSOLETOS / REGULARIZADOS
     try:
         with engine_sb.begin() as conn:
@@ -432,8 +432,9 @@ def sincronizar_supabase_tudo(df_master):
         print("🧹 Tabela 'tb_conciliacao_base' reiniciada com sucesso para a nova carga!")
     except Exception as e:
         print(f"⚠️ Erro ao truncar tabela base no Supabase: {e}")
+        return
 
-    # 2. PREPARA O INSERÇÃO DOS REGISTROS DA CARGA ATUAL
+    # 2. PREPARA E DEDUPLICA POR CHAVE PRIMÁRIA (bilhete) PARA EVITAR UniqueViolation
     insert_base_sql = text("""
         INSERT INTO tb_conciliacao_base (
             bilhete, localizador, rloc_cia, cia, fornecedor_sistema, status_cia, status_sistema,
@@ -453,62 +454,124 @@ def sincronizar_supabase_tudo(df_master):
             :fonte_relatorio, :tipo_emissao_lemon, :consultor_lemon, :emissor_reserva_lemon,
             :centro_custo_lemon, :forma_pagto_lemon, :autorizacao_cartao_lemon, :modalidade_lemon,
             :emissao_online_lemon, :source_lemon, :ponto_venda_lemon, NOW()
-        );
+        )
+        ON CONFLICT (bilhete) DO UPDATE SET
+            localizador = EXCLUDED.localizador,
+            rloc_cia = EXCLUDED.rloc_cia,
+            cia = EXCLUDED.cia,
+            fornecedor_sistema = EXCLUDED.fornecedor_sistema,
+            status_cia = EXCLUDED.status_cia,
+            status_sistema = EXCLUDED.status_sistema,
+            data_emissao = EXCLUDED.data_emissao,
+            pagto = EXCLUDED.pagto,
+            sv = EXCLUDED.sv,
+            fop = EXCLUDED.fop,
+            a_vista = EXCLUDED.a_vista,
+            a_credito = EXCLUDED.a_credito,
+            tarifa_sistema = EXCLUDED.tarifa_sistema,
+            dif_tarifa = EXCLUDED.dif_tarifa,
+            taxa_emitida = EXCLUDED.taxa_emitida,
+            taxa_sistema = EXCLUDED.taxa_sistema,
+            dif_taxa = EXCLUDED.dif_taxa,
+            comissao = EXCLUDED.comissao,
+            taxa_du = EXCLUDED.taxa_du,
+            desconto = EXCLUDED.desconto,
+            incentivo = EXCLUDED.incentivo,
+            receita_sistema = EXCLUDED.receita_sistema,
+            dif_receita = EXCLUDED.dif_receita,
+            vl_liquido = EXCLUDED.vl_liquido,
+            status_divergencia = EXCLUDED.status_divergencia,
+            consultor = EXCLUDED.consultor,
+            emissor = EXCLUDED.emissor,
+            sistema_reserva = EXCLUDED.sistema_reserva,
+            cliente = EXCLUDED.cliente,
+            ponto_venda = EXCLUDED.ponto_venda,
+            codigo_iata = EXCLUDED.codigo_iata,
+            gerente_sugerido = EXCLUDED.gerente_sugerido,
+            setor_sugerido = EXCLUDED.setor_sugerido,
+            aba_destino = EXCLUDED.aba_destino,
+            fonte_relatorio = EXCLUDED.fonte_relatorio,
+            tipo_emissao_lemon = EXCLUDED.tipo_emissao_lemon,
+            consultor_lemon = EXCLUDED.consultor_lemon,
+            emissor_reserva_lemon = EXCLUDED.emissor_reserva_lemon,
+            centro_custo_lemon = EXCLUDED.centro_custo_lemon,
+            forma_pagto_lemon = EXCLUDED.forma_pagto_lemon,
+            autorizacao_cartao_lemon = EXCLUDED.autorizacao_cartao_lemon,
+            modalidade_lemon = EXCLUDED.modalidade_lemon,
+            emissao_online_lemon = EXCLUDED.emissao_online_lemon,
+            source_lemon = EXCLUDED.source_lemon,
+            ponto_venda_lemon = EXCLUDED.ponto_venda_lemon,
+            data_processamento = NOW();
     """)
-    
-    lote_base = []
+
+    lote_por_bilhete = {}
+    duplicados_ignorados = 0
     for _, r in df_master.iterrows():
         b_val = clean_str_strict(r.get("Bilhetes"))
-        if b_val:
-            lote_base.append({
-                "bilhete": b_val,
-                "localizador": clean_str_strict(r.get("Localizador_Sistema")),
-                "rloc_cia": clean_str_strict(r.get("Rloc_Cia") or r.get("Rloc_CIA")),
-                "cia": clean_str_strict(r.get("CIA")),
-                "fornecedor_sistema": clean_str_strict(r.get("Fornecedor_Sistema")),
-                "status_cia": clean_str_strict(r.get("Status_Cia")),
-                "status_sistema": clean_str_strict(r.get("Status_Sistema")),
-                "data_emissao": clean_str_strict(r.get("Data Emissão")),
-                "pagto": clean_str_strict(r.get("Pagto")),
-                "sv": clean_str_strict(r.get("SV")),
-                "fop": clean_str_strict(r.get("FOP")),
-                "a_vista": clean_num(r.get("A vista")),
-                "a_credito": clean_num(r.get("A credito")),
-                "tarifa_sistema": clean_num(r.get("Tarifa_Sistema")),
-                "dif_tarifa": clean_num(r.get("Dif_Tarifa")),
-                "taxa_emitida": clean_num(r.get("Taxa")),
-                "taxa_sistema": clean_num(r.get("Taxa_Sistema")),
-                "dif_taxa": clean_num(r.get("Dif_Taxa")),
-                "comissao": clean_num(r.get("Comissão")),
-                "taxa_du": clean_num(r.get("Taxa DU")),
-                "desconto": clean_num(r.get("Desc.")),
-                "incentivo": clean_num(r.get("Incentivo")),
-                "receita_sistema": clean_num(r.get("Receita_Sistema")),
-                "dif_receita": clean_num(r.get("Dif_Receita")),
-                "vl_liquido": clean_num(r.get("VL. Líquido")),
-                "status_divergencia": clean_str_strict(r.get("Status_Divergencia")),
-                "consultor": clean_str_strict(r.get("Consultor")),
-                "emissor": clean_str_strict(r.get("Emissor")),
-                "sistema_reserva": clean_str_strict(r.get("Sistema Reserva")),
-                "cliente": clean_str_strict(r.get("Cliente")),
-                "ponto_venda": clean_str_strict(r.get("Ponto de venda")),
-                "codigo_iata": clean_str_strict(r.get("Código Iata")),
-                "gerente_sugerido": clean_str_strict(r.get("Área Resp. Operação") or r.get("Gerentes")),
-                "setor_sugerido": clean_str_strict(r.get("Setor")),
-                "aba_destino": clean_str_strict(r.get("Aba_Destino")),
-                "fonte_relatorio": clean_str_strict(r.get("Fonte_Relatorio")),
-                "tipo_emissao_lemon": clean_str_strict(r.get("Tipo_Emissao_Lemon")),
-                "consultor_lemon": clean_str_strict(r.get("Consultor_Lemon")),
-                "emissor_reserva_lemon": clean_str_strict(r.get("Emissor_Reserva_Lemon")),
-                "centro_custo_lemon": clean_str_strict(r.get("Centro_Custo_Lemon")),
-                "forma_pagto_lemon": clean_str_strict(r.get("Forma_Pagto_Lemon")),
-                "autorizacao_cartao_lemon": clean_str_strict(r.get("Autorizacao_Cartao_Lemon")),
-                "modalidade_lemon": clean_str_strict(r.get("Modalidade_Lemon")),
-                "emissao_online_lemon": clean_str_strict(r.get("Emissao_Online_Lemon")),
-                "source_lemon": clean_str_strict(r.get("Source_Lemon")),
-                "ponto_venda_lemon": clean_str_strict(r.get("Ponto_Venda_Lemon"))
-            })
-            
+        if not b_val:
+            continue
+
+        novo_item = {
+            "bilhete": b_val,
+            "localizador": clean_str_strict(r.get("Localizador_Sistema")),
+            "rloc_cia": clean_str_strict(r.get("Rloc_Cia") or r.get("Rloc_CIA")),
+            "cia": clean_str_strict(r.get("CIA")),
+            "fornecedor_sistema": clean_str_strict(r.get("Fornecedor_Sistema")),
+            "status_cia": clean_str_strict(r.get("Status_Cia")),
+            "status_sistema": clean_str_strict(r.get("Status_Sistema")),
+            "data_emissao": clean_str_strict(r.get("Data Emissão")),
+            "pagto": clean_str_strict(r.get("Pagto")),
+            "sv": clean_str_strict(r.get("SV")),
+            "fop": clean_str_strict(r.get("FOP")),
+            "a_vista": clean_num(r.get("A vista")),
+            "a_credito": clean_num(r.get("A credito")),
+            "tarifa_sistema": clean_num(r.get("Tarifa_Sistema")),
+            "dif_tarifa": clean_num(r.get("Dif_Tarifa")),
+            "taxa_emitida": clean_num(r.get("Taxa")),
+            "taxa_sistema": clean_num(r.get("Taxa_Sistema")),
+            "dif_taxa": clean_num(r.get("Dif_Taxa")),
+            "comissao": clean_num(r.get("Comissão")),
+            "taxa_du": clean_num(r.get("Taxa DU")),
+            "desconto": clean_num(r.get("Desc.")),
+            "incentivo": clean_num(r.get("Incentivo")),
+            "receita_sistema": clean_num(r.get("Receita_Sistema")),
+            "dif_receita": clean_num(r.get("Dif_Receita")),
+            "vl_liquido": clean_num(r.get("VL. Líquido")),
+            "status_divergencia": clean_str_strict(r.get("Status_Divergencia")),
+            "consultor": clean_str_strict(r.get("Consultor")),
+            "emissor": clean_str_strict(r.get("Emissor")),
+            "sistema_reserva": clean_str_strict(r.get("Sistema Reserva")),
+            "cliente": clean_str_strict(r.get("Cliente")),
+            "ponto_venda": clean_str_strict(r.get("Ponto de venda")),
+            "codigo_iata": clean_str_strict(r.get("Código Iata")),
+            "gerente_sugerido": clean_str_strict(r.get("Área Resp. Operação") or r.get("Gerentes")),
+            "setor_sugerido": clean_str_strict(r.get("Setor")),
+            "aba_destino": clean_str_strict(r.get("Aba_Destino")),
+            "fonte_relatorio": clean_str_strict(r.get("Fonte_Relatorio")),
+            "tipo_emissao_lemon": clean_str_strict(r.get("Tipo_Emissao_Lemon")),
+            "consultor_lemon": clean_str_strict(r.get("Consultor_Lemon")),
+            "emissor_reserva_lemon": clean_str_strict(r.get("Emissor_Reserva_Lemon")),
+            "centro_custo_lemon": clean_str_strict(r.get("Centro_Custo_Lemon")),
+            "forma_pagto_lemon": clean_str_strict(r.get("Forma_Pagto_Lemon")),
+            "autorizacao_cartao_lemon": clean_str_strict(r.get("Autorizacao_Cartao_Lemon")),
+            "modalidade_lemon": clean_str_strict(r.get("Modalidade_Lemon")),
+            "emissao_online_lemon": clean_str_strict(r.get("Emissao_Online_Lemon")),
+            "source_lemon": clean_str_strict(r.get("Source_Lemon")),
+            "ponto_venda_lemon": clean_str_strict(r.get("Ponto_Venda_Lemon"))
+        }
+
+        if b_val in lote_por_bilhete:
+            duplicados_ignorados += 1
+            # Mantém o primeiro, mas substitui se o anterior não tinha vínculo no ERP e o novo tem
+            if lote_por_bilhete[b_val]["status_sistema"] == "NAO_CONSTA" and novo_item["status_sistema"] != "NAO_CONSTA":
+                lote_por_bilhete[b_val] = novo_item
+        else:
+            lote_por_bilhete[b_val] = novo_item
+
+    lote_base = list(lote_por_bilhete.values())
+    if duplicados_ignorados > 0:
+        print(f"ℹ️ {duplicados_ignorados} linha(s) duplicada(s) pelo mesmo bilhete foram consolidadas antes do envio.")
+
     if lote_base:
         try:
             tam_lote = 500
@@ -516,10 +579,11 @@ def sincronizar_supabase_tudo(df_master):
                 chunk = lote_base[i:i + tam_lote]
                 with engine_sb.begin() as conn:
                     conn.execute(insert_base_sql, chunk)
-            print(f"☁️ {len(lote_base)} registros inseridos com SUCESSO na 'tb_conciliacao_base' do Supabase!")
+            print(f"☁️ {len(lote_base)} registros únicos inseridos com SUCESSO na 'tb_conciliacao_base' do Supabase!")
         except Exception as e:
             print(f"❌ ERRO CRÍTICO ao sincronizar lote no Supabase: {e}")
 
+            
 def executar_auditoria():
     auto_converter_benner_parquet()
     out_file_model = "Dashboard_Revenue_Assurance_Consolidado.xlsx"
